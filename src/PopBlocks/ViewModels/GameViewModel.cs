@@ -39,6 +39,9 @@ public sealed class GameViewModel : ObservableObject
     private readonly RunStats _run = new();
     private readonly ConsumableInventory _stock;
     private readonly TutorialProgress _tutorial;
+    private readonly StoryLevels _levels;
+    private readonly ClassicGold _classicGold;
+    private readonly UnlockStore _unlocks;
     private List<Achievement> _earned = new();
     private bool _checkAchievements;
 
@@ -79,8 +82,12 @@ public sealed class GameViewModel : ObservableObject
 
     public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, ISoundPlayer sound,
         CampaignService campaign, CosmeticLoadout loadout, DevTools dev, LifetimeStats lifetime, EndingService ending,
-        AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial)
+        AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial,
+        StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks)
     {
+        _levels = levels;
+        _classicGold = classicGold;
+        _unlocks = unlocks;
         _tutorial = tutorial;
         _stock = stock;
         _achievements = achievements;
@@ -120,7 +127,13 @@ public sealed class GameViewModel : ObservableObject
         ChoiceDoneCommand = new Command(FinishChoice);
         SecondChanceCommand = new Command(UseSecondChance);
         PrismShiftCommand = new Command(UsePrismShift);
+        RerollCommand = new Command(Reroll);
+        ToggleRerollHintCommand = new Command(() => { RerollHintOpen = !RerollHintOpen; });
+        DismissLoadingCommand = new Command(DismissLoading);
+        CopySeedCommand = new Command(CopySeed);
 
+        _levels.Changed += RaiseReroll;
+        _progress.Changed += RaiseReroll;
         _bestScore = _highScores.GetBest(_setup.BestScoreKey);
     }
 
@@ -138,6 +151,7 @@ public sealed class GameViewModel : ObservableObject
     public void Configure(GameSetup setup)
     {
         _setup = setup;
+        _seedPinned = setup.IsStory && !setup.Seed.IsLegacy;   // a seed typed into the dev menu is used as given
         _coachSeen = false;
         BestScore = _highScores.GetBest(_setup.BestScoreKey);
         RaiseHeader();
@@ -172,6 +186,10 @@ public sealed class GameViewModel : ObservableObject
     public ICommand ChoiceDoneCommand { get; }
     public ICommand SecondChanceCommand { get; }
     public ICommand PrismShiftCommand { get; }
+    public ICommand RerollCommand { get; }
+    public ICommand ToggleRerollHintCommand { get; }
+    public ICommand DismissLoadingCommand { get; }
+    public ICommand CopySeedCommand { get; }
 
     // ---------------------------------------------------------------- helpers (Second Chance, Prism Shift)
     // A button shows only when the level allows helpers and the player brought one in. It is switched off, with a short
@@ -278,7 +296,7 @@ public sealed class GameViewModel : ObservableObject
         : "CLASSIC";
 
     /// <summary>Best score in Classic, gold in Story, "TUTORIAL" in a lesson.</summary>
-    public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{_progress.Gold:N0} gold" : $"BEST {_bestScore:N0}";
+    public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{_progress.Gold:N0} gold" : $"BEST {_bestScore:N0}  ·  {RunGoldText}";
 
     public string ChainText { get => _chainText; private set { if (SetProperty(ref _chainText, value)) OnPropertyChanged(nameof(HasChain)); } }
     public bool HasChain => _chainText.Length > 0;
@@ -390,6 +408,11 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(BonusResultText));
         OnPropertyChanged(nameof(HasBonusResult));
         OnPropertyChanged(nameof(ShowDevTools));
+        OnPropertyChanged(nameof(ClassicOverGoldText));
+        OnPropertyChanged(nameof(HasClassicOverGold));
+        OnPropertyChanged(nameof(ClassicSeedText));
+        OnPropertyChanged(nameof(HasClassicSeed));
+        RaiseReroll();
     }
 
     // ---------------------------------------------------------------- bindable state: story rewards (level-complete card)
@@ -649,7 +672,7 @@ public sealed class GameViewModel : ObservableObject
     public int HintColumn => CoachStep is { Mode: StepMode.Do, HighlightColumn: >= 0 } s ? s.HighlightColumn : -1;
     public int HintWidth => CoachStep?.HighlightWidth ?? 1;
 
-    private bool InputBlocked => SceneVisible || _promptOpen || CoachStep is { Mode: StepMode.Tap };
+    private bool InputBlocked => SceneVisible || _promptOpen || _isLoading || CoachStep is { Mode: StepMode.Tap };
 
     // ---------------------------------------------------------------- the first-level tutorial offer
     // A brand-new player starting Story level 1 is asked once whether they want the tutorial. The game is held still
@@ -699,6 +722,252 @@ public sealed class GameViewModel : ObservableObject
         Redraw?.Invoke();
     }
 
+    // ---------------------------------------------------------------- seeded levels: failures, reroll, loading card
+    // Every Story level is built from the player's own seed. Most of the time the seed is already known (stored, recorded,
+    // or rolled ahead) and the level starts at once. If it is not, the search runs off the UI thread and, after a moment,
+    // a skippable recap card covers the wait. A reroll swaps the level for a new seed: it costs gold that falls with each
+    // failure and is free from the tenth. Nothing here is a timer or a countdown, and none of it is ever needed to win.
+
+    private bool _seedPinned;       // a seed typed into the dev menu is used as given
+    private bool _failureCounted;   // this run has already been counted as a failure
+    private bool _isLoading, _cardVisible, _levelReady, _rerollHintOpen;
+    private CancellationTokenSource? _loadCts;
+    private TaskCompletionSource? _dismissCard;
+    private DateTime _cardShownAt;
+    private IReadOnlyList<RecapItem> _recap = Array.Empty<RecapItem>();
+
+    /// <summary>REROLL is offered on the failed panel and the pause menu once the level has failed, and always (free) on a cleared level.</summary>
+    public bool ShowReroll => _setup.IsStory && !_isLoading && (_isFailed || _isPaused) && _levels.CanOfferReroll(_setup.Level);
+
+    private int RerollPrice => _levels.RerollPrice(_setup.Level);
+    private int FailuresNow => _levels.Failures(_setup.Level);
+    private bool StuckEnough => _levels.IsCurrent(_setup.Level) && FailuresNow >= SeedingConfig.FailuresForFreeReroll;
+
+    public bool CanReroll => ShowReroll && _levels.CanAffordReroll(_setup.Level);
+
+    /// <summary>"REROLL · 11 GOLD", "REROLL · FREE" or, from the tenth failure, "FRESH LEVEL, FREE". Words, never colour alone.</summary>
+    public string RerollText => !ShowReroll ? string.Empty
+        : StuckEnough ? "FRESH LEVEL, FREE"
+        : RerollPrice == 0 ? "REROLL · FREE"
+        : $"REROLL · {RerollPrice:N0} GOLD";
+
+    public string RerollNote
+    {
+        get
+        {
+            if (!ShowReroll) return string.Empty;
+            if (StuckEnough) return "Stuck? Take a new level on the house.";
+            if (_levels.IsCleared(_setup.Level) || RerollPrice == 0) return "A different version of this level. Free.";
+            int left = _levels.FailuresUntilFree(_setup.Level);
+            return $"Free in {left} more {(left == 1 ? "try" : "tries")}";
+        }
+    }
+
+    public bool HasRerollNote => RerollNote.Length > 0;
+
+    /// <summary>The "?" button appears only when the player cannot pay. It explains where gold comes from and is never the only way forward.</summary>
+    public bool ShowRerollHint => ShowReroll && !CanReroll;
+
+    public string RerollHintText => "Short on gold? Pop blocks in Classic mode to earn some.";
+
+    public bool RerollHintOpen { get => _rerollHintOpen; set { if (SetProperty(ref _rerollHintOpen, value)) OnPropertyChanged(nameof(ShowRerollHintText)); } }
+    public bool ShowRerollHintText => _rerollHintOpen && ShowRerollHint;
+
+    public string RerollDescription => !ShowReroll ? string.Empty
+        : $"{RerollText.Replace("·", ",").ToLowerInvariant()}. {RerollNote}" + (CanReroll ? string.Empty : " You do not have enough gold yet.");
+
+    private void RaiseReroll()
+    {
+        OnPropertyChanged(nameof(ShowReroll));
+        OnPropertyChanged(nameof(CanReroll));
+        OnPropertyChanged(nameof(RerollText));
+        OnPropertyChanged(nameof(RerollNote));
+        OnPropertyChanged(nameof(HasRerollNote));
+        OnPropertyChanged(nameof(ShowRerollHint));
+        OnPropertyChanged(nameof(ShowRerollHintText));
+        OnPropertyChanged(nameof(RerollDescription));
+        if (!ShowRerollHint && _rerollHintOpen) RerollHintOpen = false;
+        RaiseHeader();
+    }
+
+    /// <summary>Swaps the level for a new one. Takes the price, then starts the new level (at once if it was rolled ahead).</summary>
+    private void Reroll()
+    {
+        if (!_setup.IsStory || _isLoading) return;   // one reroll at a time: the new level is already being found
+        if (!_levels.TryReroll(_setup.Level))
+        {
+            Toast?.Invoke("Not enough gold yet");
+            return;
+        }
+
+        // Abandoning the run to reroll is the player's choice, not another failure.
+        _failureCounted = true;
+        _seedPinned = false;
+        RerollHintOpen = false;
+        _setup = GameSetup.Story(_setup.Level);
+        NewGame();
+    }
+
+    /// <summary>A loss counts as a failure on the player's current level (and only there, and only once per run).</summary>
+    private void CountLoss()
+    {
+        if (_failureCounted || !_setup.IsStory) return;
+        _failureCounted = true;
+        if (_levels.RecordFailure(_setup.Level) > 0) _levels.PrefetchReroll(_setup.Level);
+    }
+
+    /// <summary>Restarting a level after placing at least one piece counts as a failure; leaving to the menu does not.</summary>
+    private void CountAbandonedRun()
+    {
+        if (_failureCounted || !_game.Setup.IsStory || _game.Story is not { IsTutorial: false } story) return;
+        if (_game.State is not (GameState.Playing or GameState.Paused or GameState.ResolvingBursts) || _game.PiecesPlaced == 0) return;
+
+        _failureCounted = true;
+        if (_levels.RecordFailure(story.Number) > 0) _levels.PrefetchReroll(story.Number);
+    }
+
+    // ---- loading card
+
+    public bool IsLoading => _isLoading;
+    public bool LoadingCardVisible => _isLoading && _cardVisible;
+    public string LoadingTitle => "Finding your level…";
+    public string LoadingTapText => _levelReady ? "TAP TO CONTINUE" : string.Empty;
+    public bool HasLoadingTap => _levelReady;
+    public IReadOnlyList<RecapItem> RecapItems => _recap;
+    public bool HasLoadingRecap => _recap.Count > 0;
+
+    private void RaiseLoading()
+    {
+        OnPropertyChanged(nameof(IsLoading));
+        OnPropertyChanged(nameof(LoadingCardVisible));
+        OnPropertyChanged(nameof(LoadingTapText));
+        OnPropertyChanged(nameof(HasLoadingTap));
+        OnPropertyChanged(nameof(RecapItems));
+        OnPropertyChanged(nameof(HasLoadingRecap));
+        OnPropertyChanged(nameof(IsPlaying));
+        RaiseReroll();   // REROLL hides while a level is being found
+        Redraw?.Invoke();
+    }
+
+    private void CancelLoad()
+    {
+        _loadCts?.Cancel();
+        _loadCts = null;
+        _dismissCard?.TrySetResult();
+        _isLoading = _cardVisible = _levelReady = false;
+    }
+
+    /// <summary>The level's seed is not ready: roll it off the UI thread, and show the recap card if that takes a moment.</summary>
+    private async void BeginLoad()
+    {
+        CancelLoad();
+        var cts = _loadCts = new CancellationTokenSource();
+        var ct = cts.Token;
+        int level = _setup.Level;
+        var requested = DateTime.UtcNow;
+
+        _isLoading = true;
+        _recap = PopBlocks.Engine.Story.LoadingRecap.Build(_unlocks);
+        RaiseLoading();
+
+        try
+        {
+            var resolve = _levels.ResolveAsync(level, ct);
+
+            // The card only appears if the wait is long enough to notice, so a fast roll never flashes it.
+            var delay = Task.Delay(SeedingConfig.LoadingCardDelay, ct);
+            if (await Task.WhenAny(resolve, delay) == delay && LoadingPolicy.ShouldShowCard(DateTime.UtcNow - requested, resolve.IsCompleted))
+            {
+                _cardVisible = true;
+                _cardShownAt = DateTime.UtcNow;
+                RaiseLoading();
+            }
+
+            var seed = await resolve;
+
+            // A card that is up stays for a moment so it never flashes; the player can tap it away once the level is ready.
+            if (_cardVisible)
+            {
+                _dismissCard = new TaskCompletionSource();
+                _levelReady = true;
+                RaiseLoading();
+                var hold = LoadingPolicy.HoldRemaining(DateTime.UtcNow - _cardShownAt);
+                if (hold > TimeSpan.Zero) await Task.WhenAny(Task.Delay(hold, ct), _dismissCard.Task);
+            }
+
+            if (ct.IsCancellationRequested) return;
+            _isLoading = _cardVisible = _levelReady = false;
+            _loadCts = null;
+            RaiseLoading();
+
+            _setup = _setup with { Seed = seed };
+            NewGame();
+        }
+        catch (OperationCanceledException)
+        {
+            // The player left the level, or asked for another one: nothing to do.
+        }
+        catch (Exception)
+        {
+            // A roll should never fail. If it does, say so rather than leaving the player on a blank screen.
+            _isLoading = _cardVisible = _levelReady = false;
+            RaiseLoading();
+            Toast?.Invoke("Could not load the level. Try again.");
+        }
+    }
+
+    private void DismissLoading()
+    {
+        if (_levelReady) _dismissCard?.TrySetResult();
+    }
+
+    // ---------------------------------------------------------------- Classic gold and seed
+
+    private int _runGoldPaid;        // whole gold paid so far in this Classic run
+    private int _classicOverGold;    // shown on the game-over card
+    private bool _classicBanked;     // the game-over banking has happened for this run
+
+    public bool IsClassic => !_setup.HasLevel;
+
+    /// <summary>Classic HUD: the gold this run is worth so far. Display only; payment happens when the run ends, the player leaves, or the app goes to the background.</summary>
+    public string RunGoldText => $"+{_runGoldPaid + _classicGold.Preview(_game.ClassicGoldTenths)} gold";
+
+    public string ClassicOverGoldText => $"+{_classicOverGold:N0} gold";
+    public bool HasClassicOverGold => _isClassicOver;
+    public string ClassicSeedText => _setup.ClassicSeed is { } seed ? $"Seed {seed}" : string.Empty;
+    public bool HasClassicSeed => _isClassicOver && ClassicSeedText.Length > 0;
+
+    private static int RandomClassicSeed() => Random.Shared.Next(1, int.MaxValue);
+
+    /// <summary>Pays out the Classic gold earned so far in this run. Safe to call at every opportunity: it only ever pays what is new.</summary>
+    public void BankClassicGold()
+    {
+        if (_game.Setup.HasLevel) return;
+        _runGoldPaid += _classicGold.Bank(_game.ClassicGoldTenths);
+        OnPropertyChanged(nameof(SubText));
+    }
+
+    /// <summary>The app lost focus or went to the background: pause, and bank Classic gold (a swipe-away cannot be caught afterwards).</summary>
+    public void OnAppInactive()
+    {
+        Pause();
+        BankClassicGold();
+    }
+
+    private async void CopySeed()
+    {
+        if (_setup.ClassicSeed is not { } seed) return;
+        try
+        {
+            await Clipboard.Default.SetTextAsync(seed.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Toast?.Invoke("Seed copied");
+        }
+        catch
+        {
+            // Copying is a convenience; the seed is on screen.
+        }
+    }
+
     // ---------------------------------------------------------------- lifecycle
 
     /// <summary>Creates the game timer. Call once the page has a dispatcher.</summary>
@@ -710,7 +979,7 @@ public sealed class GameViewModel : ObservableObject
         _timer.Tick += (_, _) =>
         {
             // A story panel (or the tutorial offer) holds everything still, so reading never costs the player a move.
-            if (SceneVisible || _promptOpen) return;
+            if (SceneVisible || _promptOpen || _isLoading) return;
 
             // A tutorial card (or a "now do this" step) holds the piece still until the player acts.
             // The piece is allowed to step down out of the hidden spawn rows first, so it is on screen while it waits.
@@ -737,10 +1006,42 @@ public sealed class GameViewModel : ObservableObject
     {
         Pause();
         _timer?.Stop();
+        BankClassicGold();   // leaving Classic pays out what the run earned
+        CancelLoad();
+        _levels.CancelPrefetches();   // nobody is waiting for them any more
     }
 
     public void NewGame()
     {
+        // The run being left behind: restarting a Story level after placing a piece is a failure, and a Classic run pays out.
+        CountAbandonedRun();
+        BankClassicGold();
+
+        // A Story level plays with this player's seed. It is usually known already (stored, recorded, or rolled ahead);
+        // otherwise the search runs behind the loading card and this method is called again when it is done.
+        if (_setup.IsStory && !_seedPinned)
+        {
+            if (!_levels.TryGetReady(_setup.Level, out var ready))
+            {
+                BeginLoad();
+                return;
+            }
+            _setup = _setup with { Seed = ready };
+        }
+        CancelLoad();
+
+        // A Classic run draws its pieces from a seed: the one the player typed, or a fresh random one each time.
+        if (!_setup.HasLevel)
+        {
+            if (!_setup.SeedChosen) _setup = GameSetup.ClassicRun(RandomClassicSeed(), chosen: false);
+            _classicGold.BeginRun();
+            _runGoldPaid = 0;
+            _classicOverGold = 0;
+            _classicBanked = false;
+        }
+        _failureCounted = false;
+        RerollHintOpen = false;
+
         // Shop upgrades and settings apply from the start of each game.
         _game.PreviewCount = _shop.PreviewCount;
         _game.ExtraMoves = _shop.ExtraMoves;
@@ -775,7 +1076,7 @@ public sealed class GameViewModel : ObservableObject
         _coach = null;
         if (_setup.HasLevel)
         {
-            var level = _setup.IsLesson ? LevelCatalog.Lesson(_setup.Level) : LevelCatalog.Get(_setup.Level);
+            var level = _setup.IsLesson ? LevelCatalog.Lesson(_setup.Level) : LevelCatalog.Get(_setup.Level, _setup.Seed);
             if (level.Steps.Count > 0 && !_coachSeen && (_setup.IsLesson || !_progress.IsCleared(level.Number)))
             {
                 _coach = new TutorialController(level.Steps);
@@ -822,20 +1123,16 @@ public sealed class GameViewModel : ObservableObject
 
         if (!_setup.IsStory) return;
         _setup = GameSetup.Story(_setup.Level + 1);
+        _seedPinned = false;
         _coachSeen = false;
         NewGame();
     }
 
-    /// <summary>Generating a level takes a moment on the hardest tiers, so the next one is built in the background.</summary>
+    /// <summary>Finding a level takes a moment on the hardest tiers, so the next one is rolled in the background.</summary>
     private void PrefetchNextLevel()
     {
         if (!_setup.IsStory) return;   // lessons are hand-made and quick to build
-        int next = _setup.Level + 1;
-        _ = Task.Run(() =>
-        {
-            try { LevelCatalog.Get(next); }
-            catch { /* it will simply be built when it is needed */ }
-        });
+        _levels.PrefetchAfter(_setup.Level);
     }
 
     public void Pause() => _game.Pause();
@@ -915,10 +1212,28 @@ public sealed class GameViewModel : ObservableObject
 
         if (!_setup.HasLevel)
         {
-            // Save the personal best the moment it is beaten, so an unexpected exit cannot lose it.
-            if (_highScores.Submit(_setup.BestScoreKey, _game.Score))
+            // Save the personal best the moment it is beaten, so an unexpected exit cannot lose it. A run on a seed the
+            // player typed in pays gold like any other, but never sets a record (an easy seed would make it meaningless).
+            if (_setup.CountsForBest && _highScores.Submit(_setup.BestScoreKey, _game.Score))
                 BestScore = _highScores.GetBest(_setup.BestScoreKey);
-            IsNewBest = _highScores.GetBest(_setup.BestScoreKey) > _bestAtStart;
+            IsNewBest = _setup.CountsForBest && _highScores.GetBest(_setup.BestScoreKey) > _bestAtStart;
+
+            // Game over pays out what the run earned, once, and says how much.
+            if (_game.State == GameState.GameOver && !_classicBanked)
+            {
+                _classicBanked = true;
+                BankClassicGold();
+                _classicOverGold = _runGoldPaid;
+                OnPropertyChanged(nameof(ClassicOverGoldText));
+                OnPropertyChanged(nameof(HasClassicOverGold));
+                OnPropertyChanged(nameof(ClassicSeedText));
+                OnPropertyChanged(nameof(HasClassicSeed));
+            }
+            OnPropertyChanged(nameof(SubText));
+        }
+        else if (_game.State == GameState.GameOver)
+        {
+            CountLoss();   // a failed Story level: counted once, on the player's current level only
         }
 
         // The run is over (won, lost, or Classic game over): add it to the lifetime bests, once.

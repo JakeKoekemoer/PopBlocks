@@ -151,7 +151,7 @@ public partial class GamePage : ContentPage
     private void OnWindowInactive(object? sender, EventArgs e)
     {
         StopRepeat();
-        _vm.Pause();
+        _vm.OnAppInactive();   // pauses, and banks any Classic gold: a swipe-away cannot be caught afterwards
     }
 
     private async void OnMenuClicked(object? sender, EventArgs e)

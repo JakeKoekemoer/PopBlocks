@@ -10,6 +10,17 @@ public readonly record struct SolvedMove(int Rotations, int LeftColumn);
 public sealed record SolveResult(bool Won, int Moves, IReadOnlyList<SolvedMove> Plan);
 
 /// <summary>
+/// How hard the bot thinks. <see cref="Full"/> is the bot that sets move limits. <see cref="Weak"/> takes the single best
+/// placement with no look-ahead; how many more pieces it needs than the full bot is a measure of how much planning a
+/// board demands (see <c>LevelRoller</c>).
+/// </summary>
+public readonly record struct SolveOptions(int Candidates, bool LookAhead)
+{
+    public static SolveOptions Full => new(6, true);
+    public static SolveOptions Weak => new(1, false);
+}
+
+/// <summary>
 /// A small look-ahead bot. It plays a level with a lightweight copy of the rules and reports whether
 /// (and in how many pieces) the goals can be met. The level catalogue uses it to set move limits that
 /// are always achievable, and the tests replay its plans through the real engine to prove the copy is faithful.
@@ -21,7 +32,6 @@ public static class LevelSolver
     private const int W = GameConfig.Columns;
     private const int H = GameConfig.TotalRows;
     private const int Hidden = GameConfig.HiddenRows;
-    private const int TopCandidates = 6;
     private const int ChainSlots = 9;
 
     private static int ChainsOfAtLeast(State s, int waves)
@@ -64,8 +74,9 @@ public static class LevelSolver
     /// Plays the level with the bot. With a <paramref name="bonus"/> the bot must also meet that optional objective
     /// (used to check that a memory objective is possible before a level offers it).
     /// </summary>
-    public static SolveResult Solve(LevelDefinition level, int maxMoves, BonusObjective? bonus = null)
+    public static SolveResult Solve(LevelDefinition level, int maxMoves, BonusObjective? bonus = null, SolveOptions? options = null)
     {
+        var opts = options ?? SolveOptions.Full;
         var scratch = new Scratch();
 
         // The bot normally ignores drop-bonus points (conservative). When checking an objective it must know exactly
@@ -117,7 +128,14 @@ public static class LevelSolver
             if (firsts.Count == 0) return new SolveResult(false, move, plan);
             firsts.Sort((a, b) => b.Value.CompareTo(a.Value));
 
-            int take = Math.Min(TopCandidates, firsts.Count);
+            int take = Math.Min(opts.Candidates, firsts.Count);
+            if (!opts.LookAhead)
+            {
+                // The weak bot: the best-looking placement now, without asking what the next piece would do with it.
+                best = firsts[0].P;
+                bestState = firsts[0].S;
+                take = 0;
+            }
             for (int i = 0; i < take; i++)
             {
                 var (v1, p1, s1) = firsts[i];
@@ -183,6 +201,46 @@ public static class LevelSolver
             for (int i = 0; i < 50 && engine.State == GameState.ResolvingBursts; i++) engine.Tick();
         }
         return (engine, run);
+    }
+
+    /// <summary>
+    /// True if a person could play this plan: every piece can be rotated and slid to the column the bot chose in the real
+    /// engine (a tall pile can block a slide the bot's copy of the rules does not notice), and the plan then wins the level
+    /// within its move limit. A level whose plan fails this is not truly "bot-verified", so a roll does not accept it.
+    /// </summary>
+    public static bool PlanIsPlayable(LevelDefinition level, IReadOnlyList<SolvedMove> plan)
+    {
+        var engine = new GameEngine(new PieceGenerator(new Random(1)));
+        engine.StartLevel(level);
+
+        foreach (var move in plan)
+        {
+            if (engine.State != GameState.Playing || engine.CurrentPiece is null) break;
+
+            for (int r = 0; r < move.Rotations; r++)
+            {
+                int guard = 0;
+                while (!engine.Rotate())
+                {
+                    engine.Tick();
+                    if (++guard > 4 || engine.State != GameState.Playing) return false;
+                }
+            }
+
+            bool reached = false;
+            for (int guard = 0; guard < 12; guard++)
+            {
+                int left = engine.CurrentPiece!.BoardCells().Min(c => c.X);
+                if (left == move.LeftColumn) { reached = true; break; }
+                if (left > move.LeftColumn) engine.MoveLeft(); else engine.MoveRight();
+            }
+            if (!reached) return false;
+
+            engine.HardDrop();
+            for (int i = 0; i < 50 && engine.State == GameState.ResolvingBursts; i++) engine.Tick();
+        }
+
+        return engine.State == GameState.LevelComplete && (!engine.HasMoveLimit || engine.PiecesPlaced <= engine.MoveLimit);
     }
 
     // ------------------------------------------------------------------ placements

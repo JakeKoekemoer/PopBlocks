@@ -4,16 +4,16 @@ namespace PopBlocks.Tests;
 public static class LevelSnapshotData
 {
     public const string Lines = """
-1|Easy|PopBlocks:4:0|m0|f2400|c4|-|p0|4d59ba2f
-2|Easy|PopBlocks:5:0|m0|f2400|c4|-|p0|d4b8fccd
-3|Easy|Chain:2:0|m0|f2400|c4|-|p0|75424287
-4|Easy|PopBlocks:8:0|m3|f2000|c4|-|p0|126fac45
-5|Easy|Score:100:0|m3|f2000|c4|-|p0|8d9a0c42
-6|Easy|PopBlocks:4:0|m0|f3000|c4|-|p0|77c17ff1
-7|Easy|PopBlocks:8:0|m2|f2000|c4|-|p0|749160ba
-8|Easy|ClearDown:0:0|m2|f1900|c4|-|p0|70c73267
-9|Easy|BigGroup:6:0|m2|f1800|c4|-|p0|c996424c
-10|Easy|PopBlocks:12:0;Score:150:0|m9|f1500|c4|-|p0|6adbadd3
+1|Easy|Score:240:0|m10|f1000|c4|-|p0|da5fa677
+2|Easy|Score:250:0|m8|f995|c4|-|p0|c3318925
+3|Easy|Score:270:0|m10|f990|c4|-|p0|47bcba67
+4|Easy|Score:280:0|m8|f985|c4|-|p0|4b8b110b
+5|Easy|Score:290:0|m12|f980|c4|-|p0|79b412cc
+6|Easy|PopBlocks:24:0|m14|f974|c4|-|p0|d90712d5
+7|Easy|PopBlocks:25:0|m12|f969|c4|-|p0|3f459237
+8|Easy|PopBlocks:27:0|m14|f964|c4|-|p0|792691ea
+9|Easy|PopBlocks:28:0|m14|f959|c4|-|p0|b50bfa6b
+10|Easy|PopBlocks:29:0|m14|f954|c4|-|p0|2738d776
 11|Easy|PopBlocks:14:0|m10|f1300|c4|-|p0|2eb67be3
 12|Easy|Score:380:0|m15|f944|c4|-|p0|5ab94f16|bonus MovesLeft:3:0:mem_r1_1
 13|Easy|PopColour:9:4|m7|f939|c4|-|p0|9361d874

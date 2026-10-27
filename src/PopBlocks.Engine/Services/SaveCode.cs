@@ -31,7 +31,12 @@ public static class SaveCode
     private const int MaxUnlocks = 5_000;
     private const int MaxId = 64;
 
-    private enum Kind { Int, Bool, Text, Unlocks }
+    private enum Kind { Int, Bool, Text, Unlocks, Name, SeedList }
+
+    /// <summary>The most level:seed pairs a code may carry (one per cleared level).</summary>
+    private const int MaxSeedPairs = 5_000;
+    private const int MaxSeedLevel = 100_000;
+    private const int MaxLevelSeed = 0x3FFFFFFF;
 
     private sealed record Field(string Key, Kind Kind, int Min = 0, int Max = int.MaxValue);
 
@@ -57,6 +62,14 @@ public static class SaveCode
             new(SaveKeys.SoundEffects, Kind.Bool),
             new(SaveKeys.ReducedMotion, Kind.Bool),
             new(SaveKeys.ControlsCollapsed, Kind.Bool),
+            new(SaveKeys.PlayerName, Kind.Name),
+            new(SaveKeys.PlayerSalt, Kind.Int, 0, int.MaxValue),
+            new(SaveKeys.CurrentLevelFor, Kind.Int, 0, 100_000),
+            new(SaveKeys.CurrentLevelSeed, Kind.Int, 0, MaxLevelSeed),
+            new(SaveKeys.CurrentLevelRerolls, Kind.Int, 0, 100_000),
+            new(SaveKeys.CurrentLevelFailures, Kind.Int, 0, 100_000),
+            new(SaveKeys.FirstClearSeeds, Kind.SeedList),
+            new(SaveKeys.ClassicGoldCarry, Kind.Int, 0, 9),
         };
         foreach (var item in ShopCatalog.Items) f.Add(new Field(item.SaveKey, Kind.Int, 0, item.MaxLevel));
         foreach (var c in ConsumableCatalog.All) f.Add(new Field(c.SaveKey, Kind.Int, 0, ConsumableCatalog.Cap));
@@ -204,6 +217,19 @@ public static class SaveCode
                     values.Add((key, raw));
                     break;
 
+                case Kind.Name:
+                    // An in-game name: any letters, digits, spaces and punctuation, but no control characters.
+                    if (raw.Length is < SeedingConfig.NameMinLength or > SeedingConfig.NameMaxLength || raw.Any(char.IsControl)) return Fail(bad);
+                    values.Add((key, raw));
+                    break;
+
+                case Kind.SeedList:
+                {
+                    if (!TryCleanSeedList(raw, out string cleaned)) return Fail(bad);
+                    values.Add((key, cleaned));
+                    break;
+                }
+
                 default:   // Unlocks
                 {
                     var ids = raw.Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -218,8 +244,52 @@ public static class SaveCode
             }
         }
 
+        // The "current level" values only mean something for the level that comes next after the cleared ones. A code whose
+        // fields disagree (or that has no progress to compare with) must not plant a seed or failure count on some other level.
+        int? currentFor = values.Where(v => v.Item1 == SaveKeys.CurrentLevelFor).Select(v => (int?)(int)v.Item2).FirstOrDefault();
+        if (currentFor is not null && currentFor != highest + 1)
+            values.RemoveAll(v => v.Item1 is SaveKeys.CurrentLevelFor or SaveKeys.CurrentLevelSeed
+                                   or SaveKeys.CurrentLevelRerolls or SaveKeys.CurrentLevelFailures);
+
         return new SaveCodeCheck(true, "", new SaveCodeSummary(highest, gold, unlocks)) { Values = values };
     }
+
+    /// <summary>
+    /// Reads <c>level:seed,level:seed</c>. Every pair is checked: level 1 to 100,000, seed 1 to 1,073,741,823, no level
+    /// twice, at most 5,000 pairs. The result is sorted by level so the same data always writes the same text.
+    /// </summary>
+    private static bool TryCleanSeedList(string raw, out string cleaned)
+    {
+        cleaned = "";
+        var pairs = raw.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        if (pairs.Length > MaxSeedPairs) return false;
+
+        var byLevel = new SortedDictionary<int, int>();
+        foreach (var pair in pairs)
+        {
+            int colon = pair.IndexOf(':');
+            if (colon <= 0 || colon == pair.Length - 1) return false;
+            if (!int.TryParse(pair.AsSpan(0, colon), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int level)
+                || !int.TryParse(pair.AsSpan(colon + 1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int seed))
+                return false;
+            if (level is < 1 or > MaxSeedLevel || seed is < 1 or > MaxLevelSeed) return false;
+            if (!byLevel.TryAdd(level, seed)) return false;
+        }
+
+        cleaned = string.Join(',', byLevel.Select(kv => $"{kv.Key}:{kv.Value}"));
+        return true;
+    }
+
+    /// <summary>Reads the first-clear list from a stored string. Anything malformed reads as an empty list.</summary>
+    public static IReadOnlyDictionary<int, int> ParseSeedList(string stored) =>
+        TryCleanSeedList(stored ?? "", out string cleaned)
+            ? cleaned.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                     .Select(p => p.Split(':')).ToDictionary(p => int.Parse(p[0]), p => int.Parse(p[1]))
+            : new Dictionary<int, int>();
+
+    /// <summary>Writes a first-clear list for storage.</summary>
+    public static string FormatSeedList(IEnumerable<KeyValuePair<int, int>> seeds) =>
+        string.Join(',', seeds.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:{kv.Value}"));
 
     private static bool IsIdChar(char c) => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '_' or '.' or ':' or '-';
 

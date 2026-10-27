@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:PopBlocks.ViewModels"
              xmlns:levels="clr-namespace:PopBlocks.Engine.Levels;assembly=PopBlocks.Engine"
+             xmlns:story="clr-namespace:PopBlocks.Engine.Story;assembly=PopBlocks.Engine"
              x:Class="PopBlocks.Views.GamePage"
              x:DataType="vm:GameViewModel"
              NavigationPage.HasNavigationBar="False"
@@ -255,6 +256,25 @@
                            TextColor="{StaticResource TextSecondary}"
                            HorizontalTextAlignment="Center" />
 
+                    <!-- Classic game over: the gold this run paid, and the seed it used (so a good run can be shared or replayed) -->
+                    <Label Text="{Binding ClassicOverGoldText}"
+                           IsVisible="{Binding HasClassicOverGold}"
+                           FontSize="22"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="Center" />
+                    <Grid IsVisible="{Binding HasClassicSeed}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Label Text="{Binding ClassicSeedText}"
+                               Style="{StaticResource CaptionLabel}"
+                               VerticalOptions="Center"
+                               HorizontalTextAlignment="End" />
+                        <Button Grid.Column="1"
+                                Text="COPY"
+                                Style="{StaticResource GhostButton}"
+                                Command="{Binding CopySeedCommand}"
+                                SemanticProperties.Description="Copy the seed of this run" />
+                    </Grid>
+
                     <HorizontalStackLayout IsVisible="{Binding HasGoldReward}"
                                            HorizontalOptions="Center"
                                            Spacing="10">
@@ -311,6 +331,35 @@
                             Style="{StaticResource PrimaryButton}"
                             IsVisible="{Binding CanRetry}"
                             Command="{Binding RestartCommand}" />
+
+                    <!-- Reroll: a new level for gold. The price falls with each failure and is free from the tenth. Plain words only:
+                         no countdown, no timer, no urgent colour. The "?" appears only when the player cannot pay yet. -->
+                    <Button Text="{Binding RerollText}"
+                            Style="{StaticResource SecondaryButton}"
+                            IsVisible="{Binding ShowReroll}"
+                            IsEnabled="{Binding CanReroll}"
+                            Command="{Binding RerollCommand}"
+                            SemanticProperties.Description="{Binding RerollDescription}" />
+                    <Grid IsVisible="{Binding ShowReroll}" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                        <Label Text="{Binding RerollNote}"
+                               IsVisible="{Binding HasRerollNote}"
+                               Style="{StaticResource CaptionLabel}"
+                               HorizontalTextAlignment="Center"
+                               VerticalOptions="Center" />
+                        <Button Grid.Column="1"
+                                Text="?"
+                                Style="{StaticResource GhostButton}"
+                                IsVisible="{Binding ShowRerollHint}"
+                                Command="{Binding ToggleRerollHintCommand}"
+                                MinimumWidthRequest="44"
+                                SemanticProperties.Description="How do I earn gold for a reroll?" />
+                    </Grid>
+                    <Label Text="{Binding RerollHintText}"
+                           IsVisible="{Binding ShowRerollHintText}"
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="13"
+                           HorizontalTextAlignment="Center" />
+
                     <Button Text="RESUME"
                             Style="{StaticResource PrimaryButton}"
                             IsVisible="{Binding IsPaused}"
@@ -446,6 +495,51 @@
                             Command="{Binding TutorialNoCommand}" />
                 </VerticalStackLayout>
             </Border>
+        </Grid>
+
+        <!-- Finding the level took a moment: a short recap of the story so far. It appears only if the wait is noticeable, stays long
+             enough not to flash, and closes by itself when the level is ready (tap to go straight in). It never delays play. -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding LoadingCardVisible}"
+              BackgroundColor="#F5070A16"
+              Margin="-6,-2,-6,-6"
+              SemanticProperties.Description="Finding your level. A short recap of the story so far.">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding DismissLoadingCommand}" />
+            </Grid.GestureRecognizers>
+            <VerticalStackLayout VerticalOptions="Center" Padding="28,0" Spacing="14">
+                <Label Text="{Binding LoadingTitle}"
+                       FontSize="24"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource TextPrimary}"
+                       HorizontalTextAlignment="Center" />
+                <Label Text="THE STORY SO FAR"
+                       IsVisible="{Binding HasLoadingRecap}"
+                       Style="{StaticResource CaptionLabel}"
+                       HorizontalTextAlignment="Center" />
+                <VerticalStackLayout Spacing="12" BindableLayout.ItemsSource="{Binding RecapItems}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="story:RecapItem">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="{Binding Source}"
+                                       FontSize="15"
+                                       FontAttributes="Bold"
+                                       TextColor="{StaticResource GoldColor}"
+                                       HorizontalTextAlignment="Center" />
+                                <Label Text="{Binding Text}"
+                                       Style="{StaticResource BodyLabel}"
+                                       FontSize="14"
+                                       HorizontalTextAlignment="Center" />
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+                <Label Text="{Binding LoadingTapText}"
+                       IsVisible="{Binding HasLoadingTap}"
+                       Style="{StaticResource CaptionLabel}"
+                       TextColor="{StaticResource Accent}"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
         </Grid>
 
         <!-- After the ending: how should the world look from now on? Cosmetic only; there is one ending. -->

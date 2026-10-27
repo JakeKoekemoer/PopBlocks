@@ -6,11 +6,14 @@ namespace PopBlocks.Views;
 public partial class AboutPage : ContentPage
 {
     private readonly ILocalSettings _settings;
+    private readonly PlayerIdentity _identity;
 
-    public AboutPage(ILocalSettings settings)
+    public AboutPage(ILocalSettings settings, PlayerIdentity identity)
     {
         InitializeComponent();
         _settings = settings;
+        _identity = identity;
+        NameLabel.Text = _identity.Name;
         LogoView.Drawable = new LogoDrawable();
 
         // Read from the installed package, so it always matches what was actually built.
@@ -20,6 +23,20 @@ public partial class AboutPage : ContentPage
     }
 
     private async void OnBackClicked(object? sender, EventArgs e) => await Navigation.PopAsync();
+
+    /// <summary>Changes the name on screen. It never changes a level: the salt was fixed when the name was first chosen.</summary>
+    private void OnRenameClicked(object? sender, EventArgs e)
+    {
+        if (PlayerIdentity.Clean(NameEntry.Text).Length == 0)
+        {
+            Say("Type a name first.");
+            return;
+        }
+        _identity.Rename(NameEntry.Text);
+        NameLabel.Text = _identity.Name;
+        NameEntry.Text = string.Empty;
+        SemanticScreenReader.Announce($"Name changed to {_identity.Name}");
+    }
 
     private void Say(string text)
     {

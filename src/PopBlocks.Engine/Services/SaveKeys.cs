@@ -59,6 +59,32 @@ public static class SaveKeys
     /// <summary>The look chosen after the ending (a <c>FinalChoice</c> id, empty until chosen).</summary>
     public const string EndingTheme = "ending_theme";
 
+    // ---- Seeded levels and rerolls (PlayerIdentity, LevelAttemptState, PlayerProgress) ----
+    /// <summary>The in-game name (1 to 20 characters). Display only: it never changes a level once the salt is set.</summary>
+    public const string PlayerName = "player_name";
+
+    /// <summary>Hash of the name and a random install number, set once. 0 means not set (an existing player who has not been asked yet).</summary>
+    public const string PlayerSalt = "player_salt";
+
+    /// <summary>The level number the next three values belong to. Ignored unless it is the player's current level (HighestCleared + 1).</summary>
+    public const string CurrentLevelFor = "current_level_for";
+
+    /// <summary>Seed of the player's current level. 0 means not yet assigned.</summary>
+    public const string CurrentLevelSeed = "current_level_seed";
+
+    /// <summary>Rerolls used on the current level. Not reset by a reroll; reset when the level is cleared.</summary>
+    public const string CurrentLevelRerolls = "current_level_rerolls";
+
+    /// <summary>Failures on the current level. Not reset by a reroll; reset when the level is cleared.</summary>
+    public const string CurrentLevelFailures = "current_level_failures";
+
+    /// <summary>Comma-separated <c>level:seed</c> pairs: the seed each cleared level was first cleared with.</summary>
+    public const string FirstClearSeeds = "first_clear_seeds";
+
+    // ---- Classic gold (ClassicGold) ----
+    /// <summary>Tenths of a gold earned in Classic and not yet paid (0 to 9).</summary>
+    public const string ClassicGoldCarry = "classic_gold_carry";
+
     // ---- Lifetime stats (LifetimeStats): maxima and counters only ----
     public const string StatLargestGroup = "stat_largest_group";
     public const string StatLongestChain = "stat_longest_chain";
@@ -86,6 +112,7 @@ public static class SaveKeys
     {
         SaveVersion, ProgressHighest, Gold, UpgradePreview, UpgradePopFlair, UpgradeExtraMoves, UpgradeColourLens, UpgradeChainSense, UpgradePrismReserve, ConsumableSecondChance, ConsumablePrismShift, BestScore,
         BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects, Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
+        PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),

@@ -1,0 +1,946 @@
+{
+  "plan_id": "pln_seeded_levels_001",
+  "goal": "Implement 'Seeded Levels, Rerolls and Classic Gold' in PopBlocks: every Story level is generated per player from a salted seed behind a bot-win and difficulty-band gate; a stuck player can reroll their current level for gold (price falls 10% of first-clear gold per failure, free at 10); Classic mode earns gold per block popped and accepts an optional starting seed that never touches the Story.",
+  "metadata": {
+    "estimated_steps": 33,
+    "required_capabilities": ["shell", "code_search", "code_edit", "run_tests", "manual_review"],
+    "project": "PopBlocks - .NET 10 MAUI (Android) app plus pure-C# PopBlocks.Engine and xUnit tests",
+    "plan_version": 1,
+    "source_documents": {
+      "spec": "https://claude.ai/artifact/3zojaVEhGF1huC9Mes3oND (PopBlocks: Seeded Levels, Rerolls and Classic Gold (Spec))",
+      "existing_plan_for_format": "docs/shattered-spectrum-plan.json",
+      "design_docs": "docs/01-game-design.md, docs/02-architecture.md, docs/04-story-mode.md, docs/07-testing.md, docs/09-extending.md, docs/10-campaign-and-content.md, docs/story/economy.md",
+      "precedence": "The spec wins. Where the spec names a line number or default, verify it against the code before relying on it."
+    },
+    "tool_notes": {
+      "shell": "git, dotnet, powershell (no Python on this machine). dotnet publish for Android, Check-Permissions.ps1 and the on-device timing must run on the Windows machine with Visual Studio 2026.",
+      "code_search / code_edit": "read and change files under E:\\PopBlocks",
+      "run_tests": "dotnet test tests/PopBlocks.Tests. The Engine targets plain net10.0, so no emulator is needed.",
+      "manual_review": "human gate: on-device playtest (Samsung S24 plus a low-end Android phone for timing) or product-owner decision"
+    },
+    "execution_notes": [
+      "Order is the spec's: measure (M0), seed plumbing (M1), saves and identity (M2), gate and roll (M3), player-facing reroll (M4), prefetch (M5), Classic gold (M6), docs and balance (M7).",
+      "M6 engine steps (28, 29) need only the new save keys (step_10) and Mix32 (step_07), so Classic gold can ship first as its own release. The M6 UI wiring (step_30) is serialised after the GameViewModel work (step_21) only to avoid edit conflicts; move it earlier if M6 ships first.",
+      "Step ids are not strict execution order: dependencies are. step_05 and step_06 (M0 sweep and timing) run after step_08 (seed plumbing) because the sweep builds candidates with Get(level, seed).",
+      "Steps serialise on purpose where they edit the same file: LevelCatalog.cs (steps 08, 15, 25), GameViewModel.cs (steps 08, 12, 21, 25, 26, 30) and SaveKeys.cs/SaveCode.cs (step 10).",
+      "Each run_tests gate must pass before the next milestone starts. Cut an internal build after M4 and after M6.",
+      "Steps whose arguments.optional is true can be skipped without affecting the rest of the plan.",
+      "Every number named in the spec is a starting value: keep it in one config class (step_07) and tune it from the sweep and playtests rather than hard-coding it.",
+      "Line numbers quoted from the spec (GameEngine.cs:187, GameViewModel.cs:778 and :836) were correct when the spec was written. Re-find the call sites by name before editing."
+    ],
+    "optional_step_ids": [],
+    "fallback_step_ids": [],
+    "global_constraints": [
+      "Legacy seed 0 must give byte-identical levels. LevelSnapshotTests (levels 1-220) must pass untouched and must not be regenerated. LevelCatalog.Get(n) keeps returning the legacy level so the ~100 existing call sites keep working.",
+      "The ten tutorial lessons stay hand-made and frozen. Level 11 keeps its scripted opening piece and intro card.",
+      "The seed may change the board and pieces but never a level's structure: goal kinds, goal count, intro goal, flip, no-pop penalty, finale, ability lock, exotic share, fall speed, colours and goal sizes keep coming from the level number and tier tables (PickKinds keeps Random(n * 7919 + 13)).",
+      "A level shown to a player is always bot-verified. Never use the unverified fallback level (Pop 8 blocks, 40 moves) for a rolled seed.",
+      "Offline only: no INTERNET permission, no analytics, no network packages, no new PackageReference unless unavoidable.",
+      "Rules live in PopBlocks.Engine. The MAUI app only draws and wires input.",
+      "SaveKeys are frozen: add keys, never rename or reuse. save_version stays 1; absent keys load as defaults, so no migration step.",
+      "Gold is earned and spent through the same path the shop uses so the 0 to 100,000,000 clamp and save-on-change apply. Integer arithmetic only.",
+      "Gold must never gate the story: the reroll is free at 10 failures, and the hint button is never the only way forward.",
+      "No countdowns, timers, pulsing or urgent colours on the reroll button. Every new control has an accessibility label that includes the price or state. Prices and states are plain text, never colour alone.",
+      "The loading card has no control that delays play and never shows a scene the player has not seen.",
+      "Classic never reads the player salt, the first-clear list or the failure counter.",
+      "A seeded Classic run pays gold at the normal rate but never updates best_score.",
+      "If an engine rule changes, change LevelSolver too and keep the catalogue replay test green. Add a seeded variant of the replay test instead of editing the old one.",
+      "Never hold the level-cache lock while the solver runs. Builds are single-flight per key. Run the Roll search off the UI thread.",
+      "Docs, the About page and the store listing change in the same commit as any promise they describe."
+    ],
+    "phases": [
+      { "id": "M0", "name": "Measure", "exit": "Sweep CSV committed under docs/story/, generation time known on a low-end Android phone, band percentiles and attempt count chosen" },
+      { "id": "M1", "name": "Seed plumbing", "exit": "Legacy seed gives byte-identical levels (snapshot test untouched); structure test passes for random seeds" },
+      { "id": "M2", "name": "Salt, name and saves", "exit": "Every save test passes, including loading an old save; name prompt and player_salt work" },
+      { "id": "M3", "name": "Gate and roll", "exit": "Levels 1-220 at rerolls 0-2 pass the seeded replay test and the fuzz run; unverified fallback never used" },
+      { "id": "M4", "name": "Failures, reroll and first clear", "exit": "Pricing and first-clear tests pass; by hand: fail a level 10 times and the reroll is free" },
+      { "id": "M5", "name": "Prefetch and loading card", "exit": "Prefetched reroll starts in under 100 ms; unprefetched one shows the card after 300 ms and closes it when ready" },
+      { "id": "M6", "name": "Classic gold and seed", "exit": "Classic tests pass and the economy docs are updated; shippable on its own" },
+      { "id": "M7", "name": "Docs and balance", "exit": "Docs updated, Classic rate tuned against real reroll prices, band edges playtested, signed build verified" }
+    ],
+    "decisions_resolved": {
+      "identical_levels": "Dropped. Levels are generated per player.",
+      "player_salt": "In-game name plus 32 random install bits, hashed once with FNV-1a, stored as player_salt, never recomputed",
+      "story_seed": "Mix32(salt, level, reroll, attempt) & 0x3FFFFFFF, never 0. Goal kinds still come from the level number only.",
+      "legacy_seed": "Seed 0 = today's n-based seeds, no difficulty gate. Used for levels cleared before the update, all existing tests and the frozen snapshot.",
+      "reroll_availability": "After the first failure on the current level (HighestCleared + 1). Free at any time on replays of cleared levels.",
+      "reroll_price": "(reward * (10 - min(failures, 10)) + 9) / 10 with reward = GoldRewards.For(level, false). Free at 10 failures. Levels 1-10 pay no gold so are always free.",
+      "failure": "A loss, or a manual restart after at least one piece was placed. Leaving to the menu does not count. Losing on purpose is allowed.",
+      "failure_counter": "Saved on every increment. Not reset by a reroll. Reset when the level is cleared.",
+      "cleared_levels": "First-clear seed recorded once in the same place gold is paid, shown on the levels page, never overwritten. Every later seed is discarded.",
+      "difficulty": "Hard requirements plus a hardness band (20th-80th percentile of min(2.0, weakNeed/fullNeed), smoothed over 5 levels each side inside a tier), softer at tier starts and mechanic introductions.",
+      "search": "attempt 0-23 or 2 seconds, then the verified candidate closest to the band. Never an unverified level.",
+      "loading": "Prefetch so rerolls are instant; otherwise a skippable recap card after 300 ms, held at least 600 ms.",
+      "classic_gold": "rate(L) = min(5, 1 + (L - 1) / 4) tenths of a gold per block popped, carry saved as classic_gold_carry, banked once at game over / leave / background.",
+      "classic_seed": "Optional 0 to 2,147,483,647. Piece i from new Random(Mix32(seed, i)). Seeded runs pay gold but never set best_score."
+    },
+    "open_questions": [
+      { "id": "Q1", "question": "Which levels can be rerolled?", "default": "Every Story level including finales and level 200. The free reroll at 10 failures keeps gold from gating the story." },
+      { "id": "Q2", "question": "Does a seeded Classic run count for the personal best?", "default": "No. It still pays gold." },
+      { "id": "Q3", "question": "Does a manual restart count as a failure?", "default": "Yes, after at least one piece was placed. Leaving to the menu does not count." },
+      { "id": "Q4", "question": "Skipped name?", "default": "\"Traveller\". Optional extra: Pip uses the name in dialogue." },
+      { "id": "Q5", "question": "Retuning after release: stored seeds are not regenerated, so a broken level cannot be fixed by retuning alone.", "default": "Accept this for the first release. Later option: store generator_version and silently reroll uncleared levels made by an older version (a separate follow-up, not part of this plan)." },
+      { "id": "Q6", "question": "Classic HUD counter?", "default": "Include the small running +N gold. Remove it if it distracts." }
+    ],
+    "tunable_parameters": [
+      { "parameter": "Band edges", "default": "20th to 80th percentile of hardness, smoothed over 5 levels each side", "decided_by": "step_05" },
+      { "parameter": "Soft-start length", "default": "First 5 levels of a tier (51, 101, 151); each introduction level plus 2. Read introduction levels from the RegionRules constants.", "decided_by": "step_05, step_33" },
+      { "parameter": "Search attempts and time budget", "default": "24 attempts, 2 seconds", "decided_by": "step_05 device timing" },
+      { "parameter": "Loading card thresholds", "default": "Show after 300 ms, hold at least 600 ms", "decided_by": "step_26" },
+      { "parameter": "Reroll price anchor", "default": "First-clear gold x (10 - failures) / 10", "decided_by": "step_33" },
+      { "parameter": "Failures for a free reroll", "default": 10, "decided_by": "Fixed by the product owner" },
+      { "parameter": "Classic gold rate", "default": "1 to 5 tenths of a gold per block by Classic level; a decent early run pays about 15 gold", "decided_by": "step_33 playtest" },
+      { "parameter": "Name length", "default": "1 to 20 characters", "decided_by": "Developer" }
+    ]
+  },
+  "steps": [
+    {
+      "step_id": "step_01",
+      "tool": "shell",
+      "description": "Record the baseline: check the working tree, branch off, and run the full test suite so every later milestone can prove it broke nothing.",
+      "arguments": {
+        "name": "baseline",
+        "phase": "M0",
+        "effort": "S",
+        "commands": [
+          "git status",
+          "git switch -c feature/seeded-levels",
+          "dotnet test tests/PopBlocks.Tests"
+        ],
+        "notes": "docs/store-listing/ is currently untracked. Decide with the user whether to commit it first; do not delete it.",
+        "acceptance": [
+          "All existing tests pass",
+          "Work happens on feature/seeded-levels"
+        ]
+      },
+      "dependencies": [],
+      "on_failure": { "strategy": "abort", "max_retries": 0, "fallback_step_id": null },
+      "output_keys": ["baseline_test_report"]
+    },
+    {
+      "step_id": "step_02",
+      "tool": "manual_review",
+      "description": "RESOLVED. Records the locked decisions and open-question defaults from the spec so later steps read one source of truth. No input needed unless the user overrides a default.",
+      "arguments": {
+        "name": "decisions",
+        "phase": "M0",
+        "effort": "S",
+        "resolved": true,
+        "baseline": "{{baseline_test_report}}",
+        "decisions": "See metadata.decisions_resolved and metadata.open_questions in this file.",
+        "notes": "Confirm Q1-Q6 defaults only if the user wants to change one. Otherwise proceed on the defaults."
+      },
+      "dependencies": ["step_01"],
+      "on_failure": { "strategy": "skip", "max_retries": 0, "fallback_step_id": null },
+      "output_keys": ["design_decisions"]
+    },
+    {
+      "step_id": "step_03",
+      "tool": "code_search",
+      "description": "Verify the spec's description of the code before editing: the generation, solver, cache, gold, save and Classic call sites, and the introduction-level constants.",
+      "arguments": {
+        "name": "verify_current_state",
+        "phase": "M0",
+        "effort": "S",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "src/PopBlocks.Engine/Levels/LevelSolver.cs",
+          "src/PopBlocks.Engine/Logic/GameEngine.cs",
+          "src/PopBlocks.Engine/Logic/BoardGenerator.cs",
+          "src/PopBlocks.Engine/Logic/PieceGenerator.cs",
+          "src/PopBlocks.Engine/Services/PlayerProgress.cs",
+          "src/PopBlocks.Engine/Services/SaveKeys.cs",
+          "src/PopBlocks.Engine/Services/SaveCode.cs",
+          "src/PopBlocks.Engine/Services/SettingsServices.cs",
+          "src/PopBlocks.Engine/Story/RegionRules.cs",
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "tests/PopBlocks.Tests/LevelSnapshotTests.cs",
+          "tests/PopBlocks.Tests/BonusObjectiveTests.cs"
+        ],
+        "details": [
+          "Confirm: BoardSeed = n, PieceSeed = BoardGenerator.PieceSeed(n), goal-kind RNG Random(n * 7919 + 13), colour-goal colour Random(n * 31 + 5), SolverCap 80, retry up to 8 times with easier goals, and the unverified fallback.",
+          "Confirm LevelSolver.Solve(level, maxMoves, bonus) is the only solver entry point and find where the top-6 candidate count and two-piece look-ahead are set.",
+          "Confirm how the cache keys levels, which calls build outside the lock, and where Classic pieces come from (PieceGenerator with a default Random).",
+          "Find the real introduction-level constants in RegionRules and the memory-level offsets (11 and 17 per region) and how BonusPlanner.Choose is called.",
+          "Find where the app lifecycle hook that auto-pauses the game lives (needed for Classic banking).",
+          "List any spec statement that does not match the code and record it in the output."
+        ],
+        "acceptance": ["A short list of confirmed facts and mismatches that later steps use instead of the spec's line numbers"]
+      },
+      "dependencies": ["step_01"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["code_facts"]
+    },
+    {
+      "step_id": "step_04",
+      "tool": "code_edit",
+      "description": "Add a SolveOptions parameter to LevelSolver.Solve (candidates kept, look-ahead on or off) so a weak bot can be run. The default must reproduce today's behaviour exactly.",
+      "arguments": {
+        "name": "solver_options",
+        "phase": "M0",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelSolver.cs",
+          "tests/PopBlocks.Tests/*Solver*.cs (new or extend an existing solver test)"
+        ],
+        "details": [
+          "SolveOptions { int Candidates = 6; bool LookAhead = true; }. Solve(level, maxMoves, bonus = null, options = default) keeps the current signature working.",
+          "Weak bot = Candidates 1, LookAhead false. If the weak bot does not win within the cap, callers use the cap.",
+          "Expose the number of pieces the bot needs so hardness = min(2.0, weakNeed / fullNeed) can be computed.",
+          "Do not change the default result for any level. Prove it with the snapshot and replay tests."
+        ],
+        "acceptance": [
+          "Default options give identical SolveResult for levels 1-220 (assert in a test)",
+          "Weak bot never needs fewer pieces than the full bot on a sample of levels, or the test documents why"
+        ]
+      },
+      "dependencies": ["step_03"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["solver_options_api"]
+    },
+    {
+      "step_id": "step_05",
+      "tool": "code_edit",
+      "description": "Build the sweep tool: for levels 1-220 run at least 50 candidate seeds each and write a CSV, then run it, measure generation time on a low-end Android phone, and choose the band percentiles and attempt count.",
+      "arguments": {
+        "name": "sweep_tool",
+        "phase": "M0",
+        "effort": "L",
+        "files": [
+          "tests/PopBlocks.Tests/SeedSweep.cs (new, opt-in via environment variable) or a small console project under tools/",
+          "docs/story/seed-sweep.csv (generated, committed)",
+          "docs/story/seed-sweep-notes.md (new)"
+        ],
+        "details": [
+          "Builds each candidate with LevelCatalog.Get(level, seed) (step_08), without the band gate. This is why the sweep runs after seed plumbing even though it is the M0 measurement.",
+          "CSV columns: level, seed, fullNeed, weakNeed, hardness, startBlocks, generationMs.",
+          "Opt-in only (environment variable) so normal test runs stay fast.",
+          "Device timing: run the generation of a spread of levels on a low-end Android phone and record the 95th percentile per tier. If p95 is above 1 second, lower the attempt count (24) or skip the weak-bot run where it is not needed.",
+          "Choose and record: band percentiles (default 20th-80th), smoothing window (5), soft-start clamp rules, attempt count and time budget."
+        ],
+        "acceptance": [
+          "CSV committed under docs/story/ with at least 50 seeds per level for 1-220",
+          "Notes file records p95 generation time on a low-end phone and the chosen parameters"
+        ]
+      },
+      "dependencies": ["step_04", "step_08"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["sweep_csv", "chosen_band_parameters"]
+    },
+    {
+      "step_id": "step_06",
+      "tool": "manual_review",
+      "description": "On-device timing check for the sweep (low-end Android phone). Human gate: the p95 generation time decides the attempt count and whether the weak-bot run stays.",
+      "arguments": {
+        "name": "device_timing_review",
+        "phase": "M0",
+        "effort": "S",
+        "inputs": "{{sweep_csv}} {{chosen_band_parameters}}",
+        "questions": [
+          "Is p95 generation time under 1 second per level on the low-end phone?",
+          "If not, lower attempts below 24 or drop the weak-bot run for levels where it is not needed. Record the choice."
+        ]
+      },
+      "dependencies": ["step_05"],
+      "on_failure": { "strategy": "skip", "max_retries": 0, "fallback_step_id": null },
+      "output_keys": ["timing_decision"]
+    },
+    {
+      "step_id": "step_07",
+      "tool": "code_edit",
+      "description": "Add the seed primitives and one config class: Mix32 (splitmix-style), Hash32 (FNV-1a over UTF-8 plus the install nonce), the LevelSeed record struct, and a SeedingConfig holding every tunable number.",
+      "arguments": {
+        "name": "seed_primitives",
+        "phase": "M1",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelSeed.cs (new)",
+          "src/PopBlocks.Engine/Levels/SeedMix.cs (new: Mix32, Hash32)",
+          "src/PopBlocks.Engine/SeedingConfig.cs (new)",
+          "tests/PopBlocks.Tests/SeedMixTests.cs (new)"
+        ],
+        "details": [
+          "public readonly record struct LevelSeed(int Value) { public static LevelSeed Legacy => new(0); }",
+          "Mix32(params ints) returns an int; levelSeed = Mix32(salt, level, reroll, attempt) & 0x3FFFFFFF and never 0.",
+          "Hash32 uses FNV-1a, matching LevelSnapshotTests.PileHash. Never string.GetHashCode().",
+          "SeedingConfig holds: attempts (24), search budget (2 s), band percentiles, free-reroll failures (10), loading thresholds (300/600 ms), Classic rate table, name length (1-20), default name 'Traveller'. Values come from step_05 where decided there."
+        ],
+        "acceptance": [
+          "Golden-value unit tests for Mix32 and Hash32",
+          "levelSeed is always in 1..0x3FFFFFFF for a large sample"
+        ]
+      },
+      "dependencies": ["step_03"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["seed_primitives_api"]
+    },
+    {
+      "step_id": "step_08",
+      "tool": "code_edit",
+      "description": "Seed plumbing: LevelCatalog.Get(level, seed), GameSetup.Seed, a cache keyed by (level, seed) with single-flight builds, and routing the engine and view model through the seed. Goal kinds stay on the level number.",
+      "arguments": {
+        "name": "seed_plumbing",
+        "phase": "M1",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "src/PopBlocks.Engine/Models/GameSetup.cs",
+          "src/PopBlocks.Engine/Logic/GameEngine.cs",
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "tests/PopBlocks.Tests/SeededLevelStructureTests.cs (new)"
+        ],
+        "details": [
+          "Get(int level) stays and means Get(level, LevelSeed.Legacy). Get(level, seed) is a pure function; seed 0 uses the old n-based seeds exactly.",
+          "For a non-zero seed: BoardSeed = seed, PieceSeed = BoardGenerator.PieceSeed(seed), colour-goal colour from seed. Clear-down target and move limit follow from the pile and the solver as today. Level 11 and levels 1-10 use the same seeding; the scripted opening piece and intro card stay.",
+          "Do not touch PickKinds' RNG or any tier table.",
+          "Replace the static dictionary with a cache keyed by (level, seed). Never hold the lock while the solver runs (today's Get already builds outside it). Single-flight per key.",
+          "GameSetup.Story(int level, LevelSeed seed) with an optional Seed; GameEngine.Start and GameViewModel pass it through."
+        ],
+        "acceptance": [
+          "LevelSnapshotTests passes untouched (legacy seed is byte-identical)",
+          "Structure test: for 20 salts and levels 1-220, goal kinds, goal count, flip, penalty, finale, ability lock, colours, fall speed and exotic share equal the legacy level's",
+          "Same salt, level and seed give an identical level (pile hash, goals, move limit, objective) twice"
+        ]
+      },
+      "dependencies": ["step_07"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["seeded_get_api"]
+    },
+    {
+      "step_id": "step_09",
+      "tool": "run_tests",
+      "description": "M1 gate: the whole suite, with the legacy snapshot and replay tests green and the new structure tests passing.",
+      "arguments": {
+        "name": "gate_m1",
+        "phase": "M1",
+        "effort": "S",
+        "commands": ["dotnet test tests/PopBlocks.Tests"],
+        "acceptance": ["All tests pass", "LevelSnapshotTests file is unchanged except its comment (done in step_31)"]
+      },
+      "dependencies": ["step_08"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["gate_m1_report"]
+    },
+    {
+      "step_id": "step_10",
+      "tool": "code_edit",
+      "description": "Persistence: add the eight new save keys and the new seed-list kind to SaveKeys and SaveCode, with validation and the 'stale current_level_for' rule.",
+      "arguments": {
+        "name": "save_keys_and_codec",
+        "phase": "M2",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks.Engine/Services/SaveKeys.cs",
+          "src/PopBlocks.Engine/Services/SaveCode.cs",
+          "src/PopBlocks.Engine/Services/PlayerProgress.cs",
+          "tests/PopBlocks.Tests/SaveCodeTests.cs",
+          "tests/PopBlocks.Tests/SaveInfrastructureTests.cs"
+        ],
+        "details": [
+          "Keys (add to SaveKeys.All and SaveCode.Fields): player_name (text 1-20), player_salt (int 0..2147483647, 0 = unset), current_level_for (int 0..100000), current_level_seed (int 0..1073741823, 0 = unassigned), current_level_rerolls (0..100000), current_level_failures (0..100000), first_clear_seeds (new seed-list kind, up to 5000 pairs), classic_gold_carry (int 0..9).",
+          "Seed-list kind validates every pair: level 1-100000, seed 1-1073741823, no duplicate levels, at most 5000 pairs. Malformed input fails through the existing Fail path.",
+          "On load, if current_level_for != HighestCleared + 1, treat the three current_level_* values as unset.",
+          "A cleared level with no entry in first_clear_seeds replays the legacy seed. A save with progress and no player_salt is an existing player.",
+          "Add a text kind to the codec if none exists for player_name."
+        ],
+        "acceptance": [
+          "Round trip of every new key",
+          "An old save (no new keys) loads with defaults",
+          "Malformed, duplicate, out-of-range and oversized seed lists are rejected",
+          "A stale current_level_for is ignored",
+          "The SaveKeys.All comparison test is extended"
+        ]
+      },
+      "dependencies": ["step_03"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["save_keys_api"]
+    },
+    {
+      "step_id": "step_11",
+      "tool": "code_edit",
+      "description": "Player identity service: name validation, installNonce, salt = Hash32(name, nonce) stored once, rename without changing the salt.",
+      "arguments": {
+        "name": "player_identity",
+        "phase": "M2",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Services/PlayerIdentity.cs (new)",
+          "tests/PopBlocks.Tests/PlayerIdentityTests.cs (new)"
+        ],
+        "details": [
+          "Name = trimmed, control characters removed, 1-20 chars. Skip uses 'Traveller' (still generates a salt).",
+          "installNonce is 32 random bits generated at that moment; salt stored once as player_salt and never recomputed.",
+          "Rename updates player_name only.",
+          "Provide IsExistingPlayerWithoutName (progress but player_salt == 0) for the prompt trigger."
+        ],
+        "acceptance": [
+          "Salt is stable across rename and across instances reading the same settings",
+          "Skip yields 'Traveller' and a non-zero salt",
+          "Control characters and over-length input are handled"
+        ]
+      },
+      "dependencies": ["step_07", "step_10"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["player_identity_api"]
+    },
+    {
+      "step_id": "step_12",
+      "tool": "code_edit",
+      "description": "Name prompt UI and About/settings: one text field and a Skip button before the tutorial offer, shown on first launch and on the first launch after the update for existing players; Rename action in About; update the promises text.",
+      "arguments": {
+        "name": "name_prompt_ui",
+        "phase": "M2",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks/ViewModels/GameViewModel.cs (ShouldOfferTutorial)",
+          "src/PopBlocks/Views/MainPage.xaml(.cs)",
+          "src/PopBlocks/Views/AboutPage.xaml(.cs)",
+          "src/PopBlocks/MauiProgram.cs (register PlayerIdentity)"
+        ],
+        "details": [
+          "Copy: \"What should Pip call you? Pick any name. It is only for the game and never leaves your phone.\"",
+          "Existing players are asked on the first launch after the update, before their next level starts.",
+          "About: show the name with Rename (renaming does not change levels). Update the promises text: name stored locally and travels only inside the player's own save code, Classic earns gold, rerolls cost gold and are free after 10 failures.",
+          "Put all new strings with the existing UI strings. Accessibility labels on every control."
+        ],
+        "acceptance": [
+          "Fresh install: prompt appears before the tutorial offer; Skip works",
+          "Existing save: prompt appears once, then never again",
+          "Rename leaves levels unchanged"
+        ]
+      },
+      "dependencies": ["step_11"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_13",
+      "tool": "run_tests",
+      "description": "M2 gate: all save tests pass including loading an old save.",
+      "arguments": {
+        "name": "gate_m2",
+        "phase": "M2",
+        "effort": "S",
+        "commands": ["dotnet test tests/PopBlocks.Tests"],
+        "acceptance": ["All tests pass", "Old-save load test passes"]
+      },
+      "dependencies": ["step_12"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["gate_m2_report"]
+    },
+    {
+      "step_id": "step_14",
+      "tool": "code_edit",
+      "description": "Generate DifficultyBand.cs from the sweep CSV with the soft-start clamp, so retuning means rerunning the tool.",
+      "arguments": {
+        "name": "difficulty_band_table",
+        "phase": "M3",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Levels/DifficultyBand.cs (generated)",
+          "tests/PopBlocks.Tests/SeedSweep.cs (add a 'write band table' mode)",
+          "tests/PopBlocks.Tests/DifficultyBandTests.cs (new)"
+        ],
+        "details": [
+          "Band for level n = 20th to 80th percentile of hardness smoothed over 5 levels each side inside the same tier.",
+          "Soft starts: first 5 levels of each tier (51, 101, 151) and each introduction level plus 2 following levels clamp the upper edge to the median of the previous 5 levels; if that empties the band, accept up to the lower edge. Read introduction levels from the RegionRules constants.",
+          "Guard rails: fullNeed and start-pile size within the 10th-90th percentile of the sweep for that tier.",
+          "Generated file carries a header saying how to regenerate it."
+        ],
+        "acceptance": [
+          "A band exists for every level 1-220",
+          "Tier-start and introduction levels have a lower upper edge than their neighbours (test)",
+          "Regenerating from the committed CSV gives the committed file"
+        ]
+      },
+      "dependencies": ["step_05", "step_06", "step_13"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["difficulty_band_api"]
+    },
+    {
+      "step_id": "step_15",
+      "tool": "code_edit",
+      "description": "LevelCatalog.Roll: search attempts 0-23 (or the time budget) for the first candidate that meets the hard requirements and the band; otherwise the verified candidate closest to the band. Remove any path that returns the unverified fallback for a rolled seed.",
+      "arguments": {
+        "name": "roll_and_gate",
+        "phase": "M3",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "src/PopBlocks.Engine/Levels/LevelSolver.cs",
+          "tests/PopBlocks.Tests/RollGateTests.cs (new)"
+        ],
+        "details": [
+          "Roll(int level, int salt, int reroll) returns (LevelDefinition, LevelSeed); deterministic for a given (salt, level, reroll).",
+          "Hard requirements: full solver wins within SolverCap (80); Generated does not return the unverified fallback (if all 8 easing steps fail, reject this attempt); start pile has no burst-sized group and clear spawn rows; on memory levels (offsets 11 and 17, never a finale) BonusPlanner.Choose returns an objective; move limit >= 6.",
+          "hardness = min(2.0, weakNeed / fullNeed) with the weak bot from SolveOptions.",
+          "Time budget from SeedingConfig; accept the verified candidate closest to the band if none fits. Never an unverified level.",
+          "Legacy Generated(n) behaviour (including its fallback) must stay as is for seed 0; add a way for Roll to ask 'did this build need the fallback?'.",
+          "Callable off the UI thread; no shared mutable state without the single-flight cache."
+        ],
+        "acceptance": [
+          "Same (salt, level, reroll) gives an identical result twice",
+          "Rolled levels never use the unverified fallback",
+          "Memory levels always carry an objective"
+        ]
+      },
+      "dependencies": ["step_14", "step_08"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["roll_api"]
+    },
+    {
+      "step_id": "step_16",
+      "tool": "code_edit",
+      "description": "Gate tests: seeded replay test through the real GameEngine, hardness-in-band (or closest-candidate rule applied), memory objectives, never the fallback; plus an opt-in fuzz run.",
+      "arguments": {
+        "name": "gate_tests",
+        "phase": "M3",
+        "effort": "M",
+        "files": [
+          "tests/PopBlocks.Tests/SeededCatalogueReplayTests.cs (new)",
+          "tests/PopBlocks.Tests/SeedFuzzTests.cs (new, opt-in by environment variable)"
+        ],
+        "details": [
+          "For a fixed test salt, levels 1-220 and rerolls 0-2: the bot wins; the plan replayed through the real GameEngine wins; hardness is in the band or the closest-candidate rule applied; memory levels have an objective; the unverified fallback is never used.",
+          "Fuzz: 5,000 seeds per tier with the same assertions plus generation-time statistics.",
+          "BonusObjectiveTests, RegionRulesTests and the old replay test stay untouched on the legacy seed."
+        ],
+        "acceptance": ["Seeded replay test passes for 1-220 x rerolls 0-2", "Fuzz run passes when enabled"]
+      },
+      "dependencies": ["step_15"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["gate_tests_report"]
+    },
+    {
+      "step_id": "step_17",
+      "tool": "run_tests",
+      "description": "M3 gate: full suite plus the fuzz run once.",
+      "arguments": {
+        "name": "gate_m3",
+        "phase": "M3",
+        "effort": "S",
+        "commands": ["dotnet test tests/PopBlocks.Tests"],
+        "notes": "Run the opt-in fuzz once with its environment variable set and attach the generation-time statistics.",
+        "acceptance": ["All tests pass", "Fuzz run passes"]
+      },
+      "dependencies": ["step_16"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["gate_m3_report"]
+    },
+    {
+      "step_id": "step_18",
+      "tool": "code_edit",
+      "description": "Engine rules for reroll: PricingRules (price function), FailureTracker (counted only on the current level, saved on every increment), and an atomic RerollService.",
+      "arguments": {
+        "name": "reroll_rules",
+        "phase": "M4",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks.Engine/Services/RerollPricing.cs (new)",
+          "src/PopBlocks.Engine/Services/LevelAttemptState.cs (new: failures, rerolls, current seed)",
+          "src/PopBlocks.Engine/Services/RerollService.cs (new)",
+          "tests/PopBlocks.Tests/RerollPricingTests.cs (new)",
+          "tests/PopBlocks.Tests/FailureTrackingTests.cs (new)"
+        ],
+        "details": [
+          "price = (reward * (10 - min(failures, 10)) + 9) / 10, reward = GoldRewards.For(level, false). Offered when failures >= 1 on the current level (HighestCleared + 1); always free on a cleared level; levels 1-10 are always free.",
+          "Failure = loss, or manual restart after at least one piece placed. Leaving to the menu does not count. Replays never count.",
+          "Reroll in one save: deduct gold, reroll count + 1, clear the stored seed. Do this before generating. Too little gold changes nothing.",
+          "Spend gold through the shop's path so the clamp and save-on-change behaviour apply.",
+          "Examples to assert: level 12 -> 12/11/6/2/0; level 60 -> 33/30/17/4/0; level 130 -> 77/70/39/8/0; level 180 -> 114/103/57/12/0 at first-clear / 1 / 5 / 9 / 10+ failures."
+        ],
+        "acceptance": [
+          "Table-driven pricing test including rounding",
+          "Free for levels 1-10 and at 10 or more failures",
+          "Spending is atomic; too little gold changes nothing",
+          "Failures survive an app restart, are not reset by a reroll, are reset by a clear"
+        ]
+      },
+      "dependencies": ["step_10", "step_15"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["reroll_rules_api"]
+    },
+    {
+      "step_id": "step_19",
+      "tool": "code_edit",
+      "description": "First-clear record and seed resolution: write n:seed once in PlayerProgress.Complete, reset the current-level state, and implement the 'which seed a level plays' table.",
+      "arguments": {
+        "name": "first_clear_and_resolution",
+        "phase": "M4",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Services/PlayerProgress.cs",
+          "src/PopBlocks.Engine/Services/LevelSeedResolver.cs (new)",
+          "tests/PopBlocks.Tests/FirstClearTests.cs (new)"
+        ],
+        "details": [
+          "On the first clear of level n, in the same place gold is paid, write n:seed to first_clear_seeds. Never overwrite. Then reset stored seed 0, rerolls 0, failures 0.",
+          "Resolver: current level first entry -> Roll(level, salt, 0) stored; later entries -> stored seed; cleared level with record -> recorded seed; cleared before the update with no record -> legacy seed 0; reroll on a cleared level -> Roll(level, salt, k) with k per session, free, not stored; locked level -> not playable.",
+          "Leaving a rerolled replay returns the level to its recorded seed next time.",
+          "Memory objectives belong to the memory id, not the seed. Confirm against BonusObjectiveTests."
+        ],
+        "acceptance": [
+          "Seed recorded once and never overwritten",
+          "A level cleared before the update replays the legacy seed",
+          "A reroll on a cleared level is not stored",
+          "Earning a memory objective on any seed counts"
+        ]
+      },
+      "dependencies": ["step_18"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["resolver_api"]
+    },
+    {
+      "step_id": "step_20",
+      "tool": "run_tests",
+      "description": "Engine-side gate for M4: pricing, failures and first-clear tests green before any UI work.",
+      "arguments": {
+        "name": "gate_m4_engine",
+        "phase": "M4",
+        "effort": "S",
+        "commands": ["dotnet test tests/PopBlocks.Tests"],
+        "acceptance": ["All tests pass"]
+      },
+      "dependencies": ["step_19"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["gate_m4_engine_report"]
+    },
+    {
+      "step_id": "step_21",
+      "tool": "code_edit",
+      "description": "Wire failures, reroll and seed resolution into GameViewModel: record failures on loss and on restart-after-placed-piece, perform the reroll, reset level state exactly as a retry does, persist the current level.",
+      "arguments": {
+        "name": "viewmodel_reroll_wiring",
+        "phase": "M4",
+        "effort": "L",
+        "files": ["src/PopBlocks/ViewModels/GameViewModel.cs", "src/PopBlocks/MauiProgram.cs"],
+        "details": [
+          "Level start uses LevelSeedResolver; Roll runs off the UI thread.",
+          "Count a failure only when the level is the player's current level; save the counter on every increment.",
+          "Reroll: deduct gold, add 1 to the reroll count, clear the stored seed (one save), then roll, store as current seed, start the level. Helpers (Second Chance, Prism Shift, Prism Reserve free shifts) are available again.",
+          "Retrying the same seed stays free and unchanged.",
+          "Expose bindable state: RerollPrice, CanAffordReroll, FailuresUntilFree, ShowReroll, IsRerollFree, RerollLabel."
+        ],
+        "acceptance": [
+          "Loss and restart-after-placement increment failures; menu exit does not",
+          "Reroll starts a new level and resets helper availability",
+          "Cleared-level reroll is free and not stored"
+        ]
+      },
+      "dependencies": ["step_20", "step_12"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_22",
+      "tool": "code_edit",
+      "description": "Reroll UI and levels-page seed: REROLL on the fail panel and pause menu with price, 'Free in N more tries', the '?' hint, and 'Fresh level, free' at 10 failures; seed text on cleared and current levels with tap-to-copy.",
+      "arguments": {
+        "name": "reroll_ui",
+        "phase": "M4",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks/Views/GamePage.xaml(.cs)",
+          "src/PopBlocks/Views/LevelSelectPage.xaml(.cs)",
+          "src/PopBlocks/Views/UiHelpers.cs",
+          "wherever existing UI strings live"
+        ],
+        "details": [
+          "Fail panel: keep RETRY unchanged. Add REROLL with its price, 'Free in N more tries' (N = 10 - failures), and a '?' hint button reading: \"Short on gold? Pop blocks in Classic mode to earn some.\" The hint may link to Classic and is never the only way forward.",
+          "At 10 or more failures the button reads 'Fresh level, free' with the line 'Stuck? Take a new level on the house.' Do not auto-trigger it.",
+          "When gold is short: button disabled, price stays visible.",
+          "Pause menu: the same REROLL when the current level has at least 1 failure, and always (free) on a cleared level.",
+          "Levels page: cleared level shows 'Seed 483920117' as small secondary text (tap copies); legacy level shows 'Original'; current level shows its seed once assigned; locked levels show none. No promise of reproduction after an update.",
+          "No countdowns, timers, pulsing or urgent colours. Accessibility labels include the price or state."
+        ],
+        "acceptance": [
+          "All states render as plain text (affordable, unaffordable, free at 10, cleared-level free)",
+          "Screen-reader labels include price/state"
+        ]
+      },
+      "dependencies": ["step_21"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_23",
+      "tool": "code_edit",
+      "description": "Dev menu additions: enter a Story seed for a level, set failures and gold, and run the seed sweep.",
+      "arguments": {
+        "name": "dev_menu",
+        "phase": "M4",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks/DevMenu.cs",
+          "src/PopBlocks/Views/DevMenuPage.xaml(.cs)",
+          "src/PopBlocks.Engine/Services/DevTools.cs",
+          "tests/PopBlocks.Tests/DevToolsTests.cs"
+        ],
+        "details": [
+          "Typing a Story seed in is a dev-menu-only feature.",
+          "Setting failures and gold goes through the same save path as the game."
+        ],
+        "acceptance": ["DevToolsTests extended and passing", "Dev menu reachable only where it is today"]
+      },
+      "dependencies": ["step_21"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_24",
+      "tool": "manual_review",
+      "description": "M4 manual check on device: fail a level 10 times and confirm the reroll becomes free; confirm price display, disabled state, hint text and levels-page seed copy.",
+      "arguments": {
+        "name": "gate_m4_manual",
+        "phase": "M4",
+        "effort": "S",
+        "checklist": [
+          "Fail a current level 10 times (restart after a placed piece counts); the button changes to 'Fresh level, free'",
+          "With too little gold the button is disabled, the price is visible, and 'Free in N more tries' is correct",
+          "Kill the app mid-way; the failure count survives",
+          "Replay a cleared level and reroll: free, and the next entry returns the recorded seed",
+          "Tap a seed on the levels page; the number is copied"
+        ]
+      },
+      "dependencies": ["step_22", "step_23"],
+      "on_failure": { "strategy": "skip", "max_retries": 0, "fallback_step_id": null },
+      "output_keys": ["m4_manual_report"]
+    },
+    {
+      "step_id": "step_25",
+      "tool": "code_edit",
+      "description": "Prefetch and cache: PrefetchNextLevel uses the seed-resolution rule; after a recorded failure prefetch Roll(level, salt, reroll + 1) at low priority; cancel on leave; cache keeps the current level, the next level and one prefetched reroll.",
+      "arguments": {
+        "name": "prefetch",
+        "phase": "M5",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks/ViewModels/GameViewModel.cs (PrefetchNextLevel)",
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs (cache)",
+          "tests/PopBlocks.Tests/LevelCacheTests.cs (new)"
+        ],
+        "details": [
+          "Do nothing before the first failure, to save battery.",
+          "Cache bounded to (current, next, one prefetched reroll). Single-flight per key; no lock held while the solver runs.",
+          "Cancellation token cancels the prefetch when the player leaves the level."
+        ],
+        "acceptance": [
+          "Cache never grows beyond the bound",
+          "Two threads requesting the same key trigger one solve (test)",
+          "A prefetched reroll starts in under 100 ms"
+        ]
+      },
+      "dependencies": ["step_22"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_26",
+      "tool": "code_edit",
+      "description": "Loading card: if a level is not ready 300 ms after it is requested, show a full-screen recap of story already seen (from UnlockStore, most recent first), hold at least 600 ms, close when ready, tap to dismiss once ready.",
+      "arguments": {
+        "name": "loading_card",
+        "phase": "M5",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks/Views/GamePage.xaml(.cs) or a new LoadingCard view",
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "src/PopBlocks.Engine/Services/UnlockStore.cs (read-only query for seen scene/lore ids)",
+          "tests/PopBlocks.Tests/LoadingRecapTests.cs (new, for the recap selection logic)"
+        ],
+        "details": [
+          "Recap content drawn from scene and lore ids in UnlockStore, most recent first. Never show anything from a scene the player has not seen.",
+          "No control that delays play. The search budget is 2 s so the card waits about 2.6 s at most.",
+          "Same card on first entry to a level when no prefetch finished (after the name prompt or after restoring a save code).",
+          "Thresholds come from SeedingConfig."
+        ],
+        "acceptance": [
+          "Recap selection only returns seen ids (test)",
+          "Card appears at 300 ms, stays at least 600 ms, closes when the level is ready",
+          "A prefetched reroll never shows the card"
+        ]
+      },
+      "dependencies": ["step_25"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_27",
+      "tool": "run_tests",
+      "description": "M5 gate: full suite plus the on-device timing check for prefetched and unprefetched rerolls.",
+      "arguments": {
+        "name": "gate_m5",
+        "phase": "M5",
+        "effort": "S",
+        "commands": ["dotnet test tests/PopBlocks.Tests"],
+        "notes": "Device check: prefetched reroll starts in under 100 ms; unprefetched shows the card after 300 ms and closes it when ready.",
+        "acceptance": ["All tests pass", "Device timing recorded"]
+      },
+      "dependencies": ["step_26"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["gate_m5_report"]
+    },
+    {
+      "step_id": "step_28",
+      "tool": "code_edit",
+      "description": "Classic gold engine: rate table, run accrual in tenths, carry, and exactly-once banking. Independent of the Story work; needs only the new save keys.",
+      "arguments": {
+        "name": "classic_gold_engine",
+        "phase": "M6",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Services/ClassicGold.cs (new)",
+          "src/PopBlocks.Engine/Logic/ScoringSystem.cs or GameEngine.cs (expose blocks popped per wave)",
+          "tests/PopBlocks.Tests/ClassicGoldTests.cs (new)"
+        ],
+        "details": [
+          "rate(L) = min(5, 1 + (L - 1) / 4) tenths per block, using the Classic level (1 + score / 800) at the moment of the pop. Count every block in every wave, chain waves included, no chain multiplier, no drop points.",
+          "Pending tenths accrue during a run. Bank: total = carry + pending; gold += total / 10; carry = total % 10; pending = 0. Save classic_gold_carry.",
+          "Bank through the shop's gold path. Guard so each banking event pays exactly once (game over then leave pays once).",
+          "Integer arithmetic only."
+        ],
+        "acceptance": [
+          "Rate table test for levels 1-4, 5-8, 9-12, 13-16, 17+",
+          "Carry is preserved across runs and stays in 0..9",
+          "Game over followed by leave pays once",
+          "Story levels pay no Classic gold"
+        ]
+      },
+      "dependencies": ["step_10"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": ["classic_gold_api"]
+    },
+    {
+      "step_id": "step_29",
+      "tool": "code_edit",
+      "description": "Classic seeded piece stream: piece i comes from new Random(Mix32(seed, i)); a seeded run pays gold but never updates best_score; Classic reads no Story state.",
+      "arguments": {
+        "name": "classic_seed_engine",
+        "phase": "M6",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Logic/PieceGenerator.cs",
+          "src/PopBlocks.Engine/Models/GameSetup.cs",
+          "src/PopBlocks.Engine/Services/SettingsServices.cs (best score submit path)",
+          "tests/PopBlocks.Tests/ClassicSeedTests.cs (new)"
+        ],
+        "details": [
+          "Stream is independent of how the player played and works with undo and rewind. Identical colour counts give identical pieces; the early 4-to-5 colour step is the only difference.",
+          "Unseeded Classic behaves as today.",
+          "Seeded run: Submit(best_score) is skipped.",
+          "No dependency on player salt, first_clear_seeds or the failure counter."
+        ],
+        "acceptance": [
+          "Same seed gives identical pieces across runs",
+          "Seeded run leaves best_score alone",
+          "Classic code path reads no Story state (test with a settings fake that throws on Story keys)"
+        ]
+      },
+      "dependencies": ["step_07", "step_28"],
+      "on_failure": { "strategy": "retry", "max_retries": 2, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_30",
+      "tool": "code_edit",
+      "description": "Classic app wiring: bank on game over, on leaving Classic (Back, menu, new game) and on app background (the same hook as auto-pause); optional Seed field on the start screen; HUD running total; game-over '+N gold' and seed with copy button.",
+      "arguments": {
+        "name": "classic_ui_wiring",
+        "phase": "M6",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "src/PopBlocks/Views/MainPage.xaml(.cs)",
+          "src/PopBlocks/Views/GamePage.xaml(.cs)",
+          "src/PopBlocks/Platforms/Android/MainActivity.cs and App.xaml.cs (lifecycle hook, as needed)"
+        ],
+        "details": [
+          "Seed field: numeric 0 to 2,147,483,647, collapsed behind a small 'Seed' link with a Clear button. Empty means a random seed chosen when the run starts.",
+          "Game over shows '+N gold' and the seed used (typed or random) with a copy button.",
+          "HUD: small running '+N gold', display only (Q6 default: include). Payment still happens only at the three banking events.",
+          "Save immediately after banking, as the personal best does today. A process killed with no event loses the unbanked part; that is accepted."
+        ],
+        "acceptance": [
+          "Each banking event pays exactly once",
+          "Backgrounding mid-run banks and saves",
+          "Seed field validation rejects out-of-range input"
+        ]
+      },
+      "dependencies": ["step_29", "step_21"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": []
+    },
+    {
+      "step_id": "step_31",
+      "tool": "run_tests",
+      "description": "M6 gate: Classic tests green, then the economy docs for Classic are updated so this milestone can ship on its own.",
+      "arguments": {
+        "name": "gate_m6",
+        "phase": "M6",
+        "effort": "S",
+        "commands": ["dotnet test tests/PopBlocks.Tests"],
+        "details": [
+          "Update docs/story/economy.md: rule 1 gets a Classic exception, Income gains Classic, Sinks gains rerolls.",
+          "Update the LevelSnapshotTests comment to say it freezes only the legacy seed (do not regenerate the snapshot)."
+        ],
+        "acceptance": ["All tests pass", "economy.md updated"]
+      },
+      "dependencies": ["step_30"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["gate_m6_report"]
+    },
+    {
+      "step_id": "step_32",
+      "tool": "code_edit",
+      "description": "Fairness tests (P7Tests) and docs: for every level 1-220 a reroll is free at 10 failures and no level needs gold to progress; update every doc, the About text, README and store listing named in the spec.",
+      "arguments": {
+        "name": "fairness_and_docs",
+        "phase": "M7",
+        "effort": "M",
+        "files": [
+          "tests/PopBlocks.Tests/P7Tests.cs",
+          "docs/01-game-design.md (1.5 levels per player; 1.6 Classic earns gold, rerolls are a sink; 1.8 promise 6 bot-verified at generation)",
+          "docs/story/economy.md",
+          "docs/02-architecture.md (persistence)",
+          "docs/04-story-mode.md (generation)",
+          "docs/07-testing.md",
+          "docs/09-extending.md (how to rerun the sweep and retune the band)",
+          "docs/10-campaign-and-content.md (fairness list)",
+          "README.md",
+          "src/PopBlocks/Views/AboutPage.xaml",
+          "docs/store-listing/full-description.txt and short-description.txt (only if they say levels are identical or Classic earns nothing)"
+        ],
+        "acceptance": [
+          "Fairness test passes for 1-220",
+          "No document still says levels are identical on every device or that Classic earns nothing"
+        ]
+      },
+      "dependencies": ["step_31"],
+      "on_failure": { "strategy": "retry", "max_retries": 1, "fallback_step_id": null },
+      "output_keys": ["docs_updated"]
+    },
+    {
+      "step_id": "step_33",
+      "tool": "manual_review",
+      "description": "Balance and release gate: tune the Classic rate against real reroll prices (target about 15 gold for a decent early run), playtest 5 seeds at each band edge on 3 levels per tier against docs/story/p3-playtest.md to p6-playtest.md, then final test run, Check-Permissions.ps1 and a signed APK check on device. Also decide open question Q5 (generator_version follow-up); the default is to skip it.",
+      "arguments": {
+        "name": "balance_and_release",
+        "phase": "M7",
+        "effort": "M",
+        "commands": [
+          "dotnet test tests/PopBlocks.Tests",
+          "powershell -File scripts/Check-Permissions.ps1"
+        ],
+        "checklist": [
+          "Adjust band percentiles if edges feel wrong, then regenerate DifficultyBand.cs from the sweep tool",
+          "Adjust the Classic rate table in SeedingConfig if early runs pay far from 15 gold",
+          "Verify no INTERNET permission and signed APK installs and runs on the Samsung S24",
+          "Decide on the generator_version follow-up (Q5); skip if the default stands"
+        ]
+      },
+      "dependencies": ["step_32"],
+      "on_failure": { "strategy": "skip", "max_retries": 0, "fallback_step_id": null },
+      "output_keys": ["release_report"]
+    }
+  ]
+}

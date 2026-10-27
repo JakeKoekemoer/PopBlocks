@@ -5,7 +5,7 @@
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" RowSpacing="12">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="20,16,20,0" RowSpacing="12">
         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
             <Button Grid.Column="0" Text="←" Style="{StaticResource RoundButton}" FontSize="18" Clicked="OnBackClicked" />
             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="0">
@@ -24,7 +24,32 @@
             </Border>
         </Grid>
 
-        <ScrollView Grid.Row="1">
+        <!-- The level you tapped: what it is, which seed it was built from (for information and bug reports), and PLAY.
+             Every player gets their own levels, so the seed is how a level can be talked about. Tap it to copy the number. -->
+        <Border Grid.Row="1" Style="{StaticResource Glass}" Padding="16,10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                    <Label x:Name="DetailTitle" FontSize="17" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                    <Label x:Name="DetailSeed" Style="{StaticResource CaptionLabel}">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnSeedTapped" />
+                        </Label.GestureRecognizers>
+                    </Label>
+                    <Label x:Name="DetailHint" FontSize="11" TextColor="{StaticResource TextSecondary}" IsVisible="False" />
+                </VerticalStackLayout>
+                <Button x:Name="DetailPlay"
+                        Grid.Column="1"
+                        Text="PLAY"
+                        Style="{StaticResource PrimaryButton}"
+                        HeightRequest="44"
+                        MinimumWidthRequest="96"
+                        CornerRadius="22"
+                        FontSize="14"
+                        Clicked="OnDetailPlayClicked" />
+            </Grid>
+        </Border>
+
+        <ScrollView Grid.Row="2">
             <VerticalStackLayout x:Name="LevelsHost" Spacing="10" Padding="0,0,0,28" />
         </ScrollView>
     </Grid>

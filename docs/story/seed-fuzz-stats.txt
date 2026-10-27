@@ -1,0 +1,1 @@
+Extreme: p50 108 ms, p95 810 ms, max 2150 ms; Hard: p50 87 ms, p95 1173 ms, max 2932 ms; Medium: p50 34 ms, p95 210 ms, max 1258 ms; Easy: p50 8 ms, p95 79 ms, max 898 ms

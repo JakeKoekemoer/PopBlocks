@@ -69,6 +69,12 @@ public sealed class PlayerProgress
 
         _settings.SetInt(HighestClearedKey, HighestCleared);
         _settings.SetInt(GoldKey, Gold);
+
+        // The seed of the first clear is remembered (once, never overwritten) so the level can be replayed as it was beaten;
+        // every other seed is thrown away. Then the next level starts with a clean slate: no seed, rerolls or failures.
+        SeedStore.RecordFirstClear(_settings, level.Number, level.Seed);
+        SeedStore.ResetCurrent(_settings);
+
         Changed?.Invoke();
         return new CompletionResult(true, gold);
     }

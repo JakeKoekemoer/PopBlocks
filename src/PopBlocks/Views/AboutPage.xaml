@@ -67,8 +67,39 @@
                         </Grid>
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                             <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
-                            <Label Grid.Column="1" Text="Gold is earned by playing. It can't be bought." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                            <Label Grid.Column="1" Text="Gold is earned by playing, in the Story and by popping blocks in Classic. It can't be bought." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
                         </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="Stuck on a level? Swap it for a new one with a reroll. A reroll costs gold, a little less after every try, and it is free after 10 tries. Gold never stands between you and the story." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="Your levels are yours. Each player gets their own, built on this phone and checked by a bot so they can always be won." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- The in-game name: local only, travels only inside the player's own save code -->
+                <Border Style="{StaticResource Glass}" Padding="24,20">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="YOUR NAME" Style="{StaticResource CaptionLabel}" />
+                        <Label x:Name="NameLabel"
+                               FontSize="24"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource TextPrimary}" />
+                        <Label Style="{StaticResource BodyLabel}"
+                               Text="Pip uses this name in the game. It stays on this phone and travels only inside your own save code. Changing the name never changes your levels." />
+                        <Entry x:Name="NameEntry"
+                               Placeholder="A new name"
+                               MaxLength="20"
+                               TextColor="{StaticResource TextPrimary}"
+                               SemanticProperties.Description="A new name, up to 20 characters" />
+                        <Button x:Name="RenameButton"
+                                Text="RENAME"
+                                Style="{StaticResource GhostButton}"
+                                HeightRequest="46"
+                                Clicked="OnRenameClicked" />
                     </VerticalStackLayout>
                 </Border>
 

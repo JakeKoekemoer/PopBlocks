@@ -152,3 +152,19 @@ public sealed class RewindableGenerator : IPieceGenerator
         _dropped += count;
     }
 }
+
+/// <summary>
+/// A repeatable stream of pieces for a Classic run with a seed. Piece <c>i</c> comes from its own
+/// <c>Random(Mix32(seed, i))</c> rather than one running <see cref="System.Random"/>, so it never depends on how the
+/// player played, and it works with undo and rewind. Pieces are identical for identical colour counts.
+/// </summary>
+public sealed class SeededPieceGenerator : IPieceGenerator
+{
+    private readonly int _seed;
+    private int _index;
+
+    public SeededPieceGenerator(int seed) => _seed = seed;
+
+    public Piece Next(int colourCount) =>
+        new PieceGenerator(new Random(Levels.SeedMix.Mix32(_seed, _index++))).Next(colourCount);
+}

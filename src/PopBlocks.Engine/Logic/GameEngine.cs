@@ -114,6 +114,12 @@ public sealed class GameEngine
     public int TotalPopped => _poppedClassic;
     private int _poppedClassic;
 
+    /// <summary>
+    /// Tenths of a gold earned so far in this Classic game (see <see cref="SeedingConfig.ClassicTenthsPerBlock"/>). Always 0
+    /// in Story. The app pays it out through <c>ClassicGold</c>.
+    /// </summary>
+    public int ClassicGoldTenths { get; private set; }
+
     /// <summary>Burst waves so far in the current resolution; returns to 0 when the board stabilises.</summary>
     public int Chain { get; private set; }
 
@@ -184,14 +190,14 @@ public sealed class GameEngine
     public void Start(GameSetup setup) =>
         StartCore(setup, setup.Mode switch
         {
-            GameMode.Story => LevelCatalog.Get(setup.Level),
+            GameMode.Story => LevelCatalog.Get(setup.Level, setup.Seed),
             GameMode.Tutorial => LevelCatalog.Lesson(setup.Level),
             _ => null,
         });
 
     /// <summary>Starts a game from an explicit level definition (previews, tests). A tutorial level starts as a lesson.</summary>
     public void StartLevel(LevelDefinition level) =>
-        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number) : GameSetup.Story(level.Number), level);
+        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number) : GameSetup.Story(level.Number, new LevelSeed(level.Seed)), level);
 
     private void StartCore(GameSetup setup, LevelDefinition? level)
     {
@@ -208,7 +214,9 @@ public sealed class GameEngine
         }
         else
         {
-            _rewindable = new RewindableGenerator(_defaultGenerator);
+            // A seeded Classic run draws its pieces from the seed; any other starts with the generator the engine was built with.
+            IPieceGenerator source = setup.ClassicSeed is { } classicSeed ? new SeededPieceGenerator(classicSeed) : _defaultGenerator;
+            _rewindable = new RewindableGenerator(source);
         }
         _generator = _rewindable;
 
@@ -225,6 +233,7 @@ public sealed class GameEngine
         Score = 0;
         PiecesPlaced = 0;
         _poppedClassic = 0;
+        ClassicGoldTenths = 0;
         Chain = 0;
         LastChain = 0;
         LastPenalty = 0;
@@ -450,6 +459,10 @@ public sealed class GameEngine
         int multiplier = ScoringSystem.Multiplier(Chain);
         int points = ScoringSystem.WavePoints(groups.Select(g => g.Size), Chain);
         var cleared = groups.SelectMany(g => g.Cells).ToList();
+
+        // Classic pays by the block, at the Classic level the pop happens at (before this wave's points are counted).
+        // Every wave counts, chain waves included, with no chain multiplier. Drop points never count.
+        if (Story is null) ClassicGoldTenths += cleared.Count * SeedingConfig.ClassicTenthsPerBlock(Level);
 
         GravityResolver.Clear(Board, cleared);
         var moves = GravityResolver.Apply(Board);

@@ -5,52 +5,112 @@ using PopBlocks.Engine.Story;
 namespace PopBlocks.Engine.Levels;
 
 /// <summary>
-/// The Story levels. Level 11 (the first "new shapes" level) is hand-made; every other level is generated from the
-/// level number, so it is endless and identical on every device. The ten guided tutorial lessons are hand-made too, but
-/// they live in their own sequence (<see cref="Lesson"/>) and are not Story levels.
+/// The Story levels. Level 11 (the first "new shapes" level) is hand-made in its opening piece and card; every level is
+/// generated from the level number and a <see cref="LevelSeed"/>, so it is endless. The legacy seed (0) gives the original,
+/// number-based level; a player's own seed (from <see cref="Roll"/>) gives their own version of it: the pile, the pieces
+/// and the colour of a colour goal change, the structure never does. The ten guided tutorial lessons are hand-made too,
+/// but they live in their own sequence (<see cref="Lesson"/>) and are not Story levels.
 ///
 /// Generated levels are proven winnable: a bot plays the level first, and the move limit is set from
 /// how many pieces it needed plus slack that shrinks as the tiers get harder. If the bot cannot reach the
-/// goals, the goals are eased until it can.
+/// goals, the goals are eased until it can. If it still cannot (the plain fallback), <see cref="BuiltLevel.Verified"/>
+/// is false and a roll never accepts the level.
 /// </summary>
 public static class LevelCatalog
 {
-    private const int SolverCap = 80;
+    /// <summary>How many pieces the bot may use when it plays a level. Also the most any move limit can come from.</summary>
+    public const int SolverCap = 80;
 
     /// <summary>Finales ask for a little more than their neighbours and leave a little less slack.</summary>
     private const double FinaleDemand = 1.1;
     private const double FinaleSlackShift = 0.08;
 
-    private static readonly Dictionary<int, LevelDefinition> Cache = new();
+    // Levels are cached by (number, seed). Legacy levels are a pure function of their number, so they are kept for good.
+    // Seeded levels are bounded: the current level, the next one and a prefetched reroll are all that is ever needed.
+    // A cache entry is a Lazy, so two threads asking for the same level never solve it twice (single flight), and the
+    // solver always runs outside the lock.
+    private static readonly Dictionary<(int Level, int Seed), Lazy<LevelDefinition>> Cache = new();
+    private static readonly LinkedList<(int Level, int Seed)> Recent = new();
     private static readonly object Gate = new();
 
-    public static LevelDefinition Get(int level)
+    /// <summary>The original level for this number (legacy seed). Existing callers and tests use this.</summary>
+    public static LevelDefinition Get(int level) => Get(level, LevelSeed.Legacy);
+
+    /// <summary>The level for this number built from <paramref name="seed"/>. A pure function: same inputs, same level.</summary>
+    public static LevelDefinition Get(int level, LevelSeed seed)
     {
         level = Math.Max(1, level);
+        var key = (level, seed.Value);
+        Lazy<LevelDefinition> entry;
         lock (Gate)
         {
-            if (Cache.TryGetValue(level, out var cached)) return cached;
+            if (!Cache.TryGetValue(key, out entry!))
+            {
+                entry = new Lazy<LevelDefinition>(() => Build(level, seed).Level, LazyThreadSafetyMode.ExecutionAndPublication);
+                Cache[key] = entry;
+            }
+            if (!seed.IsLegacy) Touch(key);
         }
 
-        var built = Build(level);
+        try
+        {
+            return entry.Value;
+        }
+        catch
+        {
+            lock (Gate) { if (Cache.TryGetValue(key, out var current) && ReferenceEquals(current, entry)) Cache.Remove(key); }
+            throw;
+        }
+    }
 
+    /// <summary>
+    /// Puts a level that was already built (by a roll) into the cache, so starting it does not build it a second time.
+    /// Does nothing if the level is already cached. The level must be the one <see cref="Build"/> gives for this seed.
+    /// </summary>
+    public static void Prime(int level, LevelSeed seed, LevelDefinition built)
+    {
+        level = Math.Max(1, level);
+        var key = (level, seed.Value);
         lock (Gate)
         {
-            Cache[level] = built;
+            if (Cache.ContainsKey(key)) { if (!seed.IsLegacy) Touch(key); return; }
+            Cache[key] = new Lazy<LevelDefinition>(built);
+            if (!seed.IsLegacy) Touch(key);
         }
-        return built;
     }
 
-    public static bool IsCached(int level)
+    public static bool IsCached(int level) => IsCached(level, LevelSeed.Legacy);
+
+    public static bool IsCached(int level, LevelSeed seed)
     {
-        lock (Gate) return Cache.ContainsKey(level);
+        lock (Gate) return Cache.TryGetValue((Math.Max(1, level), seed.Value), out var e) && e.IsValueCreated;
     }
 
-    private static LevelDefinition Build(int n) => n switch
+    /// <summary>Marks a seeded level as most recently used and drops the oldest ones past <see cref="SeedingConfig.CacheSize"/>. Call under the lock.</summary>
+    private static void Touch((int Level, int Seed) key)
     {
-        11 => NewShapesLevel(),
-        _ => Generated(n),
-    };
+        Recent.Remove(key);
+        Recent.AddFirst(key);
+        while (Recent.Count > SeedingConfig.CacheSize)
+        {
+            Cache.Remove(Recent.Last!.Value);
+            Recent.RemoveLast();
+        }
+    }
+
+    /// <summary>
+    /// Builds a level from a seed without caching it, and reports what the bot made of it. <see cref="BuiltLevel.Verified"/>
+    /// is false if the bot could not win any version of the goals and the plain fallback level was used (legacy levels
+    /// only ever do this by accident; <see cref="LevelRoller"/> never accepts such a level).
+    /// </summary>
+    public static BuiltLevel Build(int level, LevelSeed seed)
+    {
+        level = Math.Max(1, level);
+        return level == RegionRules.ExoticShapesIntro ? NewShapesLevel(seed) : Generated(level, seed);
+    }
+
+    /// <summary>Searches for a level seed that passes the difficulty gate for this player. See <see cref="LevelRoller"/>.</summary>
+    public static RolledLevel Roll(int level, int salt, int reroll) => LevelRoller.Roll(level, salt, reroll);
 
     // ====================================================================== the tutorial lessons
 
@@ -245,18 +305,19 @@ public static class LevelCatalog
                 Tap("Show what you learned", "Two goals this time. Pop 12 blocks and reach 150 points before your moves run out."),
             },
         };
-        return WithSolvedLimit(def, slack: 2.4, add: 4);
+        return WithSolvedLimit(def, slack: 2.4, add: 4).Level;
     }
 
-    private static LevelDefinition NewShapesLevel()
+    private static BuiltLevel NewShapesLevel(LevelSeed seed)
     {
         var def = new LevelDefinition
         {
             Number = 11,
+            Seed = seed.Value,
             Tier = Tier.Easy,
             Title = "New shapes",
-            BoardSeed = 11,
-            PieceSeed = 1011,
+            BoardSeed = seed.IsLegacy ? 11 : seed.Value,
+            PieceSeed = seed.IsLegacy ? 1011 : BoardGenerator.PieceSeed(seed.Value),
             Profile = new DifficultyProfile(4, 3, 1, 4, 0.5, 0.0),
             Goals = new[] { new Goal(GoalKind.PopBlocks, 14) },
             FallIntervalMs = 1300,
@@ -269,12 +330,12 @@ public static class LevelCatalog
             },
             Tip = "Odd shapes can reach awkward gaps.",
         };
-        return WithSolvedLimit(def, slack: 2.2, add: 3);
+        return WithSolvedLimit(def, slack: 2.2, add: 3);   // the opening piece ("Plus") and intro card stay whatever the seed
     }
 
     // ====================================================================== generated levels
 
-    private static LevelDefinition Generated(int n)
+    private static BuiltLevel Generated(int n, LevelSeed seed)
     {
         var tier = StoryConfig.TierFor(n);
         double p = StoryConfig.ProgressInTier(n);
@@ -282,8 +343,12 @@ public static class LevelCatalog
         bool finale = RegionRules.IsFinale(n);
         int variant = finale ? -1 : rule.VariantAt(n);
 
+        // The seed changes the pile, the pieces and the colour of a colour goal, and nothing else: the shape of the level
+        // (goal kinds, flip, penalty, finale, speed, colours) still comes from the level number alone.
+        int boardSeed = seed.IsLegacy ? n : seed.Value;
+
         var profile = RegionProfile(ProfileFor(tier, p, variant), rule);
-        var board = BoardGenerator.Generate(n, profile);
+        var board = BoardGenerator.Generate(boardSeed, profile);
         int startBlocks = board.CountOccupied();
 
         bool flip = RegionRules.Flips(n);
@@ -299,17 +364,21 @@ public static class LevelCatalog
         double split = kinds.Count == 1 ? 1.0 : kinds.Count == 2 ? 0.75 : 0.6;
 
         LevelDefinition result = null!;
+        int fullNeed = 0;
+        bool verified = false;
+        IReadOnlyList<SolvedMove> plan = Array.Empty<SolvedMove>();
         for (int step = 0; step < 8; step++)
         {
-            var goals = kinds.Select(k => MakeGoal(k, demand * split, tier, p, profile, startBlocks, rng0: n, step)).ToList();
+            var goals = kinds.Select(k => MakeGoal(k, demand * split, tier, p, profile, startBlocks, rng0: boardSeed, step)).ToList();
 
             var draft = new LevelDefinition
             {
                 Number = n,
+                Seed = seed.Value,
                 Tier = tier,
                 Title = $"Level {n}",
-                BoardSeed = n,
-                PieceSeed = BoardGenerator.PieceSeed(n),
+                BoardSeed = boardSeed,
+                PieceSeed = BoardGenerator.PieceSeed(boardSeed),
                 Profile = profile,
                 Goals = goals,
                 MoveLimit = SolverCap,
@@ -329,17 +398,22 @@ public static class LevelCatalog
             slack = Math.Max(RegionRules.SlackFloor, slack - rule.SlackShift - (finale ? FinaleSlackShift : 0.0));
             int limit = Math.Max(6, (int)Math.Ceiling(solved.Moves * slack) + add);
             result = draft with { MoveLimit = limit };
+            fullNeed = solved.Moves;
+            plan = solved.Plan;
+            verified = true;
             break;
         }
 
         // The bot could not meet any version of the goals (should not happen): fall back to a plain, generous level.
+        // It is not bot-verified, which is why BuiltLevel says so and a rolled seed never accepts it.
         result ??= new LevelDefinition
         {
             Number = n,
+            Seed = seed.Value,
             Tier = tier,
             Title = $"Level {n}",
-            BoardSeed = n,
-            PieceSeed = BoardGenerator.PieceSeed(n),
+            BoardSeed = boardSeed,
+            PieceSeed = BoardGenerator.PieceSeed(boardSeed),
             Profile = profile,
             Goals = new[] { new Goal(GoalKind.PopBlocks, 8) },
             MoveLimit = 40,
@@ -353,20 +427,22 @@ public static class LevelCatalog
         // A memory objective is offered only where the bot has shown it fits alongside the main goals.
         var bonus = BonusPlanner.Choose(result);
 
-        return result with
+        var level = result with
         {
             Bonus = bonus,
             FlipView = flip,
             Steps = RegionRules.IntroCards(n),
             Tip = finale ? RegionRules.FinaleTip(n) : TipFor(result, flip, penalty),
         };
+        return new BuiltLevel(level, fullNeed, verified, plan);
     }
 
-    private static LevelDefinition WithSolvedLimit(LevelDefinition def, double slack, int add)
+    private static BuiltLevel WithSolvedLimit(LevelDefinition def, double slack, int add)
     {
         var solved = LevelSolver.Solve(def with { MoveLimit = SolverCap }, SolverCap);
         int moves = solved.Won ? solved.Moves : 12;
-        return def with { MoveLimit = Math.Max(6, (int)Math.Ceiling(moves * slack) + add) };
+        var level = def with { MoveLimit = Math.Max(6, (int)Math.Ceiling(moves * slack) + add) };
+        return new BuiltLevel(level, solved.Won ? solved.Moves : 0, solved.Won, solved.Won ? solved.Plan : Array.Empty<SolvedMove>());
     }
 
     private static string? TipFor(LevelDefinition level, bool flip, bool penalty)

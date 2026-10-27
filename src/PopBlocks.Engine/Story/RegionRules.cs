@@ -56,6 +56,8 @@ public sealed record RegionRule
 public static class RegionRules
 {
     // ---- Where each goal kind is introduced (its first level uses it and shows a card) ----
+    /// <summary>The hand-made level that brings in the exotic piece shapes.</summary>
+    public const int ExoticShapesIntro = 11;
     public const int PopColourIntro = 13;
     public const int ClearDownIntro = 16;
     public const int ChainIntro = 20;

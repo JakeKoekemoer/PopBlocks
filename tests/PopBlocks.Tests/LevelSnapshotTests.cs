@@ -6,10 +6,14 @@ using Xunit;
 namespace PopBlocks.Tests;
 
 /// <summary>
-/// A regression snapshot of every generated level: its goals, move limit, speed, view rules and starting pile.
-/// Levels are meant to be identical on every device and after every update, so any change shows up here and has to be
-/// approved on purpose. To approve a deliberate change, run the tests once with POPBLOCKS_WRITE_SNAPSHOT set to the
-/// path of LevelSnapshotData.cs, review the diff, and commit it.
+/// A regression snapshot of every generated level built from the LEGACY seed (<see cref="LevelSeed.Legacy"/>, 0): its goals,
+/// move limit, speed, view rules and starting pile. These are the original, number-based levels: they are what a player who
+/// cleared a level before levels were generated per player replays, and they are frozen so that every old test keeps
+/// meaning what it did. Seeded levels (a player's own levels) are deliberately NOT covered here: they are covered by the
+/// seeding, structure and gate tests (SeededLevelStructureTests, SeededCatalogueReplayTests), and retuning the difficulty
+/// band must never regenerate this snapshot. Any change to the legacy levels shows up here and has to be approved on
+/// purpose. To approve a deliberate change, run the tests once with POPBLOCKS_WRITE_SNAPSHOT set to the path of
+/// LevelSnapshotData.cs, review the diff, and commit it.
 /// </summary>
 public class LevelSnapshotTests
 {

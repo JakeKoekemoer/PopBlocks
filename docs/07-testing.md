@@ -27,7 +27,7 @@ The campaign and economy have their own files:
 
 | File | Covers |
 |---|---|
-| `LevelSnapshotTests.cs`, `LevelSnapshotData.cs` | A frozen description of levels 1 to 220: any change to level generation shows up as a diff to review. Levels 1 to 11 may never change. |
+| `LevelSnapshotTests.cs`, `LevelSnapshotData.cs` | A frozen description of levels 1 to 220 **built from the legacy seed** (the original, number-based levels): any change to level generation shows up as a diff to review. Level 11 may never change. Seeded levels are covered by the tests below, not by this snapshot, and the snapshot is never regenerated for a retune. |
 | `RegionRulesTests.cs` | Each region leans on its favoured goal, finales are clean (no flip, no penalty, no helpers), nothing appears before its introduction. |
 | `StoryLayerTests.cs`, `FullStoryTests.cs`, `EndingTests.cs` | Scenes, lore, characters, replay rules, region rewards, the ending and its choice, and checks on the story text itself (nobody is named early, no text promises a branch, scenes fit on screen). |
 | `RunStatsTests.cs`, `BonusObjectiveTests.cs` | The record of a run and the optional objectives, replayed through the real engine. |
@@ -36,7 +36,13 @@ The campaign and economy have their own files:
 | `UndoTests.cs` | Undo restores every field; random play with random undos never diverges from replaying only the kept moves; refusals; the rewindable generator; colour-order cycling. |
 | `HelperTests.cs` | Prism Shift, helper stock, caps, locks, prices, Prism Reserve, the "without helpers" objective. |
 | `SaveInfrastructureTests.cs`, `SaveCodeTests.cs`, `P7Tests.cs` | Save keys (frozen), the migrator, the unlock store, the save code (round trip, tampering, bombs, clamping), and the fairness rules: every level winnable with nothing bought, the ending reachable with no purchase or memory, replays never pay twice, everything for sale affordable. |
-| `DevToolsTests.cs` | The testing shortcuts. |
+| `DevToolsTests.cs`, `SeededDevAndPageTests.cs` | The testing shortcuts (gold, jumps, failures, reset), the seed text on the levels page, and the gate timing report. |
+| `SeedMixTests.cs`, `SeededLevelStructureTests.cs` | Golden values for `Mix32`, `Hash32` and seed derivation; the same seed gives an identical level; different salts give different piles; a seed never changes a level's structure (goal kinds, flip, penalty, finale, colours, speed) for any level 1 to 220; the bounded, single-flight cache; the solver options. |
+| `SeededCatalogueReplayTests.cs` | The **gate**: for a fixed salt, levels 1 to 220 at rerolls 0 to 2 are bot-winnable, the bot's plan wins through the real `GameEngine`, the start is fair, memory levels have their objective, the unverified fallback is never used, and the hardness is in the band or the closest-candidate rule applied. Also `SeedFuzzTests` (see 7.6). |
+| `RerollTests.cs` | Table-driven reroll prices, failures (current level only, saved on every increment, survive a restart, not reset by a reroll, reset by a clear), the reroll action (atomic, free at 10, never needs gold), which seed a level plays, first-clear recording, prefetch and cancellation, single-flight rolls. |
+| `SeedSaveTests.cs`, `PlayerIdentityTests.cs` | The eight new save keys round-trip through a save code, an old save loads, malformed or oversized seed lists are rejected, a stale `current_level_for` is ignored; the name and salt rules. |
+| `ClassicGoldTests.cs` | The Classic rate table, accrual in the engine, banking (once per event, carry kept), seeded piece streams, a typed seed never sets a best score, and that Classic reads no Story state. |
+| `LoadingRecapTests.cs` | The loading card thresholds (300 ms, 600 ms) and that the recap shows only story the player has seen. |
 
 `StoryTests.cs` is split into classes by topic:
 
@@ -83,3 +89,16 @@ The MAUI layer has no automated tests: pages, the view model's bindings, gesture
 4. Prefer asserting on behaviour the player sees (state, score, goals, board) over internal fields.
 5. Tests must be deterministic. Use seeded `Random` or scripted generators; never `new Random()` without a seed.
 6. When fixing a bug, add the test that would have caught it first.
+
+## 7.6 The seeded-level gate, sweep and fuzz
+
+The gate test (`SeededCatalogueReplayTests`) runs on every build: 660 rolls in about half a minute on a desktop, in parallel. It is the seeded twin of the catalogue replay test in 7.3, which keeps running on the legacy levels unchanged.
+
+Two things are switched on by environment variable because they take minutes:
+
+| Variable | What it does |
+|---|---|
+| `POPBLOCKS_FUZZ=1` (`POPBLOCKS_FUZZ_SEEDS`, default 5000, `POPBLOCKS_FUZZ_STATS` = a file to write) | `SeedFuzzTests`: 5,000 random rolls per tier with the same assertions as the gate, plus roll-time statistics (median, 95th percentile, slowest per tier). |
+| `POPBLOCKS_SWEEP_CSV=path` (`POPBLOCKS_SWEEP_SEEDS`, default 50) and `POPBLOCKS_BAND_FROM_CSV=path` with `POPBLOCKS_BAND_TO=path` | `SeedSweep`: the measurement behind `DifficultyBand`. See [Extending](09-extending.md#915-retune-the-difficulty-band). |
+
+Run a switched-on test from a copy of the build output (`dotnet test <copy>/PopBlocks.Tests.dll`) if you want to keep editing and building while it runs.

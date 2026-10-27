@@ -1,3 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
+using PopBlocks.Engine;
+using PopBlocks.Engine.Levels;
+using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
 
 namespace PopBlocks.Views;
@@ -9,13 +13,16 @@ namespace PopBlocks.Views;
 public partial class DevMenuPage : ContentPage
 {
     private readonly DevTools _dev;
+    private readonly IServiceProvider _services;
     private Label? _status;
     private Entry? _levelEntry;
+    private Entry? _seedEntry;
 
-    public DevMenuPage(DevTools dev)
+    public DevMenuPage(DevTools dev, IServiceProvider services)
     {
         InitializeComponent();
         _dev = dev;
+        _services = services;
     }
 
     protected override void OnAppearing()
@@ -80,6 +87,50 @@ public partial class DevMenuPage : ContentPage
             ("201+", () => _dev.SetNextLevel(201))));
         Host.Children.Add(Ui.Card(jump));
 
+        // ---- Seeds, failures and the gate
+        _seedEntry = new Entry
+        {
+            Placeholder = "story seed (1 to 1073741823)",
+            Keyboard = Keyboard.Numeric,
+            TextColor = Ui.Res("TextPrimary", Colors.White),
+            PlaceholderColor = Ui.Res("TextSecondary", Colors.Gray),
+            HorizontalOptions = LayoutOptions.Fill,
+        };
+        var playSeed = SmallButton("PLAY", null);
+        playSeed.Clicked += async (_, _) => await PlaySeedAsync();
+        var seedRow = new Grid { ColumnSpacing = 8 };
+        seedRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        seedRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        seedRow.Add(_seedEntry, 0, 0);
+        seedRow.Add(playSeed, 1, 0);
+
+        var timing = Ui.Body(string.Empty, 12, Ui.Res("TextPrimary", Colors.White));
+        var timeGate = SmallButton("TIME THE GATE ON THIS PHONE", null);
+        timeGate.Clicked += async (_, _) =>
+        {
+            timeGate.IsEnabled = false;
+            timing.Text = "Rolling levels…";
+            string report = await Task.Run(() => GateTiming.Describe(GateTiming.Measure(8)));
+            timing.Text = report;
+            timeGate.IsEnabled = true;
+        };
+
+        var seeds = Stack(
+            Ui.Caption("SEEDS, FAILURES AND THE GATE"),
+            Ui.Body("Type a level number in the box above and a seed here, then PLAY to play that level with exactly that seed. Typing a seed is a dev feature only.", 12),
+            seedRow,
+            Ui.Caption("FAILURES ON THE CURRENT LEVEL (A REROLL IS FREE AT 10)"));
+        seeds.Children.Add(ButtonRow(
+            ("0", () => _dev.SetFailures(0)),
+            ("1", () => _dev.SetFailures(1)),
+            ("5", () => _dev.SetFailures(5)),
+            ("9", () => _dev.SetFailures(9)),
+            ("10", () => _dev.SetFailures(10))));
+        seeds.Children.Add(Ui.Body("Rolling a level searches for a seed the bot can win inside the difficulty band. This times it here, on this phone: about 30 seconds.", 12));
+        seeds.Children.Add(timeGate);
+        seeds.Children.Add(timing);
+        Host.Children.Add(Ui.Card(seeds));
+
         // ---- Shop and story
         var other = Stack(Ui.Caption("SHOP AND STORY"));
         other.Children.Add(ButtonRow(
@@ -107,6 +158,24 @@ public partial class DevMenuPage : ContentPage
     private void Refresh()
     {
         if (_status != null) _status.Text = _dev.Describe();
+    }
+
+    private async Task PlaySeedAsync()
+    {
+        if (!int.TryParse(_levelEntry?.Text, out int level) || level < 1)
+        {
+            await DisplayAlertAsync("Level needed", "Type a level number in the box above first.", "OK");
+            return;
+        }
+        if (!int.TryParse(_seedEntry?.Text, out int seed) || seed < 1 || seed > SeedingConfig.SeedMask)
+        {
+            await DisplayAlertAsync("Seed needed", "A story seed is a whole number from 1 to 1,073,741,823.", "OK");
+            return;
+        }
+
+        var game = _services.GetRequiredService<GamePage>();
+        game.Configure(GameSetup.Story(level, new LevelSeed(seed)));
+        await Navigation.PushAsync(game);
     }
 
     private static VerticalStackLayout Stack(params View[] children)

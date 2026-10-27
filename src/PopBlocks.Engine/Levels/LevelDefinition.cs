@@ -10,6 +10,10 @@ namespace PopBlocks.Engine.Levels;
 public sealed record LevelDefinition
 {
     public int Number { get; init; }
+
+    /// <summary>The <see cref="LevelSeed"/> value this level was built from. 0 is the original, number-based level.</summary>
+    public int Seed { get; init; }
+
     public Tier Tier { get; init; }
     public string Title { get; init; } = "";
 

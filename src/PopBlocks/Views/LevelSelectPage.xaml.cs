@@ -16,13 +16,16 @@ public partial class LevelSelectPage : ContentPage
 
     private readonly IServiceProvider _services;
     private readonly PlayerProgress _progress;
+    private readonly StoryLevels _levels;
     private int _shownUpTo;
+    private int _selected;   // the level whose details are shown; 0 until the page appears
 
-    public LevelSelectPage(IServiceProvider services, PlayerProgress progress)
+    public LevelSelectPage(IServiceProvider services, PlayerProgress progress, StoryLevels levels)
     {
         InitializeComponent();
         _services = services;
         _progress = progress;
+        _levels = levels;
         CoinView.Drawable = new GoldCoinDrawable();
     }
 
@@ -30,7 +33,51 @@ public partial class LevelSelectPage : ContentPage
     {
         base.OnAppearing();
         _shownUpTo = Math.Max(_shownUpTo, Math.Max(FirstWindow, _progress.NextLevel + Lookahead));
+        _selected = _progress.NextLevel;
         Rebuild();
+    }
+
+    /// <summary>Shows the selected level's title, its seed (tap to copy) and a PLAY button.</summary>
+    private void ShowDetail()
+    {
+        int level = _selected;
+        bool unlocked = _progress.IsUnlocked(level);
+        bool cleared = _progress.IsCleared(level);
+        var tier = StoryConfig.TierFor(level);
+
+        DetailTitle.Text = $"Level {level}  ·  {StoryConfig.Name(tier)}";
+        string seed = _levels.SeedText(level);
+        DetailSeed.Text = seed.Length > 0 && _levels.SeedNumber(level) is not null ? seed + "  ·  tap to copy" : seed;
+        DetailSeed.IsVisible = seed.Length > 0;
+        SemanticProperties.SetDescription(DetailSeed, seed.Length == 0 ? string.Empty
+            : _levels.SeedNumber(level) is { } n ? $"{seed}. Tap to copy the number." : seed);
+
+        DetailPlay.IsEnabled = unlocked;
+        DetailPlay.Text = cleared ? "REPLAY" : unlocked ? "PLAY" : "LOCKED";
+        SemanticProperties.SetDescription(DetailPlay, unlocked ? $"{DetailPlay.Text.ToLowerInvariant()} level {level}" : $"Level {level} is locked");
+
+        DetailHint.IsVisible = false;
+    }
+
+    private async void OnSeedTapped(object? sender, TappedEventArgs e)
+    {
+        if (_levels.SeedNumber(_selected) is not { } seed) return;
+        try
+        {
+            await Clipboard.Default.SetTextAsync(seed.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            DetailHint.Text = "Seed copied.";
+            DetailHint.IsVisible = true;
+            SemanticScreenReader.Announce("Seed copied");
+        }
+        catch (Exception)
+        {
+            // Copying is a convenience; the number is on screen.
+        }
+    }
+
+    private async void OnDetailPlayClicked(object? sender, EventArgs e)
+    {
+        if (_progress.IsUnlocked(_selected)) await PlayAsync(_selected);
     }
 
     private async void OnBackClicked(object? sender, EventArgs e) => await Navigation.PopAsync();
@@ -63,6 +110,7 @@ public partial class LevelSelectPage : ContentPage
             : $"{_progress.HighestCleared} LEVEL{(_progress.HighestCleared == 1 ? "" : "S")} CLEARED";
 
         LevelsHost.Children.Clear();
+        ShowDetail();
 
         foreach (var tier in new[] { Tier.Easy, Tier.Medium, Tier.Hard, Tier.Extreme })
         {
@@ -123,7 +171,9 @@ public partial class LevelSelectPage : ContentPage
             : current ? Resource("Panel", Colors.DimGray)
             : unlocked ? Resource("GlassFill", Colors.DimGray)
             : Color.FromArgb("#66141B38");
-        var stroke = current ? colour
+        bool selected = level == _selected;
+        var stroke = selected ? Resource("TextPrimary", Colors.White)
+            : current ? colour
             : cleared ? colour.WithAlpha(0.6f)
             : unlocked ? Color.FromArgb("#44FFFFFF")
             : Color.FromArgb("#18FFFFFF");
@@ -162,17 +212,26 @@ public partial class LevelSelectPage : ContentPage
             Padding = new Thickness(2),
             BackgroundColor = fill,
             Stroke = stroke,
-            StrokeThickness = current ? 2.5 : 1,
+            StrokeThickness = selected || current ? 2.5 : 1,
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = new CornerRadius(16) },
             Content = content,
         };
+        SemanticProperties.SetDescription(tile, $"Level {level}" + (cleared ? ", cleared" : current ? ", your next level" : unlocked ? "" : ", locked"));
 
-        if (unlocked)
+        // Tap a level to see its details; tap the one already shown to play it. (The next level starts selected, so the
+        // button is one tap away, and tapping it twice plays it straight away, as the levels page always did.)
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += async (_, _) =>
         {
-            var tap = new TapGestureRecognizer();
-            tap.Tapped += async (_, _) => await PlayAsync(level);
-            tile.GestureRecognizers.Add(tap);
-        }
+            if (_selected == level && unlocked)
+            {
+                await PlayAsync(level);
+                return;
+            }
+            _selected = level;
+            Rebuild();
+        };
+        tile.GestureRecognizers.Add(tap);
 
         return tile;
     }

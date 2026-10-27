@@ -14,10 +14,12 @@ public partial class MainPage : ContentPage
     private readonly GameSettings _settings;
     private readonly PlayerProgress _progress;
     private readonly CosmeticLoadout _loadout;
+    private readonly PlayerIdentity _identity;
     private bool _loadingSettings;
     private bool _showingFullMenu;   // false: just PLAY and MORE. MORE shows the full menu.
 
-    public MainPage(IServiceProvider services, HighScoreService highScores, GameSettings settings, PlayerProgress progress, CosmeticLoadout loadout)
+    public MainPage(IServiceProvider services, HighScoreService highScores, GameSettings settings, PlayerProgress progress,
+        CosmeticLoadout loadout, PlayerIdentity identity)
     {
         Diagnostics.Crumb("MainPage ctor: start");
         InitializeComponent();
@@ -27,6 +29,7 @@ public partial class MainPage : ContentPage
         _settings = settings;
         _progress = progress;
         _loadout = loadout;
+        _identity = identity;
 
         LogoView.Drawable = new LogoDrawable();
         StartLogoView.Drawable = new LogoDrawable();
@@ -49,6 +52,21 @@ public partial class MainPage : ContentPage
 
         ShowMenu();
         Refresh();
+
+        // Asked once, before the tutorial offer (which comes when level 1 starts): a new player on their first launch, and
+        // a player from before names existed on their first launch after the update. Skipping is allowed.
+        NamePrompt.IsVisible = _identity.NeedsPrompt;
+    }
+
+    private void OnNameContinueClicked(object? sender, EventArgs e) => AnswerNamePrompt(NameEntry.Text);
+
+    private void OnNameSkipClicked(object? sender, EventArgs e) => AnswerNamePrompt(null);
+
+    private void AnswerNamePrompt(string? name)
+    {
+        _identity.Choose(name);   // an empty answer is a skip: "Traveller"
+        NamePrompt.IsVisible = false;
+        SemanticScreenReader.Announce($"Hello, {_identity.Name}");
     }
 
     /// <summary>The Android Back button steps from the full menu back to PLAY / MORE before it leaves the app.</summary>
@@ -106,8 +124,40 @@ public partial class MainPage : ContentPage
     private async void OnPlayClicked(object? sender, EventArgs e) =>
         await StartAsync(GameSetup.Story(_progress.NextLevel));
 
-    private async void OnClassicClicked(object? sender, EventArgs e) =>
-        await StartAsync(GameSetup.Classic);
+    private async void OnClassicClicked(object? sender, EventArgs e)
+    {
+        // An empty seed is a random one, chosen when the run starts. A typed seed fixes the pieces; such a run pays gold
+        // as usual but never sets a best score.
+        string typed = SeedEntry.Text?.Trim() ?? string.Empty;
+        if (typed.Length == 0)
+        {
+            await StartAsync(GameSetup.Classic);
+            return;
+        }
+
+        if (!int.TryParse(typed, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int seed))
+        {
+            SeedPanel.IsVisible = SeedNote.IsVisible = true;
+            SeedNote.Text = "A seed is a whole number from 0 to 2,147,483,647.";
+            SemanticScreenReader.Announce(SeedNote.Text);
+            return;
+        }
+
+        await StartAsync(GameSetup.ClassicRun(seed, chosen: true));
+    }
+
+    private void OnSeedLinkClicked(object? sender, EventArgs e)
+    {
+        SeedPanel.IsVisible = !SeedPanel.IsVisible;
+        SeedNote.IsVisible = SeedPanel.IsVisible;
+        SeedNote.Text = "A run with a seed still pays gold, but it never sets your best score.";
+    }
+
+    private void OnSeedClearClicked(object? sender, EventArgs e)
+    {
+        SeedEntry.Text = string.Empty;
+        SeedNote.Text = "A run with a seed still pays gold, but it never sets your best score.";
+    }
 
     /// <summary>The tutorial: the guided lessons, from lesson 1. Separate from the Story, so nothing here touches progress.</summary>
     private async void OnTutorialClicked(object? sender, EventArgs e) =>

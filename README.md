@@ -35,7 +35,7 @@ Debug builds run through the debugger. For a standalone install use a Release bu
 
 ## Game modes
 
-**Story** is the main mode, a campaign of **200 levels in eight regions** (the Forgotten Garden to the Heart of the Spectrum) followed by an endless band, Beyond the Spectrum. You restore a broken world, guided by Pip, and the story is told in short scenes that can always be skipped. Every level starts with a preset pile of blocks, gives you goals, and a limited number of pieces (moves). Meet every goal before the pieces run out to clear the level and unlock the next one. You lose if you run out of moves, or if the stack reaches the top.
+**Story** is the main mode, a campaign of **200 levels in eight regions** (the Forgotten Garden to the Heart of the Spectrum) followed by an endless band, Beyond the Spectrum. You restore a broken world, guided by Pip, and the story is told in short scenes that can always be skipped. Every level starts with a pile of blocks built for you (every player gets their own levels, from their in-game name and a hidden number), gives you goals, and a limited number of pieces (moves). Meet every goal before the pieces run out to clear the level and unlock the next one. You lose if you run out of moves, or if the stack reaches the top.
 
 | Levels | Tier | What changes |
 |---|---|---|
@@ -69,7 +69,7 @@ A locked item tells you how to find it and never shows a price. Prices, rewards 
 
 **Save code.** The About page can copy your progress as one line of text and restore it on another phone (the app keeps no cloud backup, by design).
 
-**Classic** starts from an empty board and speeds up with your score. It keeps a personal best.
+**Classic** starts from an empty board and speeds up with your score. It keeps a personal best and **earns gold** for every block popped (paid when the run ends, when you leave, or when the app goes to the background). An optional **seed** (the SEED link in the menu) gives the same pieces again; a run on a typed seed pays gold but never sets the best score.
 
 **Pops.** A match first lights up in its own colour, turns solid neon, and then bursts. Pop effects can be switched off on the menu (pops are then instant).
 
