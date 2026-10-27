@@ -57,6 +57,9 @@ public sealed class GameSettings
     public const string BlastEffectsKey = "blast_effects";
     public const string ShowGhostKey = "show_ghost";
     public const string ControlsCollapsedKey = "controls_collapsed";
+    public const string SoundEffectsKey = "sound_effects";
+    public const string LandingGuideStyleKey = SaveKeys.LandingGuideStyle;
+    public const string ReducedMotionKey = SaveKeys.ReducedMotion;
 
     private readonly ILocalSettings _settings;
 
@@ -65,7 +68,13 @@ public sealed class GameSettings
         _settings = settings;
         _blastEffects = settings.GetBool(BlastEffectsKey, true);
         _showGhost = settings.GetBool(ShowGhostKey, true);
+
+        // Older saves have only the on/off ghost setting; it decides the guide until the player picks a style.
+        _guideStyle = settings.GetInt(LandingGuideStyleKey, _showGhost ? 1 : 0);
+        if (_guideStyle is < 0 or > 2) _guideStyle = _showGhost ? 1 : 0;
+        _reducedMotion = settings.GetBool(ReducedMotionKey, false);
         _controlsCollapsed = settings.GetBool(ControlsCollapsedKey, false);
+        _soundEffects = settings.GetBool(SoundEffectsKey, true);
     }
 
     private bool _blastEffects;
@@ -76,11 +85,50 @@ public sealed class GameSettings
     }
 
     private bool _showGhost;
-    /// <summary>Outline showing where the active piece will land.</summary>
+    /// <summary>Outline showing where the active piece will land. Kept in step with <see cref="LandingGuideStyle"/>.</summary>
     public bool ShowGhost
     {
         get => _showGhost;
-        set { _showGhost = value; _settings.SetBool(ShowGhostKey, value); }
+        set
+        {
+            _showGhost = value;
+            _settings.SetBool(ShowGhostKey, value);
+            // Turning it on from here gives the usual outline; turning it off switches the guide off.
+            int style = value ? Math.Max(1, _guideStyle) : 0;
+            _guideStyle = style;
+            _settings.SetInt(LandingGuideStyleKey, style);
+        }
+    }
+
+    private int _guideStyle;
+    /// <summary>The landing guide: 0 off, 1 outline, 2 bold (a thick outline with a faint column of light).</summary>
+    public int LandingGuideStyle
+    {
+        get => _guideStyle;
+        set
+        {
+            _guideStyle = Math.Clamp(value, 0, 2);
+            _settings.SetInt(LandingGuideStyleKey, _guideStyle);
+            // The old key keeps meaning "any guide at all", so an older build reading this save still behaves.
+            _showGhost = _guideStyle > 0;
+            _settings.SetBool(ShowGhostKey, _showGhost);
+        }
+    }
+
+    private bool _reducedMotion;
+    /// <summary>No screen shake, flashes or confetti; bursts become quick fades. Gameplay is unchanged.</summary>
+    public bool ReducedMotion
+    {
+        get => _reducedMotion;
+        set { _reducedMotion = value; _settings.SetBool(ReducedMotionKey, value); }
+    }
+
+    private bool _soundEffects;
+    /// <summary>Short game sounds (rotate, place, drop, pop). On by default.</summary>
+    public bool SoundEffects
+    {
+        get => _soundEffects;
+        set { _soundEffects = value; _settings.SetBool(SoundEffectsKey, value); }
     }
 
     private bool _controlsCollapsed;

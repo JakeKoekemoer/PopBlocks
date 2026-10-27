@@ -71,9 +71,15 @@ It locates `aapt2` in the Android SDK, dumps the APK's permissions and **fails (
 
 ## 8.6 Versioning
 
-- `ApplicationDisplayVersion` in `PopBlocks.csproj`: the version number shown to people (currently 2.0).
-- `ApplicationVersion` in `PopBlocks.csproj`: an integer that must go up with every installed build (currently 2).
+- `ApplicationDisplayVersion` in `PopBlocks.csproj`: the version number shown to people.
+- `ApplicationVersion` in `PopBlocks.csproj`: an integer that must go up with every installed build.
 - The About page displays both, read from the installed package, so it can never disagree with the build.
+
+Saves are versioned separately (`save_version`, see [Architecture](02-architecture.md#26-persistence)). An over-the-top install keeps every saved key; `allowBackup` is off, so a reinstall (uninstall, then install) starts empty unless the player restores a save code.
+
+## 8.6a Developer menu
+
+`DevMenu.Enabled` (`DevMenu.cs`) is true for Debug builds and for any build made with `-p:DevMenu=true` (which adds the `DEVMENU` constant); it is a `const`, so in a normal Release build the menu button and the pause-card shortcuts never show. To test the whole campaign without playing it, run a Release build with `-p:DevMenu=true` and use the menu to jump to a level, add gold, max the shop, fill the helpers or unlock every look. Never ship a build made that way.
 
 ## 8.7 Logs and debugging
 

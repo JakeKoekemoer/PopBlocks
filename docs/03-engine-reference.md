@@ -46,6 +46,8 @@ Immutable: `Moved` and `Rotated` return new pieces. Cells are offsets from a **p
 
 Colours travel with their cells through rotation. That is a core rule of the puzzle (see game design).
 
+`WithColourOrder(colours)` deals the same cells new colours (geometry, position and pivot unchanged). `DistinctColourOrders` counts the different colourings the piece's colours allow, and `WithNextColourOrder()` moves to the next one in a fixed lexicographic cycle (null for a one-colour piece). Prism Shift is built on these.
+
 ### 3.2.2 `ShapeCatalog`
 
 Three arrays: `Classic`, `Exotic`, and the single `Dot`. A `ShapeDef` is a name, a random-draw weight, cell offsets and a pivot. `Build` colours a shape; `Parse("Pair:RC")` builds a piece from a short text spec (shape name, then one colour letter per cell). The text form exists so hand-made tutorial levels can script their piece sequence readably and tests can set up exact situations.
@@ -68,10 +70,12 @@ All of these are pure (no hidden state) except `GameEngine` and the generators.
 ### `ScoringSystem`
 `Multiplier`, `GroupPoints`, `WavePoints`, plus the Classic difficulty curve (`LevelForScore`, `FallIntervalMs`, `ColourCountForLevel`). Uses `checked` arithmetic so an overflow would throw in tests instead of silently wrapping.
 
-### `PieceGenerator` and `IPieceGenerator`
+### `PieceGenerator`, `IPieceGenerator` and `RewindableGenerator`
 `IPieceGenerator.Next(colourCount)` returns a piece already at the spawn position. `PieceGenerator` draws random pieces from the weighted Classic set, or from the Exotic set for a configurable share. It is seeded with a `Random` instance so levels are deterministic. `ScriptedPieceGenerator` plays a fixed list of pieces first (hand-made tutorials) and then hands over to another generator.
 
 The interface exists so the engine can be fed any sequence: random for Classic, seeded for Story, scripted for tutorials, and fixed lists in tests.
+
+`RewindableGenerator` wraps any generator and remembers every piece it hands out. `System.Random` cannot be wound back, so undo goes back by *replaying the remembered pieces*; the wrapped generator is only asked for something new once the log is exhausted. The engine wraps its generator in one at every game start and trims the log behind the oldest snapshot it can still return to.
 
 ### `BoardGenerator`
 Builds the starting pile of a generated Story level from `(seed, DifficultyProfile)`. Guarantees:
@@ -91,7 +95,8 @@ The heart of the game. It owns the board, the current piece, the upcoming queue,
 - *Time:* `Tick()` and `TimerIntervalMs`.
 - *Input:* `MoveLeft`, `MoveRight`, `SoftDrop`, `Rotate`, `HardDrop`, and `LandingDistance` (for the ghost outline).
 - *State:* `Board`, `State`, `FailReason`, `CurrentPiece`, `NextPiece`, `Upcoming`, `Score`, `PiecesPlaced`, `Chain`, `LastChain`, `LastWave`, `LastPenalty`, `PendingGroups`, `Goals`, `MoveLimit`, `MovesLeft`, `Story`, `Setup`.
-- *Configuration the app sets before a game:* `PreviewCount` (1 to 5), `ExtraMoves` (shop bonus), `Timing` (`PopTiming`).
+- *Configuration the app sets before a game:* `PreviewCount` (1 to 5), `ExtraMoves` (shop bonus), `Timing` (`PopTiming`), and the helper allowance: `SecondChanceStock`, `PrismShiftStock`, `PrismFreeCharges`.
+- *Helpers:* `UseSecondChance()`, `ShiftNextPiece()`, `SecondChanceStatus` / `PrismShiftStatus` (an `AbilityStatus` saying why not), `SecondChancesLeft`, `PrismShiftsLeft`, `SecondChanceUsed`, `PrismShiftsUsed`, `LastShiftWasPaid`, `HelpersAllowed`; and the mechanism underneath undo, `CanRewind` / `Rewind()`.
 - *Events:* `Changed` (anything a view might redraw), `WaveResolved` (once per burst wave, for effects), `EventRaised` (`GameEvent`s, for tutorials and feedback).
 
 **Locking and resolving a piece** (`LockPiece`):
@@ -103,6 +108,13 @@ The heart of the game. It owns the board, the current piece, the upcoming queue,
 5. `FinishResolution` decides: goals met, overflow, out of moves, or spawn the next piece.
 
 **Move accounting.** `MoveLimit` is the level's limit plus `ExtraMoves` (the shop bonus) for non-tutorial levels. `MovesLeft = MoveLimit - PiecesPlaced`. The out-of-moves check runs after the last piece has fully resolved and the goals have been tested, so winning on the last piece works.
+
+**Helpers.** Both are *copied in at game start* (like `ExtraMoves`), so buying one mid-level changes nothing, and both are refused unless the level allows them: `HelpersAllowed` is true only for a Story level that is not a tutorial and has `AllowAbilities` (finales set it false). Classic never has them. A level has at most one Second Chance and one paid Prism Shift however many are in stock, plus `PrismFreeCharges` free shifts (spent first).
+
+- **Second Chance (undo).** When a piece appears the engine takes an `EngineSnapshot` (board clone, the piece, the queue, score, pieces placed, blocks popped, last chain and penalty, last wave, a `GoalTracker.Clone()` and the generator position). It keeps the newest and the one before. `Rewind()` restores the older one, rewinds the generator to its position, and keeps nothing older, so it goes **one step** back and a second use needs another placement first. It works only in `Playing` (never while blocks pop, paused, or after the level ends), raises only `GameEvent.SecondChanceUsed` (no sound or tutorial event fires again), and does not refund the move twice. It does not give back a Prism Shift spent after the placement it undoes.
+- **Prism Shift.** Replaces the first upcoming piece with `Piece.WithNextColourOrder()`: the same colours dealt out in the next different order, same shape and position. A one-colour piece has nothing to rearrange (`AbilityStatus.SingleColour`). The generator is not touched.
+- `RunStats` listens for these events: it rolls back what an undone placement did (so a big group popped and then taken back does not satisfy an objective) and counts helpers used.
+- `ConsumableInventory.Attach(engine)` takes one out of stock when the engine reports a *paid* use, so leaving a level without using a helper costs nothing.
 
 **Why `PendingGroups` is separate from the board.** During the highlight phase the board is deliberately unchanged. The drawing code lights up the pending cells in place and the engine pops them later. If the engine mutated the board first, there would be nothing left to light up.
 
@@ -124,11 +136,18 @@ See [Story mode](04-story-mode.md) for the full picture. In brief:
 |---|---|
 | `ILocalSettings` | Key/value store abstraction (int, bool, string). Implemented by the app with `Preferences`, by tests in memory. |
 | `HighScoreService` | Classic personal best; saved the moment it is beaten. |
+| `SaveKeys`, `SaveMigrator`, `SaveCode` | Every saved key, the format version, and the copy-and-paste save code. |
+| `UnlockStore` | The set of unlock ids (scenes seen, lore, fragments, achievements, cosmetics). `Unlock` returns true only the first time. |
 | `GameSettings` | Pop effects, landing guide, collapsed controls. Each property saves itself on set. |
 | `PlayerProgress` | Highest Story level cleared and gold. `Complete(level)` pays only the first clear. `TrySpend` for purchases. Raises `Changed`. |
 | `GoldRewards` | The gold formula by tier. |
-| `ShopService` | Upgrade levels, costs, purchasing, and the effects (`PreviewCount`, `FlairLevel`, `ExtraMoves`). |
-| `UpgradeInfo` | A shop row ready to show. |
+| `ShopCatalog`, `ShopItem`, `ShopTier`, `Requirement` | Every upgrade as data: id, save key, tiers with price, effect text and what must be restored or earned first. |
+| `ShopService` | Upgrade levels, locks, purchasing, and the effects (`PreviewCount`, `FlairLevel`, `ExtraMoves`, `LensLevel`, `ChainSenseOwned`, `PrismFreeCharges`). Generic API by item id (`Entry`, `Entries`, `TryBuy`); the original `Upgrade` API is kept. |
+| `ConsumableCatalog`, `ConsumableInventory` | The two helpers that are used up: price, requirement, stock (cap 3), buying, taking one when used, copying stock into an engine. |
+| `CosmeticCatalog`, `CosmeticShop`, `ColourMath` | Every skin, burst, board, frame and Pip accessory as data; owning, discovering, buying and equipping them; colour maths for the skin rules. |
+| `AchievementCatalog`, `AchievementService`, `LifetimeStats`, `RunStats` | Achievements, personal bests, and the record of one run that feeds them and the optional objectives. |
+| `WorkshopService` | Which of Bram's lamps are lit (a function of regions restored). |
+| `DevTools` | Testing shortcuts (gold, jump to a level, max the shop, fill helpers, unlock all looks, reset). The app shows them only in development builds. |
 
 **Why `PlayerProgress.Complete` checks `level.Number == HighestCleared + 1`.** Levels unlock in order, and gold is paid once per level. Requiring the level to be the *next* one means replaying a cleared level, or any out-of-order completion, pays nothing and moves nothing, with no extra bookkeeping. If you ever allow skipping levels, this rule must be replaced with an explicit per-level "paid" record.
 

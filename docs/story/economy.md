@@ -1,0 +1,119 @@
+# PopBlocks economy
+
+Gold is earned by playing and spent in Bram's Workshop. This page records where gold comes from, where it goes, and
+the rules that keep it fair. The numbers are in code (`GoldRewards`, `ShopCatalog`, `AchievementCatalog`) and are
+checked by tests (`P4ShopTests`, `P4GateTests`, `AchievementTests`); change them there and update this page.
+
+## Rules
+
+1. **Gold is paid on first clear only.** Replaying a level, reloading a save or skipping a scene never pays again.
+2. **Nothing needed to finish the game costs gold.** Every level 1-200 is winnable by the bot solver with zero
+   purchases and zero abilities (`AllLevels_1_to_200_BotWinnable_WithNoUpgrades`). The ending does not depend on any
+   optional collectible.
+3. **Story and accessibility are never sold.** Archive, Journal, Achievements, settings (landing guide style, reduced
+   motion, high contrast) and every scene are open from the first launch, whatever the gold or the workshop state.
+4. **Cosmetics unlock through story or achievements first; gold comes second.** Gold cannot skip a story gate.
+5. **Locked items show a hint, never a price.** A locked item says how to find it ("Restore the Crystal Caves").
+6. **Saves are never rewritten.** A save from before this phase loads with the same gold, levels and upgrades. Region
+   rewards and achievements are paid when they are earned in play, not when an old save is caught up.
+
+## Income
+
+Baseline income is level-clear gold only (`GoldRewards.For`), cumulative at the last level of each region pair:
+
+| By level | 25 | 50 | 75 | 100 | 125 | 150 | 175 | 200 |
+|---|---|---|---|---|---|---|---|---|
+| Gold earned | 208 | 680 | 1,540 | 2,650 | 4,320 | 6,365 | 9,009 | 11,965 |
+
+On top of that:
+
+* **Region rewards** (`25 + 25 x region`, paid when the region's last level is cleared for the first time in play):
+  50, 75, 100, 125, 150, 175, 200, 225. Total **1,100**.
+* **Achievements** (13, one-off): total **910** (`AchievementCatalog.TotalGold`).
+* "Beyond the Spectrum" levels above 200 keep paying level gold, so a finished game still earns.
+
+A player who finishes the campaign has earned about **14,000** gold.
+
+## Sinks
+
+| Phase | What | Gold |
+|---|---|---|
+| Before | Lookout 1-2, Pop Flair 1-3, Spare Moves 1-3 (the original shop) | 3,050 |
+| P4 | Lookout 3-4 (900, 1,500), Colour Lens (500, 1,100), Chain Sense (700) | 4,700 |
+| P5 | Cosmetics: 7 skins (80-320), 6 bursts (60-260), 6 boards (50-150) | 2,960 (`CosmeticCatalog.TotalPrice`) |
+| P6 | Prism Reserve (600 + 1,200) and the two helpers (Second Chance 150, Prism Shift 100 each, up to 3 held) | 1,800 for the upgrade, then recurring: at most 2 x 3 held = 750 gold of stock at a time |
+
+Everything above adds up to roughly **12,500**, which leaves slack: a player who plays the whole campaign,
+finds some memories and earns most achievements can afford the lot by the end, and a player who skips optional content
+still buys the helpers they care about.
+
+## Pacing
+
+* The first purchase is affordable around level 15-20 (Pop Flair at 80 gold).
+* The mid-game upgrades (Lookout 2, Spare Moves 2, Colour Lens) land when their region is restored, one every few
+  hours of play.
+* The new tiers are gated by region (`Lookout 3` needs region 3, `Lookout 4` needs region 6, `Colour Lens` needs
+  regions 2 and 4, `Chain Sense` needs region 3) so a new player is not shown a wall of prices they cannot meet.
+
+## What the helpers do (and do not do)
+
+* **Lookout** shows 1 to 5 upcoming pieces. It changes what you can see, not what happens.
+* **Colour Lens** outlines groups a block or two short of a burst (`ColourMatcher.FindNearGroups`). It only shows what
+  is already on the board.
+* **Chain Sense** glows the landing outline when dropping where the piece is now would start a chain
+  (`PlacementPreview.CountWaves`, tested to equal a real drop). It never moves a piece or picks a move.
+* **Spare Moves** adds moves on every non-tutorial Story level, finales included. Tutorials are untouched.
+
+## Achievements
+
+All local to the device and none needs grinding. Rules are pure functions over `AchievementFacts`, stored as
+`ach_<id>` in the unlock store; gold is paid at the moment the id is first stored.
+
+| Achievement | Rule | Gold |
+|---|---|---|
+| First Connection | Pop a group | 20 |
+| Aftershock | A chain of 2 | 20 |
+| A Bigger Picture | A group of 8 or more | 40 |
+| Careful Planner | Win a Story level with 3+ moves spare | 40 |
+| Restorer | Restore one region | 50 |
+| Keeper of Memories | 20 Archive entries | 60 |
+| Spectrum Seeker | A memory in every region | 150 |
+| Balanced World | Finish the campaign | 150 |
+| Classic Champion | 3,000 in Classic | 100 |
+| Chain Master | A 5-wave chain | 80 |
+| Clean Sweep | Win with an empty board | 80 |
+| Perfectionist | Every memory of one region | 100 |
+| Puzzle Scholar | Finish the ten tutorials | 20 |
+
+*Perfectionist is read as "every memory in one region" rather than "every level perfect", because levels have no
+star rating.* Achievements already deserved by an existing save are paid the next time a run ends, not at load.
+
+## Changing a number
+
+1. Change it in code. 2. Re-run the tests: the budget tests (`Total_achievement_gold_is_in_the_economy_budget`,
+`Every_gameplay_item_is_optional_and_every_price_is_reachable`) fail if income and spend drift apart. 3. Update this
+page. Never change a save key.
+
+## Cosmetics
+
+* A look is **discovered** through the story or an achievement and only then can it be **bought**. Locked looks show a
+  hint ("Restore the Crystal Caves"), never a price.
+* **Rewards cost nothing.** The Garden board (region 1), the Whole Spectrum skin (region 8), the three post-ending boards
+  (campaign finished), the piece frames and Pip's accessories (achievements) and the High Contrast board (always) are
+  yours as soon as their requirement is met. They are never sold.
+* Region N reveals: 1 nature, 2 crystal, 3 leaf, 4 water, 5 clockwork, 6 ice, 7 citadel, 8 Spectrum.
+* A skin may change shade, corner, border, highlight and texture, but never a colour's hue or its symbol. The tests check
+  hue distance, perceived difference between the five colours, and symbol contrast for every skin.
+* Cut from the plan for want of an on-device frame-time check: trail effects, chain celebration and victory effects.
+  Nothing is for sale that the game does not draw.
+
+## Helpers (P6)
+
+* Second Chance (150 gold, opens when region 2 is restored) and Prism Shift (100 gold, region 4) are the only things in the
+  game that are used up. A player holds at most **3** of each, and a level can use at most **one** of each (plus the
+  free shifts of Prism Reserve), so stock cannot be hoarded into a way to play a level for you.
+* They are off on tutorials, on the last level of every region, and in Classic. Level gold is paid on first clear whether
+  or not a helper was used.
+* Prism Reserve adds free Prism Shifts per level (1 at region 5, 2 at region 7). It spends no stock.
+* No level needs a helper. The bot that proves each level winnable plays without them (see `HelperTests`).
+* A level that is left without using a helper costs nothing; stock is taken only when a helper is used.

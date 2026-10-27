@@ -67,9 +67,9 @@
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="FontAttributes" Value="Bold" />
                 <Setter Property="CharacterSpacing" Value="0.8" />
-                <Setter Property="CornerRadius" Value="20" />
+                <Setter Property="CornerRadius" Value="18" />
                 <Setter Property="Padding" Value="0" />
-                <Setter Property="HeightRequest" Value="62" />
+                <Setter Property="HeightRequest" Value="52" />
             </Style>
 
             <Style x:Key="ControlButton" TargetType="Button" BasedOn="{StaticResource ControlButtonBase}">

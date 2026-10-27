@@ -43,6 +43,15 @@ public sealed record LevelDefinition
     /// <summary>Hand-made opening pieces ("Pair:RC"), played before random ones.</summary>
     public IReadOnlyList<string> Script { get; init; } = Array.Empty<string>();
 
+    /// <summary>An optional objective that uncovers one of the region's memories. Null on most levels.</summary>
+    public BonusObjective? Bonus { get; init; }
+
+    /// <summary>The last level of a region: a little tougher than its neighbours, and played without helpers.</summary>
+    public bool IsFinale { get; init; }
+
+    /// <summary>False on finales: shop abilities and consumables are switched off so the level stays a clean test.</summary>
+    public bool AllowAbilities { get; init; } = true;
+
     /// <summary>Extreme: the board is shown upside down, so pieces enter from the bottom of the screen.</summary>
     public bool FlipView { get; init; }
 

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PopBlocks.Views.WorkshopPage"
+             NavigationPage.HasNavigationBar="False"
+             Background="{StaticResource PageGradient}">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" RowSpacing="12">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+            <Button Grid.Column="0" Text="←" Style="{StaticResource RoundButton}" FontSize="18" Clicked="OnBackClicked" />
+            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="0">
+                <Label Text="Bram's Workshop" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                <Label x:Name="SummaryLabel" Style="{StaticResource CaptionLabel}" />
+            </VerticalStackLayout>
+            <Border Grid.Column="2" Style="{StaticResource Glass}" Padding="12,6" VerticalOptions="Center">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="20" />
+                </Border.StrokeShape>
+                <HorizontalStackLayout Spacing="8">
+                    <GraphicsView x:Name="CoinView" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
+                    <Label x:Name="GoldLabel" FontSize="16" FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Border>
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout x:Name="Host" Spacing="12" Padding="0,4,0,28" />
+        </ScrollView>
+    </Grid>
+</ContentPage>

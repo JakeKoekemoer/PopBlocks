@@ -71,6 +71,57 @@ public sealed class Piece
         return new Piece(rotated, X, Y, Pivot2X, Pivot2Y);
     }
 
+    /// <summary>
+    /// The same piece with its colours dealt out again in <paramref name="colours"/> order (one per cell, in cell order).
+    /// Geometry, position and rotation centre never change, so the new piece fits wherever this one did.
+    /// </summary>
+    public Piece WithColourOrder(IReadOnlyList<CellColour> colours)
+    {
+        if (colours.Count != Cells.Count) throw new ArgumentException("One colour per cell is needed.", nameof(colours));
+        var cells = new BlockCell[Cells.Count];
+        for (int i = 0; i < cells.Length; i++) cells[i] = new BlockCell(Cells[i].X, Cells[i].Y, colours[i]);
+        return new Piece(cells, X, Y, Pivot2X, Pivot2Y);
+    }
+
+    /// <summary>How many different colourings this piece's colours allow (1 for a single-coloured piece).</summary>
+    public int DistinctColourOrders
+    {
+        get
+        {
+            long total = 1;
+            for (int i = 2; i <= Cells.Count; i++) total *= i;
+            foreach (var group in Cells.GroupBy(c => c.Colour))
+                for (int i = 2; i <= group.Count(); i++) total /= i;
+            return (int)total;
+        }
+    }
+
+    /// <summary>
+    /// The next different colouring of the same colours, in a fixed order that visits every colouring once and then
+    /// starts over. Null when there is only one colouring (a single-coloured piece): nothing can be rearranged.
+    /// </summary>
+    public Piece? WithNextColourOrder()
+    {
+        if (DistinctColourOrders < 2) return null;
+
+        var order = Cells.Select(c => (byte)c.Colour).ToArray();
+        if (!NextPermutation(order)) Array.Sort(order);   // the last colouring wraps to the first
+        return WithColourOrder(order.Select(b => (CellColour)b).ToArray());
+    }
+
+    /// <summary>Lexicographic next permutation in place; false (and unchanged) when already the last.</summary>
+    private static bool NextPermutation(byte[] a)
+    {
+        int i = a.Length - 2;
+        while (i >= 0 && a[i] >= a[i + 1]) i--;
+        if (i < 0) return false;
+        int j = a.Length - 1;
+        while (a[j] <= a[i]) j--;
+        (a[i], a[j]) = (a[j], a[i]);
+        Array.Reverse(a, i + 1, a.Length - i - 1);
+        return true;
+    }
+
     /// <summary>Absolute board coordinates of every cell (allocates; for logic and tests, not per-frame drawing).</summary>
     public IEnumerable<BlockCell> BoardCells()
     {

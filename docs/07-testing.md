@@ -6,7 +6,7 @@ Project: `tests/PopBlocks.Tests` (xUnit, `net10.0`). It references only `PopBloc
 dotnet test tests/PopBlocks.Tests
 ```
 
-or use **Test Explorer** in Visual Studio. There are roughly 170 test cases.
+or use **Test Explorer** in Visual Studio. There are roughly 560 test cases.
 
 ## 7.1 What is tested, and where
 
@@ -18,13 +18,31 @@ or use **Test Explorer** in Visual Studio. There are roughly 170 test cases.
 | `PieceTests.cs` | Spawn position, movement, rotation (including the doubled-pivot 2x2 block) and colour travel. |
 | `ScoringSystemTests.cs` | Group points, chain multiplier cap, Classic speed and colour curves. |
 | `GameEngineTests.cs` | The core engine: spawning, falling, moving, locking, bursts, simultaneous groups, chains and multipliers, hard and soft drop scoring, pause and resume (including during a chain), restart, game over (hidden-row lock, blocked spawn), Classic level speed-up, events. |
+| `ShapeCatalogTests.cs` | Every shape (and every random piece) is edge-connected, in all four rotations. Guards against gaps and corner-only pieces. |
+| `ToneSynthTests.cs` | Sound effects are short, audible, unclipped, start and end in silence, and wrap into a valid WAV; the sound setting defaults on and persists. |
 | `ServicesAndBoardTests.cs` | `HighScoreService`, `GameSettings`, `Board` (text conversion, clone, counts). |
 | `StoryTests.cs` | Everything in Story, in these classes: |
+
+The campaign and economy have their own files:
+
+| File | Covers |
+|---|---|
+| `LevelSnapshotTests.cs`, `LevelSnapshotData.cs` | A frozen description of levels 1 to 220: any change to level generation shows up as a diff to review. Levels 1 to 11 may never change. |
+| `RegionRulesTests.cs` | Each region leans on its favoured goal, finales are clean (no flip, no penalty, no helpers), nothing appears before its introduction. |
+| `StoryLayerTests.cs`, `FullStoryTests.cs`, `EndingTests.cs` | Scenes, lore, characters, replay rules, region rewards, the ending and its choice, and checks on the story text itself (nobody is named early, no text promises a branch, scenes fit on screen). |
+| `RunStatsTests.cs`, `BonusObjectiveTests.cs` | The record of a run and the optional objectives, replayed through the real engine. |
+| `P4ShopTests.cs`, `P4HelperTests.cs`, `P4SettingsTests.cs`, `P4GateTests.cs`, `WorkshopTests.cs` | The shop catalogue, Colour Lens and Chain Sense, accessibility settings, achievements, the baseline-save gate, the workshop. |
+| `CosmeticTests.cs` | Skin rules (hue, separation, symbol contrast), board legibility, ownership, buying, equipping, older saves. |
+| `UndoTests.cs` | Undo restores every field; random play with random undos never diverges from replaying only the kept moves; refusals; the rewindable generator; colour-order cycling. |
+| `HelperTests.cs` | Prism Shift, helper stock, caps, locks, prices, Prism Reserve, the "without helpers" objective. |
+| `SaveInfrastructureTests.cs`, `SaveCodeTests.cs`, `P7Tests.cs` | Save keys (frozen), the migrator, the unlock store, the save code (round trip, tampering, bombs, clamping), and the fairness rules: every level winnable with nothing bought, the ending reachable with no purchase or memory, replays never pay twice, everything for sale affordable. |
+| `DevToolsTests.cs` | The testing shortcuts. |
 
 `StoryTests.cs` is split into classes by topic:
 
 - **`StoryRuleTests`**: move limits, winning on the last move, stack overflow, each goal kind, the no-pop penalty, timed pop phases (highlight, pop, settle), preview queue length, shop move bonus, event order, restart determinism.
-- **`TutorialLevelTests`**: tutorials 1 to 9 are *played through the real engine by following their own coaching steps*. If a tutorial's instructions stop being completable, this fails.
+- **`TutorialSeparationTests`, `TutorialProgressTests`**: the tutorial is its own sequence of ten lessons, Story levels 1 to 10 are ordinary and uncoached, and the "want the tutorial?" state is remembered once and travels in the save code.
+- **`TutorialLevelTests`**: lessons 1 to 9 are *played through the real engine by following their own coaching steps*. If a tutorial's instructions stop being completable, this fails.
 - **`TutorialControllerTests`**: the pure coaching state machine (Tap, Do, Watch, skip, freeze).
 - **`ProgressAndShopTests`**: unlock order, gold paid once, tutorials pay zero, spending, upgrade prices and effects, persistence round trips.
 - **`ShapeTests`**: every shape fits at spawn, four rotations return a shape to where it started, rotation never loses or merges cells, shapes can be found and parsed by name (bad specs are rejected), Classic generation never makes exotic pieces, and a script plays before random pieces.

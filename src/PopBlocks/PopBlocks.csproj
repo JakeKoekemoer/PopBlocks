@@ -14,13 +14,18 @@
 
     <ApplicationTitle>PopBlocks</ApplicationTitle>
     <ApplicationId>com.popblocks.game</ApplicationId>
-    <ApplicationDisplayVersion>2.0</ApplicationDisplayVersion>
-    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>3.0</ApplicationDisplayVersion>
+    <ApplicationVersion>4</ApplicationVersion>
 
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 
     <!-- Release builds produce a directly installable .apk (the default would be an .aab for Play Store). -->
     <AndroidPackageFormat Condition="'$(Configuration)' == 'Release'">apk</AndroidPackageFormat>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Dev menu: always in Debug builds; add it to a Release build with  dotnet build -c Release -p:DevMenu=true -->
+    <DefineConstants Condition="'$(DevMenu)' == 'true'">$(DefineConstants);DEVMENU</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

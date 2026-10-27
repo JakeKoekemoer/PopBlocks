@@ -56,4 +56,16 @@ public static class ColourMatcher
 
         return groups;
     }
+
+    /// <summary>
+    /// Groups that are too small to pop yet: from <paramref name="minSize"/> up to <paramref name="maxSize"/> cells.
+    /// The Colour Lens uses this to outline groups that are a block or two short. Read-only, like
+    /// <see cref="FindGroups"/>.
+    /// </summary>
+    public static IReadOnlyList<ColourGroup> FindNearGroups(Board board, int minSize, int maxSize)
+    {
+        if (maxSize >= GameConfig.MinGroupSize) maxSize = GameConfig.MinGroupSize - 1;
+        if (minSize < 2) minSize = 2;
+        return FindGroups(board, minSize).Where(g => g.Size <= maxSize).ToList();
+    }
 }

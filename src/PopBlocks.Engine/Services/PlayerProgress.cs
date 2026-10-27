@@ -73,6 +73,15 @@ public sealed class PlayerProgress
         return new CompletionResult(true, gold);
     }
 
+    /// <summary>Adds gold earned outside a level clear (a region reward, an achievement). Never negative.</summary>
+    public void AwardGold(int amount)
+    {
+        if (amount <= 0) return;
+        Gold = (int)Math.Min(int.MaxValue, (long)Gold + amount);
+        _settings.SetInt(GoldKey, Gold);
+        Changed?.Invoke();
+    }
+
     public bool TrySpend(int cost)
     {
         if (cost < 0 || cost > Gold) return false;
@@ -80,5 +89,23 @@ public sealed class PlayerProgress
         _settings.SetInt(GoldKey, Gold);
         Changed?.Invoke();
         return true;
+    }
+
+    // ---- Development tools only (see DevTools). Normal play never calls these. ----
+
+    /// <summary>Sets cleared-level progress directly, without paying gold. For testing.</summary>
+    public void DevSetHighestCleared(int level)
+    {
+        HighestCleared = Math.Max(0, level);
+        _settings.SetInt(HighestClearedKey, HighestCleared);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Sets gold directly. For testing.</summary>
+    public void DevSetGold(int gold)
+    {
+        Gold = Math.Max(0, gold);
+        _settings.SetInt(GoldKey, Gold);
+        Changed?.Invoke();
     }
 }

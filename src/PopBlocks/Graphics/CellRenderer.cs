@@ -1,5 +1,6 @@
 using Microsoft.Maui.Graphics;
 using PopBlocks.Engine.Models;
+using PopBlocks.Engine.Services;
 
 namespace PopBlocks.Graphics;
 
@@ -49,8 +50,8 @@ public static class CellRenderer
     public static void DrawLayer(ICanvas canvas, BlockLayer layer, float x, float y, float size, CellColour colour, CellLinks links)
     {
         float inset = size * VisualDesign.CellInset;
-        float border = size * VisualDesign.BorderWidth;
-        float radius = size * VisualDesign.CornerRadius;
+        float border = size * VisualDesign.Border;
+        float radius = size * VisualDesign.Corner;
         float half = size / 2f;
 
         float left = x + inset;
@@ -101,25 +102,27 @@ public static class CellRenderer
 
             default:
             {
-                // Top highlight, only where the cell has an exposed top edge.
-                if (!links.HasFlag(CellLinks.Up))
+                var style = VisualDesign.Highlight;
+
+                // Top highlight, only where the cell has an exposed top edge. (Faceted skins draw facets instead.)
+                if (!links.HasFlag(CellLinks.Up) && style != HighlightStyle.Facet)
                 {
                     float stroke = size * VisualDesign.HighlightWidth;
                     float lineY = innerTop + stroke * 0.9f;
                     float lineStart = links.HasFlag(CellLinks.Left) ? x : innerLeft + radius * 0.8f;
                     float lineEnd = links.HasFlag(CellLinks.Right) ? x + size : innerLeft + innerSpan - radius * 0.8f;
-                    canvas.StrokeColor = VisualDesign.HighlightColour(colour).WithAlpha(0.85f);
+                    canvas.StrokeColor = VisualDesign.HighlightColour(colour).WithAlpha(style == HighlightStyle.Soft ? 0.45f : 0.85f);
                     canvas.StrokeSize = stroke;
                     canvas.StrokeLineCap = LineCap.Round;
                     canvas.DrawLine(lineStart, lineY, lineEnd, lineY);
                 }
 
                 // Glossy sheen across an exposed top edge, and a soft shade along an exposed bottom edge.
-                if (!links.HasFlag(CellLinks.Up))
+                if (!links.HasFlag(CellLinks.Up) && style != HighlightStyle.Facet)
                 {
                     float sheenLeft = links.HasFlag(CellLinks.Left) ? x : innerLeft + border;
                     float sheenRight = links.HasFlag(CellLinks.Right) ? x + size : innerLeft + innerSpan - border;
-                    canvas.FillColor = Colors.White.WithAlpha(0.16f);
+                    canvas.FillColor = Colors.White.WithAlpha(style == HighlightStyle.Soft ? 0.09f : 0.16f);
                     canvas.FillRoundedRectangle(sheenLeft, innerTop + border, sheenRight - sheenLeft, innerSpan * 0.34f, radius * 0.6f);
                 }
                 if (!links.HasFlag(CellLinks.Down))
@@ -130,12 +133,76 @@ public static class CellRenderer
                     canvas.FillRoundedRectangle(shadeLeft, innerTop + innerSpan * 0.80f, shadeRight - shadeLeft, innerSpan * 0.17f, radius * 0.5f);
                 }
 
+                if (style == HighlightStyle.Facet) DrawFacets(canvas, innerLeft, innerTop, innerSpan);
+                if (VisualDesign.Pattern != SkinPattern.None && size >= 14f) DrawPattern(canvas, VisualDesign.Pattern, innerLeft, innerTop, innerSpan);
+
                 DrawSymbol(canvas, x + half, y + half, size, colour);
                 break;
             }
         }
 
         canvas.RestoreState();
+    }
+
+    // Facets are built once, in a unit square, and scaled to the face when drawn (no allocation per frame).
+    private static readonly PathF FacetLight = BuildCornerTriangle(0.10f, 0.10f, 0.38f);
+    private static readonly PathF FacetDark = BuildCornerTriangle(0.90f, 0.90f, -0.38f);
+
+    private static PathF BuildCornerTriangle(float cx, float cy, float arm)
+    {
+        var p = new PathF();
+        p.MoveTo(cx, cy);
+        p.LineTo(cx + arm, cy);
+        p.LineTo(cx, cy + arm);
+        p.Close();
+        return p;
+    }
+
+    /// <summary>Two flat facets, light at the top left and dark at the bottom right, kept clear of the centre where the symbol sits.</summary>
+    private static void DrawFacets(ICanvas canvas, float left, float top, float span)
+    {
+        canvas.SaveState();
+        canvas.Translate(left, top);
+        canvas.Scale(span, span);
+        canvas.FillColor = Colors.White.WithAlpha(0.20f);
+        canvas.FillPath(FacetLight, WindingMode.NonZero);
+        canvas.FillColor = Colors.Black.WithAlpha(0.12f);
+        canvas.FillPath(FacetDark, WindingMode.NonZero);
+        canvas.RestoreState();
+    }
+
+    /// <summary>
+    /// A faint texture in the corners of the face. It never reaches the middle, so the symbol (which is what tells the
+    /// colours apart) is untouched by every skin.
+    /// </summary>
+    private static void DrawPattern(ICanvas canvas, SkinPattern pattern, float left, float top, float span)
+    {
+        switch (pattern)
+        {
+            case SkinPattern.Lines:
+                canvas.StrokeColor = Colors.White.WithAlpha(0.20f);
+                canvas.StrokeSize = MathF.Max(1f, span * 0.045f);
+                canvas.StrokeLineCap = LineCap.Round;
+                canvas.DrawLine(left + span * 0.62f, top + span * 0.90f, left + span * 0.90f, top + span * 0.62f);
+                canvas.DrawLine(left + span * 0.74f, top + span * 0.90f, left + span * 0.90f, top + span * 0.74f);
+                canvas.DrawLine(left + span * 0.10f, top + span * 0.38f, left + span * 0.38f, top + span * 0.10f);
+                break;
+
+            case SkinPattern.Dots:
+                canvas.FillColor = Colors.White.WithAlpha(0.28f);
+                canvas.FillEllipse(left + span * 0.70f, top + span * 0.72f, span * 0.12f, span * 0.12f);
+                canvas.FillEllipse(left + span * 0.80f, top + span * 0.58f, span * 0.07f, span * 0.07f);
+                canvas.FillEllipse(left + span * 0.14f, top + span * 0.20f, span * 0.08f, span * 0.08f);
+                break;
+
+            case SkinPattern.Grain:
+                canvas.FillColor = Colors.Black.WithAlpha(0.14f);
+                canvas.FillEllipse(left + span * 0.16f, top + span * 0.70f, span * 0.06f, span * 0.06f);
+                canvas.FillEllipse(left + span * 0.30f, top + span * 0.84f, span * 0.05f, span * 0.05f);
+                canvas.FillEllipse(left + span * 0.78f, top + span * 0.22f, span * 0.06f, span * 0.06f);
+                canvas.FillEllipse(left + span * 0.66f, top + span * 0.12f, span * 0.05f, span * 0.05f);
+                break;
+        }
     }
 
     /// <summary>
@@ -151,7 +218,7 @@ public static class CellRenderer
         float span = size - 2f * inset;
         float left = x + inset;
         float top = y + inset;
-        float radius = size * VisualDesign.CornerRadius;
+        float radius = size * VisualDesign.Corner;
         float half = size / 2f;
         var neon = VisualDesign.NeonColour(colour);
 
@@ -256,7 +323,7 @@ public static class CellRenderer
     public static void DrawSymbol(ICanvas canvas, float cx, float cy, float size, CellColour colour)
     {
         float r = size * VisualDesign.SymbolRadius;
-        canvas.FillColor = VisualDesign.Symbol;
+        canvas.FillColor = VisualDesign.SymbolNow;
 
         switch (colour)
         {

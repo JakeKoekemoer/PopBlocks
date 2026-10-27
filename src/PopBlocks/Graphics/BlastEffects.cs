@@ -1,6 +1,7 @@
 using Microsoft.Maui.Graphics;
 using PopBlocks.Engine;
 using PopBlocks.Engine.Models;
+using PopBlocks.Engine.Services;
 
 namespace PopBlocks.Graphics;
 
@@ -23,6 +24,8 @@ public sealed class BlastEffects
         public long StartMs;
         public int DurationMs;
         public int Flair;
+        public BurstStyle Style;
+        public bool Reduced;
         public BurstWave Wave = null!;
         public float CentreX, CentreY;      // centroid of the cleared cells, in board cells
         public CellColour Dominant;
@@ -44,6 +47,15 @@ public sealed class BlastEffects
     /// <summary>Pop Flair level from the shop, 0 to 3.</summary>
     public int Flair { get; set; }
 
+    /// <summary>
+    /// Reduced motion: bursts become short fades. No shake, no confetti, no sparks, and blocks drop into place without
+    /// sliding. The popping itself, and the chain banner, are unchanged.
+    /// </summary>
+    public bool ReducedMotion { get; set; }
+
+    /// <summary>The shapes the pop scatters (a cosmetic). It changes how the burst looks, never how long it lasts or what it scores.</summary>
+    public BurstStyle Style { get; set; } = BurstStyle.Classic;
+
     public void Trigger(BurstWave wave, long nowMs)
     {
         if (!Enabled) return;
@@ -52,9 +64,12 @@ public sealed class BlastEffects
         {
             StartMs = nowMs,
             Wave = wave,
-            Flair = Math.Clamp(Flair, 0, 3),
+            Flair = ReducedMotion ? 0 : Math.Clamp(Flair, 0, 3),
+            Style = Style,
+            Reduced = ReducedMotion,
         };
         burst.DurationMs = burst.Flair >= 3 ? 1000 : VisualDesign.BurstDurationMs;
+        if (ReducedMotion) burst.DurationMs = Math.Min(burst.DurationMs, 450);
 
         foreach (var move in wave.Moves)
             burst.Drop[move.ToY * GameConfig.Columns + move.X] = move.ToY - move.FromY;
@@ -100,7 +115,7 @@ public sealed class BlastEffects
     /// </summary>
     public float FallOffsetCells(int x, int y, long nowMs)
     {
-        if (!Enabled) return 0f;
+        if (!Enabled || ReducedMotion) return 0f;
         float offset = 0f;
         foreach (var slot in _slots)
         {
@@ -118,7 +133,7 @@ public sealed class BlastEffects
     /// <summary>Screen shake for the board, in pixels. Zero unless a Flair 2+ pop just happened.</summary>
     public (float Dx, float Dy) ShakeOffset(float cell, long nowMs)
     {
-        if (!Enabled) return (0f, 0f);
+        if (!Enabled || ReducedMotion) return (0f, 0f);
         long age = nowMs - _shakeStartMs;
         if (age < 0 || age >= VisualDesign.ShakeMs) return (0f, 0f);
 
@@ -148,6 +163,104 @@ public sealed class BlastEffects
 
         canvas.Alpha = 1f;
         canvas.RestoreState();
+    }
+
+    /// <summary>
+    /// One flying piece of a pop. The style picks the shape; the Flair level still decides how many there are and how far
+    /// they fly. Everything here is drawn with plain canvas calls (no allocation), so the effect pool stays cheap.
+    /// </summary>
+    private static void DrawSpark(ICanvas canvas, BurstStyle style, int flair, float x, float y, float angle, float cell, float fade, int seed)
+    {
+        float cos = MathF.Cos(angle), sin = MathF.Sin(angle);
+        canvas.StrokeLineCap = LineCap.Round;
+
+        switch (style)
+        {
+            case BurstStyle.Petals:
+            {
+                // A petal: an ellipse laid along its direction of travel.
+                canvas.SaveState();
+                canvas.Translate(x, y);
+                canvas.Rotate(angle * 57.2958f);
+                float w = cell * 0.26f * (0.5f + 0.5f * fade), h = cell * 0.12f * (0.5f + 0.5f * fade);
+                canvas.FillEllipse(-w / 2f, -h / 2f, w, h);
+                canvas.RestoreState();
+                break;
+            }
+
+            case BurstStyle.Shards:
+            {
+                // A short, thick, square-ended sliver.
+                float len = cell * 0.30f * fade;
+                canvas.StrokeLineCap = LineCap.Butt;
+                canvas.StrokeSize = MathF.Max(1.5f, cell * 0.11f);
+                canvas.DrawLine(x, y, x - cos * len, y - sin * len);
+                break;
+            }
+
+            case BurstStyle.Bubbles:
+            {
+                // A hollow bubble that grows a little as it rises and fades.
+                float r = cell * (0.07f + 0.08f * (1f - fade));
+                canvas.StrokeSize = MathF.Max(1f, cell * 0.05f);
+                canvas.DrawEllipse(x - r, y - r, r * 2f, r * 2f);
+                break;
+            }
+
+            case BurstStyle.Cogs:
+            {
+                // A small square that spins as it goes.
+                canvas.SaveState();
+                canvas.Translate(x, y);
+                canvas.Rotate((seed * 37 + (1f - fade) * 360f) % 360f);
+                float s = cell * 0.15f;
+                canvas.FillRectangle(-s / 2f, -s / 2f, s, s);
+                canvas.RestoreState();
+                break;
+            }
+
+            case BurstStyle.Frost:
+            {
+                // A tiny snowflake: three crossing lines.
+                float r = cell * 0.13f * (0.4f + 0.6f * fade);
+                canvas.StrokeSize = MathF.Max(1f, cell * 0.04f);
+                for (int k = 0; k < 3; k++)
+                {
+                    float a = k * MathF.PI / 3f + seed * 0.3f;
+                    canvas.DrawLine(x - MathF.Cos(a) * r, y - MathF.Sin(a) * r, x + MathF.Cos(a) * r, y + MathF.Sin(a) * r);
+                }
+                break;
+            }
+
+            case BurstStyle.Starburst:
+            {
+                // A four-point star: a long cross and a short one.
+                float r = cell * 0.17f * (0.4f + 0.6f * fade);
+                canvas.StrokeSize = MathF.Max(1f, cell * 0.05f);
+                canvas.DrawLine(x - r, y, x + r, y);
+                canvas.DrawLine(x, y - r, x, y + r);
+                float q = r * 0.55f;
+                canvas.DrawLine(x - q, y - q, x + q, y + q);
+                canvas.DrawLine(x - q, y + q, x + q, y - q);
+                break;
+            }
+
+            default:
+            {
+                if (flair >= 2)
+                {
+                    float tail = cell * 0.30f * fade;
+                    canvas.StrokeSize = MathF.Max(1f, cell * 0.06f);
+                    canvas.DrawLine(x, y, x - cos * tail, y - sin * tail);
+                }
+                else
+                {
+                    float r = cell * 0.07f * fade;
+                    canvas.FillEllipse(x - r, y - r, r * 2f, r * 2f);
+                }
+                break;
+            }
+        }
     }
 
     private static void DrawBurst(ICanvas canvas, Burst burst, float originX, float originY, float cell, bool flip, long age, float boardWidth)
@@ -196,8 +309,9 @@ public sealed class BlastEffects
                 canvas.DrawEllipse(cx - ring, cy - ring, ring * 2f, ring * 2f);
             }
 
-            // Sparks flying outwards: 4 plain dots, or 8 streaks from Flair 2.
-            int sparks = flair >= 2 ? 8 : 4;
+            // Sparks flying outwards: 4 plain dots, or 8 streaks from Flair 2. Reduced motion keeps the swell and
+            // the fade of the block itself but sends nothing flying.
+            int sparks = burst.Reduced ? 0 : flair >= 2 ? 8 : 4;
             float spread = cell * (flair >= 2 ? 1.5f : 1.0f);
             for (int i = 0; i < sparks; i++)
             {
@@ -209,19 +323,8 @@ public sealed class BlastEffects
                 var sparkColour = i % 2 == 0 ? neon : Colors.White;
                 canvas.Alpha = fade;
                 canvas.FillColor = sparkColour;
-                if (flair >= 2)
-                {
-                    float tail = cell * 0.30f * fade;
-                    canvas.StrokeColor = sparkColour;
-                    canvas.StrokeSize = MathF.Max(1f, cell * 0.06f);
-                    canvas.StrokeLineCap = LineCap.Round;
-                    canvas.DrawLine(sx, sy, sx - MathF.Cos(angle) * tail, sy - MathF.Sin(angle) * tail);
-                }
-                else
-                {
-                    float r = cell * 0.07f * fade;
-                    canvas.FillEllipse(sx - r, sy - r, r * 2f, r * 2f);
-                }
+                canvas.StrokeColor = sparkColour;
+                DrawSpark(canvas, burst.Style, flair, sx, sy, angle, cell, fade, index + i);
             }
         }
 

@@ -2,10 +2,13 @@ using System.Windows.Input;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Dispatching;
 using PopBlocks.Engine;
+using PopBlocks.Engine.Audio;
 using PopBlocks.Engine.Levels;
 using PopBlocks.Engine.Logic;
 using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
+using PopBlocks.Engine.Story;
+using Region = PopBlocks.Engine.Story.Region;
 using PopBlocks.Graphics;
 
 namespace PopBlocks.ViewModels;
@@ -15,8 +18,9 @@ namespace PopBlocks.ViewModels;
 /// dispatcher timer. Falling speed comes from the engine's interval, never from the frame rate, and
 /// nothing accumulates while paused, so returning from the background applies no backlog of ticks.
 ///
-/// Story mode adds the move counter, goals, tutorial coaching, level complete (which pays gold the first
-/// time a level is cleared) and level failed. Classic keeps its score and personal best.
+/// Story mode adds the move counter, goals, level complete (which pays gold the first time a level is cleared)
+/// and level failed. The tutorial lessons play like Story levels with coaching, but sit outside the campaign:
+/// finishing one records only tutorial progress. Classic keeps its score and personal best.
 /// </summary>
 public sealed class GameViewModel : ObservableObject
 {
@@ -25,16 +29,43 @@ public sealed class GameViewModel : ObservableObject
     private readonly PlayerProgress _progress;
     private readonly ShopService _shop;
     private readonly GameSettings _settings;
+    private readonly ISoundPlayer _sound;
+    private readonly CampaignService _campaign;
+    private readonly CosmeticLoadout _loadout;
+    private readonly DevTools _dev;
+    private readonly LifetimeStats _lifetime;
+    private readonly EndingService _ending;
+    private readonly AchievementService _achievements;
+    private readonly RunStats _run = new();
+    private readonly ConsumableInventory _stock;
+    private readonly TutorialProgress _tutorial;
+    private List<Achievement> _earned = new();
+    private bool _checkAchievements;
 
     private IDispatcherTimer? _timer;
+    private bool _droppedHard;   // the lock that follows a hard drop gets the whoosh instead of the plain thud
     private GameState _lastState = GameState.Ready;
     private int _bestAtStart;
     private GameSetup _setup = GameSetup.Classic;
     private bool _coachSeen;
+    private bool _promptOpen;   // level 1, first time: "want the tutorial?" is waiting for an answer
     private bool _completionHandled;
     private TutorialController? _coach;
     private CompletionResult _result;
     private string _goalSignature = string.Empty;
+    private bool _runRecorded;
+    private List<LoreEntry> _foundLore = new();
+
+    // After the ending: the cosmetic choice of how the world looks (never changes what happened).
+    private bool _choiceOpen;
+    private string _choiceNote = string.Empty;
+
+    // Story scene panel: the scenes waiting to be shown, the one on screen and which line it is on.
+    private readonly Queue<StoryScene> _sceneQueue = new();
+    private StoryScene? _scene;
+    private int _sceneLine;
+    private CampaignOutcome _outcome = CampaignOutcome.None;
+    private bool _boardStyleApplied;
 
     private int _score;
     private string _chainText = string.Empty;
@@ -46,8 +77,19 @@ public sealed class GameViewModel : ObservableObject
     private bool _isNewBest;
     private IReadOnlyList<GoalState> _goals = Array.Empty<GoalState>();
 
-    public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings)
+    public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, ISoundPlayer sound,
+        CampaignService campaign, CosmeticLoadout loadout, DevTools dev, LifetimeStats lifetime, EndingService ending,
+        AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial)
     {
+        _tutorial = tutorial;
+        _stock = stock;
+        _achievements = achievements;
+        _dev = dev;
+        _lifetime = lifetime;
+        _ending = ending;
+        _campaign = campaign;
+        _loadout = loadout;
+        _sound = sound;
         _highScores = highScores;
         _progress = progress;
         _shop = shop;
@@ -57,13 +99,27 @@ public sealed class GameViewModel : ObservableObject
         _game.Changed += OnEngineChanged;
         _game.WaveResolved += wave => WaveResolved?.Invoke(wave);
         _game.EventRaised += OnGameEvent;
+        _run.Attach(_game);
+        _stock.Attach(_game);   // takes one out of stock when the engine says a helper was used
+        _stock.Changed += RaiseHelpers;
 
         PauseCommand = new Command(Pause);
         ResumeCommand = new Command(Resume);
         RestartCommand = new Command(NewGame);
         NextLevelCommand = new Command(GoToNextLevel);
+        TutorialYesCommand = new Command(AcceptTutorial);
+        TutorialNoCommand = new Command(DeclineTutorial);
         DismissCoachCommand = new Command(() => _coach?.Dismiss());
         SkipCoachCommand = new Command(() => _coach?.Skip());
+        AdvanceSceneCommand = new Command(AdvanceScene);
+        SkipSceneCommand = new Command(SkipScene);
+        PreviousSceneCommand = new Command(PreviousScene);
+        DevSkipLevelCommand = new Command(DevSkipLevel);
+        DevGoldCommand = new Command(DevGold);
+        ChooseLookCommand = new Command<string>(ChooseLook);
+        ChoiceDoneCommand = new Command(FinishChoice);
+        SecondChanceCommand = new Command(UseSecondChance);
+        PrismShiftCommand = new Command(UsePrismShift);
 
         _bestScore = _highScores.GetBest(_setup.BestScoreKey);
     }
@@ -103,8 +159,111 @@ public sealed class GameViewModel : ObservableObject
     public ICommand ResumeCommand { get; }
     public ICommand RestartCommand { get; }
     public ICommand NextLevelCommand { get; }
+    public ICommand TutorialYesCommand { get; }
+    public ICommand TutorialNoCommand { get; }
     public ICommand DismissCoachCommand { get; }
     public ICommand SkipCoachCommand { get; }
+    public ICommand AdvanceSceneCommand { get; }
+    public ICommand SkipSceneCommand { get; }
+    public ICommand PreviousSceneCommand { get; }
+    public ICommand DevSkipLevelCommand { get; }
+    public ICommand DevGoldCommand { get; }
+    public ICommand ChooseLookCommand { get; }
+    public ICommand ChoiceDoneCommand { get; }
+    public ICommand SecondChanceCommand { get; }
+    public ICommand PrismShiftCommand { get; }
+
+    // ---------------------------------------------------------------- helpers (Second Chance, Prism Shift)
+    // A button shows only when the level allows helpers and the player brought one in. It is switched off, with a short
+    // reason, when it cannot be used right now. Nothing here is ever needed to finish a level.
+
+    private bool HelpersOnThisLevel => _setup.IsStory && _game.HelpersAllowed;
+
+    public bool ShowSecondChance => HelpersOnThisLevel && (_game.SecondChancesLeft > 0 || _game.SecondChanceUsed > 0);
+    public bool ShowPrismShift => HelpersOnThisLevel && (_game.PrismShiftsLeft > 0 || _game.PrismShiftsUsed > 0);
+    public bool HelpersVisible => (ShowSecondChance || ShowPrismShift) && !SceneVisible && !_isComplete && !_isFailed;
+
+    public bool CanSecondChance => _game.SecondChanceStatus == AbilityStatus.Ready;
+    public bool CanPrismShift => _game.PrismShiftStatus == AbilityStatus.Ready;
+
+    public string SecondChanceText => $"UNDO  ×{_game.SecondChancesLeft}";
+    public string PrismShiftText => $"SHIFT  ×{_game.PrismShiftsLeft}";
+
+    public string SecondChanceDescription =>
+        $"Second Chance, takes back your last block. {_game.SecondChancesLeft} left this level. " + StatusText(_game.SecondChanceStatus, secondChance: true);
+    public string PrismShiftDescription =>
+        $"Prism Shift, rearranges the colours of the next piece. {_game.PrismShiftsLeft} left this level. " + StatusText(_game.PrismShiftStatus, secondChance: false);
+
+    /// <summary>Why a helper cannot be used right now, when the player has just tried or is likely to wonder.</summary>
+    public string HelperHint =>
+        _game.PrismShiftStatus == AbilityStatus.SingleColour && ShowPrismShift ? "The next piece is one colour: nothing to rearrange."
+        : _game.SecondChanceStatus == AbilityStatus.NothingToUndo && ShowSecondChance ? "Place a block first, then you can take it back."
+        : string.Empty;
+
+    public bool HasHelperHint => HelperHint.Length > 0 && HelpersVisible;
+
+    private static string StatusText(AbilityStatus status, bool secondChance) => status switch
+    {
+        AbilityStatus.Ready => "Ready.",
+        AbilityStatus.NoCharges => "None left.",
+        AbilityStatus.Busy => "Not right now.",
+        AbilityStatus.NothingToUndo => "Nothing to take back yet.",
+        AbilityStatus.SingleColour => "The next piece is one colour.",
+        _ => secondChance ? "Not on this level." : "Not on this level.",
+    };
+
+    private void UseSecondChance()
+    {
+        if (!_game.UseSecondChance()) return;
+        Toast?.Invoke("Second Chance");
+        RaiseHelpers();
+    }
+
+    private void UsePrismShift()
+    {
+        if (!_game.ShiftNextPiece()) return;
+        Toast?.Invoke("Prism Shift");
+        RaiseHelpers();
+    }
+
+    private void RaiseHelpers()
+    {
+        OnPropertyChanged(nameof(ShowSecondChance));
+        OnPropertyChanged(nameof(ShowPrismShift));
+        OnPropertyChanged(nameof(HelpersVisible));
+        OnPropertyChanged(nameof(CanSecondChance));
+        OnPropertyChanged(nameof(CanPrismShift));
+        OnPropertyChanged(nameof(SecondChanceText));
+        OnPropertyChanged(nameof(PrismShiftText));
+        OnPropertyChanged(nameof(SecondChanceDescription));
+        OnPropertyChanged(nameof(PrismShiftDescription));
+        OnPropertyChanged(nameof(HelperHint));
+        OnPropertyChanged(nameof(HasHelperHint));
+    }
+
+    /// <summary>Dev shortcuts on the pause / failed card. False in normal Release builds.</summary>
+    public bool ShowDevTools => DevMenu.Enabled && _setup.HasLevel && (_isPaused || _isFailed);
+
+    /// <summary>Dev: wins the current Story level now; the normal completion path (gold, story, rewards) then runs.</summary>
+    private void DevSkipLevel()
+    {
+        if (!DevMenu.Enabled) return;
+        _game.ForceComplete();
+    }
+
+    private void DevGold()
+    {
+        if (!DevMenu.Enabled) return;
+        _dev.AddGold(1000);
+        RaiseHeader();
+        Toast?.Invoke("+1,000 gold");
+    }
+
+    /// <summary>Pip has something short to say (a first-burst or first-chain remark). Shown as a banner, not a panel.</summary>
+    public event Action<StoryScene>? Banner;
+
+    /// <summary>Id of the board style to draw (cosmetic): "classic" or an unlocked style such as "garden".</summary>
+    public string BoardStyle => _loadout.SelectedBoard;
 
     // ---------------------------------------------------------------- bindable state: header
 
@@ -114,12 +273,12 @@ public sealed class GameViewModel : ObservableObject
     public int BestScore { get => _bestScore; private set { if (SetProperty(ref _bestScore, value)) RaiseHeader(); } }
 
     /// <summary>"LEVEL 12 · EASY" or "CLASSIC".</summary>
-    public string TitleText => _setup.IsStory
-        ? $"LEVEL {_setup.Level} · {StoryConfig.Name(StoryConfig.TierFor(_setup.Level)).ToUpperInvariant()}"
+    public string TitleText => _setup.IsLesson ? $"LESSON {_setup.Level} OF {StoryConfig.LessonCount}"
+        : _setup.IsStory ? $"LEVEL {_setup.Level} · {StoryConfig.Name(StoryConfig.TierFor(_setup.Level)).ToUpperInvariant()}"
         : "CLASSIC";
 
-    /// <summary>Best score in Classic, gold in Story.</summary>
-    public string SubText => _setup.IsStory ? $"{_progress.Gold:N0} gold" : $"BEST {_bestScore:N0}";
+    /// <summary>Best score in Classic, gold in Story, "TUTORIAL" in a lesson.</summary>
+    public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{_progress.Gold:N0} gold" : $"BEST {_bestScore:N0}";
 
     public string ChainText { get => _chainText; private set { if (SetProperty(ref _chainText, value)) OnPropertyChanged(nameof(HasChain)); } }
     public bool HasChain => _chainText.Length > 0;
@@ -134,6 +293,28 @@ public sealed class GameViewModel : ObservableObject
 
     public IReadOnlyList<GoalState> Goals { get => _goals; private set { _goals = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasGoals)); } }
     public bool HasGoals => _goals.Count > 0;
+
+    // ---------------------------------------------------------------- bindable state: optional memory objective
+
+    private BonusObjective? Bonus => _game.Story?.Bonus;
+
+    /// <summary>This level carries an optional objective that uncovers a memory.</summary>
+    public bool HasBonus => Bonus is not null;
+
+    public string BonusText => Bonus is { } b ? "Optional: " + b.Describe() : string.Empty;
+
+    private BonusState? BonusNow => Bonus?.Evaluate(_game, _run);
+
+    public string BonusProgress => BonusNow?.Progress ?? string.Empty;
+    public bool BonusMet => BonusNow?.Met == true;
+
+    private void RaiseBonus()
+    {
+        OnPropertyChanged(nameof(HasBonus));
+        OnPropertyChanged(nameof(BonusText));
+        OnPropertyChanged(nameof(BonusProgress));
+        OnPropertyChanged(nameof(BonusMet));
+    }
 
     private void RaiseHeader()
     {
@@ -157,7 +338,7 @@ public sealed class GameViewModel : ObservableObject
     public bool IsPlaying => _game.State is GameState.Playing or GameState.ResolvingBursts;
     public bool IsOverlayVisible => _isPaused || _isFailed || _isComplete || _isClassicOver;
 
-    public string OverlayTitle => _isComplete ? "LEVEL COMPLETE"
+    public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : "LEVEL COMPLETE")
         : _isFailed ? (_game.FailReason == FailReason.OutOfMoves ? "OUT OF MOVES" : "BOARD FULL")
         : _isClassicOver ? "GAME OVER"
         : "PAUSED";
@@ -184,7 +365,8 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>Small note under the card explaining why no gold was paid.</summary>
     public string GoldNote => !_isComplete ? string.Empty
         : _result.GoldAwarded > 0 ? string.Empty
-        : _game.Story?.IsTutorial == true ? "Tutorial levels don't pay gold."
+        : _setup.IsLesson ? "Lessons don't pay gold."
+        : _setup.Level <= StoryConfig.TutorialLastLevel ? "The first few levels don't pay gold."
         : "Gold is only paid the first time a level is cleared.";
     public bool HasGoldNote => GoldNote.Length > 0;
 
@@ -193,18 +375,264 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(IsOverlayVisible));
         OnPropertyChanged(nameof(OverlayTitle));
         OnPropertyChanged(nameof(OverlayDetail));
+        OnPropertyChanged(nameof(NextText));
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(RetryText));
         OnPropertyChanged(nameof(HasGoldReward));
         OnPropertyChanged(nameof(GoldRewardText));
         OnPropertyChanged(nameof(GoldNote));
         OnPropertyChanged(nameof(HasGoldNote));
+        OnPropertyChanged(nameof(HasRegionProgress));
+        OnPropertyChanged(nameof(RegionProgressText));
+        OnPropertyChanged(nameof(RegionFraction));
+        OnPropertyChanged(nameof(RewardLines));
+        OnPropertyChanged(nameof(HasRewardLines));
+        OnPropertyChanged(nameof(BonusResultText));
+        OnPropertyChanged(nameof(HasBonusResult));
+        OnPropertyChanged(nameof(ShowDevTools));
+    }
+
+    // ---------------------------------------------------------------- bindable state: story rewards (level-complete card)
+    // Layer A is the gold above. Layer B is progress through the region. Layer C is the story rewards.
+
+    private Region? CompletedRegion => _isComplete && _setup.IsStory ? RegionCatalog.For(_setup.Level) : null;   // lessons have none
+
+    public bool HasRegionProgress => CompletedRegion is not null;
+
+    public string RegionProgressText
+    {
+        get
+        {
+            if (CompletedRegion is not { } region) return string.Empty;
+            var p = _campaign.ProgressOf(region);
+            return p.IsRestored ? $"{region.Title} · restored" : $"{region.Title} · {p.LevelsCleared} / {region.LevelCount}";
+        }
+    }
+
+    public double RegionFraction => CompletedRegion is { } region ? _campaign.ProgressOf(region).Fraction : 0;
+
+    public IReadOnlyList<string> RewardLines
+    {
+        get
+        {
+            var lines = new List<string>();
+            if (_outcome.RegionGold > 0) lines.Add($"Region reward: +{_outcome.RegionGold} gold");
+            if (_outcome.FragmentAwarded) lines.Add("Prism fragment recovered");
+            foreach (var entry in _outcome.NewLore.Where(l => l.Kind == LoreKind.Journal))
+                lines.Add($"Journal entry: {entry.Title}");
+            if (_outcome.CosmeticUnlocked != null)
+                lines.Add(_boardStyleApplied ? "New board style: Garden (applied)" : "New board style: Garden");
+            foreach (var found in _outcome.NewCosmetics.Where(c => c.Id != "garden" || _outcome.CosmeticUnlocked == null))
+                lines.Add($"New in the workshop: {found.Name}");
+            foreach (var entry in _foundLore)
+                lines.Add(entry.Kind == LoreKind.Memory ? $"Memory found: {entry.Title}" : $"Journal entry: {entry.Title}");
+            foreach (var a in _earned)
+                lines.Add($"Achievement: {a.Name} (+{a.Gold} gold)");
+            return lines;
+        }
+    }
+
+    /// <summary>On a level with an optional objective: a note when the memory was not found this time.</summary>
+    public string BonusResultText
+    {
+        get
+        {
+            if (!_isComplete || Bonus is not { } b) return string.Empty;
+            if (_foundLore.Any(l => l.Kind == LoreKind.Memory)) return string.Empty;   // already shown as a reward line
+            var memory = StoryContent.FindLore(b.MemoryId);
+            return memory is not null && _campaign.HasLore(memory)
+                ? "The memory on this level is already in your Archive."
+                : $"Optional memory not found: {b.Describe()}.";
+        }
+    }
+
+    public bool HasBonusResult => BonusResultText.Length > 0;
+
+    public bool HasRewardLines => RewardLines.Count > 0;
+
+    // ---------------------------------------------------------------- bindable state: story scene panel
+
+    public bool SceneVisible => _scene is not null;
+    public string SceneTitle => _scene?.Title ?? string.Empty;
+
+    private StoryLine? CurrentLine => _scene is not null && _sceneLine < _scene.Lines.Count ? _scene.Lines[_sceneLine] : null;
+
+    public string SceneSpeaker => CurrentLine is { IsNarration: false } l ? Cast.Find(l.SpeakerId)?.Name ?? string.Empty : string.Empty;
+    public bool SceneHasSpeaker => SceneSpeaker.Length > 0;
+    public string SceneText => CurrentLine?.Text ?? string.Empty;
+    public bool SceneIsNarration => CurrentLine?.IsNarration == true;
+    public string SceneProgressText => _scene is null ? string.Empty : $"{_sceneLine + 1} / {_scene.Lines.Count}";
+    public string SceneButtonText => _scene is not null && _sceneLine >= _scene.Lines.Count - 1 ? "DONE" : "NEXT";
+
+    // Who is on screen, and on which side. Narration has no portrait. Pip is always on the left; everyone else alternates,
+    // in the order they first speak in the scene (right, left, right...), so two speakers never share a side by accident.
+    public string SceneSpeakerId => CurrentLine is { IsNarration: false } l ? l.SpeakerId : string.Empty;
+    public bool SceneHasPortrait => SceneSpeakerId.Length > 0;
+    public bool ScenePortraitOnRight => SceneHasPortrait && SpeakerOnRight(SceneSpeakerId);
+    public bool ScenePortraitLeft => SceneHasPortrait && !ScenePortraitOnRight;
+    public bool ScenePortraitRight => ScenePortraitOnRight;
+    public TextAlignment SceneNameAlignment => ScenePortraitOnRight ? TextAlignment.End : TextAlignment.Start;
+
+    private bool SpeakerOnRight(string speakerId)
+    {
+        if (_scene is null || speakerId == Cast.Pip) return false;
+        int order = 0;
+        foreach (var id in _scene.Lines.Select(l => l.SpeakerId).Where(id => id != Cast.Narrator && id != Cast.Pip).Distinct())
+        {
+            if (id == speakerId) return order % 2 == 0;
+            order++;
+        }
+        return false;
+    }
+
+    public bool SceneCanGoBack => _scene is not null && _sceneLine > 0;
+
+    /// <summary>Back to the message before this one. Does nothing on the first message.</summary>
+    public void PreviousScene()
+    {
+        if (!SceneCanGoBack) return;
+        _sceneLine--;
+        RaiseScene();
+    }
+
+    public PipMood SceneMood => _scene?.Trigger is SceneTrigger.RegionCompletion or SceneTrigger.Reaction ? PipMood.Happy : PipMood.Calm;
+
+    /// <summary>What the stage strip above the panel should show for the current line; null when no scene is open.</summary>
+    public StageInfo? SceneStage => _scene is null ? null : StageDirections.Describe(_scene, _sceneLine);
+
+    /// <summary>How bright Pip is drawn: grows with the number of regions restored.</summary>
+    /// <summary>What Pip wears and how many small lights circle Pip (one per restored region).</summary>
+    public AccessoryStyle PipAccessory => _loadout.Accessory;
+
+    public int PipDetail => _campaign.RestoredRegionCount;
+
+    public float PipBrightness => 0.35f + 0.65f * _campaign.RestoredRegionCount / RegionCatalog.All.Count;
+
+    private void ShowNextScene()
+    {
+        if (_scene is null && _sceneQueue.Count > 0)
+        {
+            _scene = _sceneQueue.Dequeue();
+            _sceneLine = 0;
+        }
+        RaiseScene();
+    }
+
+    private void AdvanceScene()
+    {
+        if (_scene is null) return;
+        if (_sceneLine < _scene.Lines.Count - 1)
+        {
+            _sceneLine++;
+            RaiseScene();
+        }
+        else FinishScene();
+    }
+
+    /// <summary>Skipping counts as seeing the scene: the player is not shown it again, and no reward depends on it.</summary>
+    public void SkipScene() => FinishScene();
+
+    private void FinishScene()
+    {
+        if (_scene is null) return;
+        _campaign.MarkSeen(_scene.Id);
+        _scene = null;
+        _sceneLine = 0;
+        ShowNextScene();   // another queued scene, or nothing: then the tutorial card (if any) comes back
+        RaiseCoach();
+        MaybeOpenChoice();
+        RaiseChoice();
+    }
+
+    // ---------------------------------------------------------------- the ending's cosmetic choice
+
+    public bool ChoiceVisible => _choiceOpen && !SceneVisible;
+
+    // The three looks, in the order the page lists them. The ids are fixed in the page; a test keeps them in step.
+    public string LookOneText => LookText("lanterns");
+    public string LookTwoText => LookText("aurora");
+    public string LookThreeText => LookText("meadow");
+
+    private string LookText(string id)
+    {
+        var look = StoryContent.FindFinalChoice(id);
+        if (look is null) return string.Empty;
+        string mark = _ending.Choice?.Id == id ? "✓  " : string.Empty;
+        return $"{mark}{look.Name}  ·  {look.Description}";
+    }
+
+    /// <summary>Pip's line about the look just picked; empty until one is picked.</summary>
+    public string ChoiceNote => _choiceNote;
+    public bool ChoiceHasNote => _choiceNote.Length > 0;
+    public string ChoiceDoneText => _ending.HasChosen ? "DONE" : "DECIDE LATER";
+
+    private void MaybeOpenChoice()
+    {
+        if (_choiceOpen || SceneVisible || !_setup.IsStory || !_isComplete) return;
+        if (_setup.Level != RegionCatalog.LastCampaignLevel || !_ending.NeedsChoice) return;
+        _choiceNote = string.Empty;
+        _choiceOpen = true;
+    }
+
+    private void ChooseLook(string? id)
+    {
+        if (id is null || !_ending.Choose(id)) return;
+        _loadout.Select(id);   // the chosen look is also a board; wear it now (it can be changed again in the wardrobe)
+        _choiceNote = _ending.Choice?.EpilogueLine ?? string.Empty;
+        OnPropertyChanged(nameof(BoardStyle));
+        RaiseChoice();
+    }
+
+    private void FinishChoice()
+    {
+        _choiceOpen = false;
+        if (_ending.EpilogueDue() is { } epilogue)
+        {
+            _sceneQueue.Enqueue(epilogue);
+            ShowNextScene();
+        }
+        RaiseChoice();
+    }
+
+    private void RaiseChoice()
+    {
+        OnPropertyChanged(nameof(ChoiceVisible));
+        OnPropertyChanged(nameof(ChoiceNote));
+        OnPropertyChanged(nameof(ChoiceHasNote));
+        OnPropertyChanged(nameof(ChoiceDoneText));
+        OnPropertyChanged(nameof(LookOneText));
+        OnPropertyChanged(nameof(LookTwoText));
+        OnPropertyChanged(nameof(LookThreeText));
+    }
+
+    private void RaiseScene()
+    {
+        OnPropertyChanged(nameof(SceneVisible));
+        OnPropertyChanged(nameof(HelpersVisible));
+        OnPropertyChanged(nameof(SceneTitle));
+        OnPropertyChanged(nameof(SceneSpeaker));
+        OnPropertyChanged(nameof(SceneHasSpeaker));
+        OnPropertyChanged(nameof(SceneText));
+        OnPropertyChanged(nameof(SceneIsNarration));
+        OnPropertyChanged(nameof(SceneProgressText));
+        OnPropertyChanged(nameof(SceneButtonText));
+        OnPropertyChanged(nameof(SceneSpeakerId));
+        OnPropertyChanged(nameof(SceneHasPortrait));
+        OnPropertyChanged(nameof(ScenePortraitLeft));
+        OnPropertyChanged(nameof(ScenePortraitRight));
+        OnPropertyChanged(nameof(SceneNameAlignment));
+        OnPropertyChanged(nameof(SceneCanGoBack));
+        OnPropertyChanged(nameof(PipBrightness));
+        OnPropertyChanged(nameof(SceneMood));
+        OnPropertyChanged(nameof(SceneStage));
+        OnPropertyChanged(nameof(CoachVisible));
+        Redraw?.Invoke();
     }
 
     // ---------------------------------------------------------------- bindable state: coaching
 
     public TutorialStep? CoachStep => _coach?.Current;
-    public bool CoachVisible => CoachStep is not null;
+    public bool CoachVisible => CoachStep is not null && !SceneVisible;
     public string CoachTitle => CoachStep?.Title ?? string.Empty;
     public string CoachText => CoachStep?.Text ?? string.Empty;
     public bool CoachNeedsTap => CoachStep is { Mode: StepMode.Tap };
@@ -221,7 +649,39 @@ public sealed class GameViewModel : ObservableObject
     public int HintColumn => CoachStep is { Mode: StepMode.Do, HighlightColumn: >= 0 } s ? s.HighlightColumn : -1;
     public int HintWidth => CoachStep?.HighlightWidth ?? 1;
 
-    private bool InputBlocked => CoachStep is { Mode: StepMode.Tap };
+    private bool InputBlocked => SceneVisible || _promptOpen || CoachStep is { Mode: StepMode.Tap };
+
+    // ---------------------------------------------------------------- the first-level tutorial offer
+    // A brand-new player starting Story level 1 is asked once whether they want the tutorial. The game is held still
+    // (and the opening scene waits) until they answer. Yes plays the lessons here; No carries straight on with level 1.
+
+    public bool TutorialPromptVisible => _promptOpen && !SceneVisible;
+
+    private bool ShouldOfferTutorial() =>
+        _setup is { IsStory: true, Level: 1 } && _tutorial.ShouldOffer(_progress.HighestCleared);
+
+    private void AcceptTutorial()
+    {
+        if (!_promptOpen) return;
+        _promptOpen = false;
+        _tutorial.MarkOffered();
+        _setup = GameSetup.Lesson(1);
+        _coachSeen = false;
+        NewGame();
+    }
+
+    private void DeclineTutorial()
+    {
+        if (!_promptOpen) return;
+        _promptOpen = false;
+        _tutorial.MarkOffered();
+        NewGame();   // the same level again, this time with its opening scene and no question
+    }
+
+    /// <summary>"NEXT LEVEL", or the lesson equivalents: the last lesson hands over to Story level 1.</summary>
+    public string NextText => !_setup.IsLesson ? "NEXT LEVEL"
+        : _setup.Level >= StoryConfig.LessonCount ? "START PLAYING"
+        : "NEXT LESSON";
 
     private void RaiseCoach()
     {
@@ -235,6 +695,7 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(CoachCanSkip));
         OnPropertyChanged(nameof(HintColumn));
         OnPropertyChanged(nameof(HintWidth));
+        OnPropertyChanged(nameof(TutorialPromptVisible));
         Redraw?.Invoke();
     }
 
@@ -248,6 +709,9 @@ public sealed class GameViewModel : ObservableObject
         _timer.IsRepeating = true;
         _timer.Tick += (_, _) =>
         {
+            // A story panel (or the tutorial offer) holds everything still, so reading never costs the player a move.
+            if (SceneVisible || _promptOpen) return;
+
             // A tutorial card (or a "now do this" step) holds the piece still until the player acts.
             // The piece is allowed to step down out of the hidden spawn rows first, so it is on screen while it waits.
             if (_coach?.FreezesGame == true && _game.State == GameState.Playing && PieceIsVisible()) return;
@@ -280,9 +744,20 @@ public sealed class GameViewModel : ObservableObject
         // Shop upgrades and settings apply from the start of each game.
         _game.PreviewCount = _shop.PreviewCount;
         _game.ExtraMoves = _shop.ExtraMoves;
+        _stock.ApplyTo(_game, _shop);   // helpers carried in; they apply to Story levels that allow them
         _game.Timing = _settings.BlastEffects
             ? new PopTiming(VisualDesign.HighlightMs, VisualDesign.SettleMs)
             : PopTiming.Instant;
+
+        // A level left half-played still counts towards the player's personal bests (once). Tutorial lessons never do.
+        if (!_runRecorded && _run.PiecesPlaced > 0 && _game.Story?.IsTutorial != true) _lifetime.Add(_run, _game.Story);
+        _run.Reset();
+        _runRecorded = false;
+        _earned = new List<Achievement>();
+        _checkAchievements = false;
+        _foundLore = new List<LoreEntry>();
+        _choiceOpen = false;
+        _choiceNote = string.Empty;
 
         _bestAtStart = _highScores.GetBest(_setup.BestScoreKey);
         BestScore = _bestAtStart;
@@ -292,30 +767,59 @@ public sealed class GameViewModel : ObservableObject
         _goalSignature = string.Empty;
         _lastState = GameState.Ready;
 
-        // Coaching: first time through a level that has steps, and only until it has been cleared.
+        // The very first Story level asks once whether the player wants the tutorial. Until they answer, the opening scene waits.
+        _promptOpen = ShouldOfferTutorial();
+
+        // Coaching: first time through a level that has steps. Story levels (and the intro cards of new features) coach only
+        // until cleared; a lesson coaches every time it is entered fresh, because replaying the tutorial is the point.
         _coach = null;
-        if (_setup.IsStory)
+        if (_setup.HasLevel)
         {
-            var level = LevelCatalog.Get(_setup.Level);
-            if (level.Steps.Count > 0 && !_coachSeen && !_progress.IsCleared(level.Number))
+            var level = _setup.IsLesson ? LevelCatalog.Lesson(_setup.Level) : LevelCatalog.Get(_setup.Level);
+            if (level.Steps.Count > 0 && !_coachSeen && (_setup.IsLesson || !_progress.IsCleared(level.Number)))
             {
                 _coach = new TutorialController(level.Steps);
                 _coach.Changed += RaiseCoach;
             }
         }
         _coachSeen = true;
+
+        // Story: a region's opening scene comes before any tutorial card, and never on a replay. Lessons have no story.
+        _sceneQueue.Clear();
+        _scene = null;
+        _outcome = CampaignOutcome.None;
+        _boardStyleApplied = false;
+        if (_setup.IsStory && !_promptOpen && _campaign.OnLevelEntered(_setup.Level) is { } opening)
+            _sceneQueue.Enqueue(opening);
+        ShowNextScene();
         RaiseCoach();
+
+        // Going back to a region's first level: one brief Pip line instead of the opening scene again.
+        if (_setup.IsStory && !_promptOpen && !SceneVisible && _campaign.ReplayRemark(_setup.Level) is { } remark)
+            Banner?.Invoke(remark);
 
         _game.Start(_setup);
 
         RaiseHeader();
         UpdateOverlay();
+        RaiseBonus();
+        RaiseChoice();
+        RaiseHelpers();
         PrefetchNextLevel();
         GameStarted?.Invoke();
     }
 
     public void GoToNextLevel()
     {
+        if (_setup.IsLesson)
+        {
+            // The last lesson hands over to the Story. A player who has not started it begins at level 1.
+            _setup = _setup.Level >= StoryConfig.LessonCount ? GameSetup.Story(_progress.NextLevel) : GameSetup.Lesson(_setup.Level + 1);
+            _coachSeen = false;
+            NewGame();
+            return;
+        }
+
         if (!_setup.IsStory) return;
         _setup = GameSetup.Story(_setup.Level + 1);
         _coachSeen = false;
@@ -325,7 +829,7 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>Generating a level takes a moment on the hardest tiers, so the next one is built in the background.</summary>
     private void PrefetchNextLevel()
     {
-        if (!_setup.IsStory) return;
+        if (!_setup.IsStory) return;   // lessons are hand-made and quick to build
         int next = _setup.Level + 1;
         _ = Task.Run(() =>
         {
@@ -356,10 +860,48 @@ public sealed class GameViewModel : ObservableObject
 
     private void OnGameEvent(GameEvent e)
     {
+        PlaySound(e);
         _coach?.Notify(e);
         if (e == GameEvent.PenaltyApplied)
             Toast?.Invoke($"No pop!  −{_game.LastPenalty}");
+
+        // Pip's first reactions to a burst and a chain: a quiet banner, never a panel, and never over a story scene.
+        if (e == GameEvent.Popped && _setup.IsStory && !SceneVisible && _campaign.OnBurst(_game.Chain) is { } reaction)
+            Banner?.Invoke(reaction);
     }
+
+    /// <summary>
+    /// Sound for the things the player hears: turn, place, drop, pop. Moving sideways and soft-dropping stay silent
+    /// (they repeat too fast to be pleasant). Each step of a chain pops a little higher.
+    /// </summary>
+    private void PlaySound(GameEvent e)
+    {
+        if (!_settings.SoundEffects) return;
+
+        switch (e)
+        {
+            case GameEvent.Rotated:
+                _sound.Play(SoundEffect.Rotate);
+                break;
+
+            case GameEvent.HardDropped:
+                _droppedHard = true;   // the engine raises PieceLocked straight after this
+                break;
+
+            case GameEvent.PieceLocked:
+                _sound.Play(_droppedHard ? SoundEffect.HardDrop : SoundEffect.Place);
+                _droppedHard = false;
+                break;
+
+            case GameEvent.Popped:
+                _sound.Play(SoundEffect.Pop, ChainPitch(_game.Chain));
+                break;
+        }
+    }
+
+    /// <summary>One whole tone up per chain step: x1.0, x1.12, x1.26, x1.41, x1.59 ...</summary>
+    internal static float ChainPitch(int chain) =>
+        MathF.Pow(2f, Math.Clamp(chain - 1, 0, 6) * 2f / 12f);
 
     private void OnEngineChanged()
     {
@@ -371,7 +913,7 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(MovesColour));
         UpdateGoals();
 
-        if (!_setup.IsStory)
+        if (!_setup.HasLevel)
         {
             // Save the personal best the moment it is beaten, so an unexpected exit cannot lose it.
             if (_highScores.Submit(_setup.BestScoreKey, _game.Score))
@@ -379,13 +921,27 @@ public sealed class GameViewModel : ObservableObject
             IsNewBest = _highScores.GetBest(_setup.BestScoreKey) > _bestAtStart;
         }
 
+        // The run is over (won, lost, or Classic game over): add it to the lifetime bests, once.
+        if (_game.State is GameState.GameOver or GameState.LevelComplete && !_runRecorded)
+        {
+            _runRecorded = true;
+            if (!_setup.IsLesson)   // a tutorial lesson is practice: it adds nothing to the bests or the achievements
+            {
+                _lifetime.Add(_run, _game.Story);
+                _checkAchievements = true;
+            }
+        }
+
         HandleCompletion();
+        RaiseBonus();
 
         IsPaused = _game.State == GameState.Paused;
-        IsFailed = _setup.IsStory && _game.State == GameState.GameOver;
-        IsClassicOver = !_setup.IsStory && _game.State == GameState.GameOver;
+        IsFailed = _setup.HasLevel && _game.State == GameState.GameOver;
+        IsClassicOver = !_setup.HasLevel && _game.State == GameState.GameOver;
         IsComplete = _game.State == GameState.LevelComplete;
         OnPropertyChanged(nameof(IsPlaying));
+        RaiseHelpers();
+        if (_checkAchievements) CheckAchievements();
 
         if (_game.State != _lastState)
         {
@@ -405,12 +961,55 @@ public sealed class GameViewModel : ObservableObject
         Goals = goals;
     }
 
+    /// <summary>
+    /// Once per finished run, after the level has been paid and the story rewards granted: earn any achievement the
+    /// run (or the progress it just made) qualifies for. Each pays its gold once, ever.
+    /// </summary>
+    private void CheckAchievements()
+    {
+        _checkAchievements = false;
+        _earned = _achievements.OnRunEnded(_run, _game.Story, _setup.HasLevel ? 0 : _game.Score).ToList();
+        if (_earned.Count == 0) return;
+        RaiseHeader();
+        UpdateOverlay();
+    }
+
     /// <summary>Pays out and saves progress, once, the moment a level is cleared.</summary>
     private void HandleCompletion()
     {
         if (_game.State != GameState.LevelComplete || _completionHandled || _game.Story is null) return;
         _completionHandled = true;
+
+        // A tutorial lesson is outside the Story: remember it was finished and nothing else (no progress, gold or scenes).
+        if (_setup.IsLesson)
+        {
+            _tutorial.Complete(_setup.Level);
+            _result = default;
+            RaiseHeader();
+            UpdateOverlay();
+            return;
+        }
+
         _result = _progress.Complete(_game.Story);
+
+        // Story rewards are granted here, before any scene is shown, so skipping a scene can never lose one.
+        _outcome = _campaign.OnLevelCompleted(_game.Story.Number, _result);
+        if (_outcome.CosmeticUnlocked == CampaignService.CosmeticGarden && _loadout.Select("garden"))
+        {
+            _boardStyleApplied = true;
+            OnPropertyChanged(nameof(BoardStyle));
+        }
+        if (_outcome.Scenes.Count > 0)
+        {
+            foreach (var scene in _outcome.Scenes) _sceneQueue.Enqueue(scene);
+            ShowNextScene();
+        }
+
+        // An optional objective met on this win uncovers its memory (on a replay too; no gold, no progress).
+        _foundLore = _campaign.OnBonusEarned(_game.Story, _run).ToList();
+
+        MaybeOpenChoice();
+        RaiseChoice();
         RaiseHeader();
         UpdateOverlay();
     }

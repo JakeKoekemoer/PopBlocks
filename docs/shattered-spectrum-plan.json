@@ -1,0 +1,2324 @@
+{
+  "plan_id": "pln_shattered_spectrum_002",
+  "goal": "Implement 'The Shattered Spectrum' in PopBlocks, vertical slice first: an eight-region story campaign (levels 1-200) with a world map, Pip, a Spectrum Archive and journal, a restoring Spectrum Workshop with cosmetics, upgrades and abilities, achievements, optional memories and a fixed ending with a cosmetic final choice - offline, code-drawn, and fair without purchases.",
+  "metadata": {
+    "estimated_steps": 59,
+    "required_capabilities": [
+      "shell",
+      "code_search",
+      "code_edit",
+      "run_tests",
+      "llm_write",
+      "llm_analyze",
+      "manual_review"
+    ],
+    "project": "PopBlocks - .NET 10 MAUI (Android) app plus pure-C# PopBlocks.Engine and xUnit tests",
+    "plan_version": 2,
+    "source_documents": {
+      "expert_feedback": "expert-feedback.txt (psychological expert review)",
+      "story_canon": "docs/story/StoryText.md",
+      "visual_reference_only": "docs/story/story-guide-infographic.png",
+      "precedence": "Story bible wins for names, cast, text and ending. Expert feedback wins for systems (shop, rewards, achievements) except where the bible or the user's decisions say otherwise."
+    },
+    "tool_notes": {
+      "shell": "git, dotnet, powershell. dotnet publish for Android and Check-Permissions.ps1 must run on the Windows machine with Visual Studio 2026.",
+      "code_search / code_edit": "read and change files under E:\\PopBlocks",
+      "run_tests": "dotnet test tests/PopBlocks.Tests. The Engine targets plain net10.0, so no emulator is needed.",
+      "llm_write / llm_analyze": "drafting text and modelling numbers",
+      "manual_review": "human gate (expert, studio writer, or on-device playtest on the Samsung S24)"
+    },
+    "execution_notes": [
+      "VERTICAL SLICE FIRST: phases P0-P1 build Region 1 only. Every later step depends (directly or not) on step 'slice_review', so nothing in P2+ starts until the slice is approved.",
+      "The slice deliberately avoids level-generation changes, new goal types and undo (story bible section 14).",
+      "Steps whose arguments.fallback_only is true must NOT run unless another step names them in on_failure.fallback_step_id.",
+      "Steps with arguments.optional true can be skipped without affecting the rest of the plan. story_review is non-blocking.",
+      "Strings like {{design_decisions}} refer to another step's output_keys and are only used where a dependency produces that key.",
+      "Several steps edit src/PopBlocks.Engine/Levels/LevelCatalog.cs (region_rules, chain_goal, finales, bonus_objectives); the dependency order serialises them on purpose.",
+      "Each run_tests gate must pass before the next phase starts. Ship an internal build after P1, P3 and P6."
+    ],
+    "fallback_step_ids": [
+      "step_09",
+      "step_47"
+    ],
+    "optional_step_ids": [
+      "step_19",
+      "step_58",
+      "step_59"
+    ],
+    "global_constraints": [
+      "Offline only: no INTERNET permission, no analytics, no ads, no network packages, no new PackageReference unless unavoidable (spec section 10).",
+      "All gameplay and story visuals are drawn in code - no raster art (spec section 1).",
+      "Rules live in the Engine project; the MAUI app only draws and wires input (docs/02 section 2.7).",
+      "Never rename or reuse an existing save key; add new keys through SaveKeys.",
+      "Every main-line level must be completable with zero purchases and zero abilities, and the ending must be reachable without optional collectibles. Add tests.",
+      "Every generated level stays deterministic from its number and bot-proven winnable.",
+      "Gold is paid only on first clear. Story progress never depends on spending gold. Never charge gold for essential story text or essential accessibility.",
+      "Story text must match real mechanics: no promised branch, secret level or colour power until it exists (story bible section 12).",
+      "Scenes are skippable and never repeat in full on replay; skipping still grants progress, fragments and journal entries.",
+      "If an engine rule changes, change LevelSolver too and keep the replay test green."
+    ],
+    "phases": [
+      {
+        "id": "P0",
+        "name": "Foundations",
+        "exit": "Clean baseline, decisions recorded, save infrastructure in place"
+      },
+      {
+        "id": "P1",
+        "name": "Vertical slice: Region 1",
+        "exit": "Region 1 plays end to end (opening, reactions, restoration states, fragment, journal entry, cosmetic); slice_review approved"
+      },
+      {
+        "id": "P2",
+        "name": "Full story and map",
+        "exit": "Regions 2-8 text and scenes in; expert review running in parallel and non-blocking"
+      },
+      {
+        "id": "P3",
+        "name": "Campaign gameplay",
+        "exit": "Region-themed generation, chain-set goal, finales, optional memories, ending with cosmetic choice; solver replay 1-220 green"
+      },
+      {
+        "id": "P4",
+        "name": "Workshop and economy",
+        "exit": "Data-driven shop, Colour Lens, Chain Sense, accessibility settings, achievements, journal, restoring Workshop; economy playtested"
+      },
+      {
+        "id": "P5",
+        "name": "Cosmetics",
+        "exit": "Skins, burst styles, board themes, accessories tied to regions; symbols always visible"
+      },
+      {
+        "id": "P6",
+        "name": "Abilities",
+        "exit": "Undo, Prism Shift (spec version) and consumables; full-campaign playtest"
+      },
+      {
+        "id": "P7",
+        "name": "Hardening and release",
+        "exit": "Fairness and save tests permanent, docs updated, save code, signed APK verified on device"
+      },
+      {
+        "id": "P8",
+        "name": "Optional: challenge levels",
+        "exit": "Only after the main campaign is proven reliable"
+      }
+    ],
+    "decisions_resolved": {
+      "regions": "25 levels x 8 = 1-200; endless 'Beyond the Spectrum' after",
+      "canon": "story bible; infographic is visual reference only",
+      "ending": "one fixed ending plus a cosmetic final choice (supersedes the earlier 'two real endings' answer)",
+      "prism_shift": "spec version: rearrange colours in the NEXT piece",
+      "colour_lens": "outline groups of 2-3",
+      "shop_cuts": "Landing Guide free; Gentle Landing skipped; Extra Preview folded into Lookout 3-4",
+      "consumables": "cap 3, one use per level, off on finales",
+      "optional_content": "lore pickups first; challenge levels deferred and optional",
+      "sequencing": "vertical slice first",
+      "save_code": "included",
+      "story_review": "non-blocking, data-only edits"
+    },
+    "feasibility": {
+      "possible_as_written": [
+        "Eight-region campaign on the existing engine (levels are data plus seeds; regions are a table over level numbers)",
+        "Story told with bundled text and no voice, cutscene art or server",
+        "Pip as a procedurally drawn companion that brightens with progress",
+        "Reward layers and a world map (region state is derived from HighestCleared)",
+        "Spectrum Workshop shop keeping Lookout, Pop Flair and Spare Moves",
+        "Cosmetics: skins, burst styles, board themes, trails, frames, victory effects, Pip accessories",
+        "Spectrum Archive, Puzzle Journal and skill-based achievements stored locally",
+        "Optional memory objectives as lore pickups",
+        "'Every level completable without upgrades' - already true by design, locked in by a test"
+      ],
+      "possible_with_changes": [
+        {
+          "item": "Colour Lens",
+          "issue": "A 4+ group bursts the instant it forms, so no 'qualifying group' ever sits on the board.",
+          "change": "Highlight groups of 2-3 cells."
+        },
+        {
+          "item": "Chain Sense",
+          "issue": "Must not reveal the solution.",
+          "change": "Only evaluate the piece's current landing spot, using real engine classes."
+        },
+        {
+          "item": "Second Chance (undo)",
+          "issue": "System.Random cannot rewind; goals and queue are mutable state.",
+          "change": "Rewindable generator, full snapshot, one step back, Playing state only; has a descope fallback."
+        },
+        {
+          "item": "Prism Shift",
+          "issue": "Spec and expert define it differently.",
+          "change": "Spec version chosen; define cost and UI in the spec first."
+        },
+        {
+          "item": "Finale with several coordinated chains",
+          "issue": "No goal kind measures this today.",
+          "change": "New ChainSet goal incl. solver support."
+        },
+        {
+          "item": "Region gameplay themes",
+          "issue": "Generation uses hard-coded level literals; flip and penalty only start at 151/156.",
+          "change": "Snapshot test first, then a region rules table. Later levels' content changes."
+        },
+        {
+          "item": "Optional memories",
+          "issue": "Need bot-verified objectives inside normal levels.",
+          "change": "Verify with LevelSolver; omit when the bot cannot do goal plus bonus."
+        },
+        {
+          "item": "Final choice",
+          "issue": "The bible has one fixed ending and forbids implying a branch that does not exist.",
+          "change": "Cosmetic final theme plus epilogue scene only."
+        }
+      ],
+      "not_recommended": [
+        {
+          "item": "Landing Guide as a paid upgrade",
+          "why": "The outline is already free, and essential information must not be paywalled."
+        },
+        {
+          "item": "Resonance Pulse",
+          "why": "Duplicates Colour Lens."
+        },
+        {
+          "item": "Gentle Landing in v1",
+          "why": "Only changes tick timing, which the solver does not model; overlaps with accessibility settings."
+        },
+        {
+          "item": "Extra Preview as a separate item",
+          "why": "Same as more Lookout levels (engine supports up to 5)."
+        },
+        {
+          "item": "Grind-style achievements",
+          "why": "Both the expert and the bible advise against them."
+        },
+        {
+          "item": "Hidden fragment per region and a 'true ending'",
+          "why": "The bible has exactly eight main fragments and an optional epilogue; the extra system adds scope without story need."
+        },
+        {
+          "item": "Eight Guardians from the infographic",
+          "why": "Not in the story bible; could return later as optional one-per-region supporting voices."
+        }
+      ],
+      "risks": [
+        "Scope: this could roughly double the code (the engine is about 3,000 lines and the app about 3,400 today). The vertical slice and phase gates exist to catch problems early.",
+        "Region rules change generated level content for everyone; fine before release, noticeable after. The snapshot test makes every change deliberate.",
+        "Economy: the current shop is fully bought by level 107 and about 8,900 of 11,965 gold is unspent at level 200, so new sinks matter more than any anti-grind measure.",
+        "Writing: the bible covers all eight regions in draft; gaps are filled by Claude and reviewed by the expert later without blocking.",
+        "Art time: eight region scenes are the largest visual task; Region 1 ships first.",
+        "Assumption to confirm: the existing three upgrades stay buyable from first launch while Bram's stations restore on the bible's schedule."
+      ]
+    }
+  },
+  "steps": [
+    {
+      "step_id": "step_01",
+      "tool": "shell",
+      "description": "Commit the in-progress sound work and the new story documents, run the full test suite and record the baseline so every later phase can prove it broke nothing.",
+      "arguments": {
+        "name": "baseline",
+        "phase": "P0",
+        "effort": "S",
+        "commands": [
+          "git add src tests docs/story docs/shattered-spectrum-plan.json && git commit -m 'Sound effects, shape tests, story bible and campaign plan (baseline)'",
+          "git switch -c feature/shattered-spectrum",
+          "dotnet test tests/PopBlocks.Tests"
+        ],
+        "notes": "Uncommitted work exists (Audio/, AndroidSoundPlayer.cs, ShapeCatalog, SettingsServices, GamePage/MainPage). Leave _to_delete/ alone. docs/story/StoryText.md and docs/story/story-guide-infographic.png were already added to the repo. The Engine targets plain net10.0, so tests need no emulator.",
+        "acceptance": [
+          "All existing tests pass",
+          "Clean git tree on feature/shattered-spectrum"
+        ]
+      },
+      "dependencies": [],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "baseline_test_report"
+      ]
+    },
+    {
+      "step_id": "step_02",
+      "tool": "manual_review",
+      "description": "RESOLVED. Records the design decisions the user has already made, so later steps read one source of truth. No input needed.",
+      "arguments": {
+        "name": "decisions",
+        "phase": "P0",
+        "effort": "S",
+        "resolved": true,
+        "baseline": "{{baseline_test_report}}",
+        "canon": {
+          "story_text": "docs/story/StoryText.md",
+          "visual_reference_only": "docs/story/story-guide-infographic.png",
+          "note": "The infographic uses different region names and Eight Guardians; the user chose the story bible as canonical. The infographic is a mood/visual reference only."
+        },
+        "decisions": [
+          {
+            "id": "D1_region_length",
+            "chosen": "25 levels per region, levels 1-200, two regions per existing tier. Levels 201+ stay endless as a post-game band."
+          },
+          {
+            "id": "D2_unusual_conditions",
+            "chosen": "Pull flip and no-pop penalty forward into region 6 as rare, clearly introduced levels; keep current frequency from 151. Verify in playtest."
+          },
+          {
+            "id": "D3_ending",
+            "chosen": "ONE fixed ending (distributed Spectrum, per the story bible) plus a cosmetic final choice: how the world looks going forward. The choice sets a final visual theme, a short epilogue scene and a cosmetic. No story branching.",
+            "supersedes": "An earlier answer of 'two real endings (Distributed vs Centralised)'. After the bible and infographic arrived the user chose the fixed-ending-plus-cosmetic-choice option."
+          },
+          {
+            "id": "D4_prism_shift",
+            "chosen": "Spec version (PopBlocks_spec.md 5.9): rearrange the colours within the NEXT piece while preserving its geometry. Limited charges. Spec text stays as written."
+          },
+          {
+            "id": "D5_colour_lens",
+            "chosen": "Outline connected same-colour groups of 2-3 cells. Tier 1 = groups of 3, tier 2 adds groups of 2. Resonance Pulse is dropped as a duplicate."
+          },
+          {
+            "id": "D6_shop_cuts",
+            "chosen": "Landing Guide becomes a free setting (not sold). Gentle Landing skipped in v1. Extra Preview folded into Lookout levels 3-4."
+          },
+          {
+            "id": "D7_consumables",
+            "chosen": "Stock cap 3 each, 1 use per ability per level, disabled on finale levels (and challenge levels if built)."
+          },
+          {
+            "id": "D8_story_owner",
+            "chosen": "The story bible is the baseline text. Claude fills the gaps. The expert reviews later as a NON-BLOCKING step; later edits are data-only."
+          },
+          {
+            "id": "D9_optional_content",
+            "chosen": "First release uses optional lore pickups (memories earned by bonus objectives inside normal levels). The separate challenge-level system is deferred to an optional last phase."
+          },
+          {
+            "id": "D10_sequencing",
+            "chosen": "Vertical slice first: Region 1 only, no level-generation refactor, no new goal types, no undo, then a review gate before anything else is built."
+          },
+          {
+            "id": "D11_save_code",
+            "chosen": "Include the clipboard-only save code (allowBackup is false, so reinstalling loses all progress)."
+          }
+        ],
+        "assumptions_to_confirm": [
+          "The existing three shop upgrades stay purchasable from first launch so current players are not locked out; Bram's Workshop stations then restore on the bible's schedule (section 9).",
+          "The infographic's 'Eight Guardians' are not built. They may return later as the optional one-per-region supporting voices the bible allows (section 4.5).",
+          "The expert's idea of one hidden Prism fragment per region and a 'true ending' for collecting all of them is dropped. The bible has exactly eight main fragments and an optional epilogue for finding every region's memory."
+        ]
+      },
+      "dependencies": [
+        "step_01"
+      ],
+      "on_failure": {
+        "strategy": "skip",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "design_decisions"
+      ]
+    },
+    {
+      "step_id": "step_03",
+      "tool": "code_edit",
+      "description": "Add the save-data foundation everything else relies on: a central registry of save keys, a save version, and an UnlockStore for ids (scenes seen, lore, fragments, achievements, cosmetics).",
+      "arguments": {
+        "name": "save_infra",
+        "phase": "P0",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Services/SaveKeys.cs (new)",
+          "src/PopBlocks.Engine/Services/UnlockStore.cs (new)",
+          "src/PopBlocks.Engine/Services/SettingsServices.cs",
+          "src/PopBlocks/MauiProgram.cs",
+          "tests/PopBlocks.Tests/ServicesAndBoardTests.cs"
+        ],
+        "details": [
+          "SaveKeys lists every existing key (progress_highest, gold, upgrade_preview, upgrade_popflair, upgrade_extramoves, best_score, blast_effects, show_ghost, controls_collapsed, sound_effects) as constants with a comment: never rename or reuse.",
+          "Add key save_version (int, default 1) and a Migrate() hook run at start-up. Migrations must be explicit and tested (story bible section 13).",
+          "UnlockStore: Has(id), Unlock(id) -> bool newly unlocked, event Unlocked(id). Persist as ONE comma-separated string key (unlocks_v1) so the whole profile is easy to export for the save code.",
+          "Register UnlockStore as a singleton in MauiProgram."
+        ],
+        "acceptance": [
+          "Round-trip tests with InMemorySettings (a second instance reads the same ids)",
+          "Existing saves load unchanged"
+        ]
+      },
+      "dependencies": [
+        "step_01"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "save_keys_api"
+      ]
+    },
+    {
+      "step_id": "step_04",
+      "tool": "code_edit",
+      "description": "Create the data table that turns the endless level list into eight regions and derive region state from the existing HighestCleared value. No new progress state.",
+      "arguments": {
+        "name": "region_catalog",
+        "phase": "P1",
+        "effort": "M",
+        "decisions": "{{design_decisions}}",
+        "save_api": "{{save_keys_api}}",
+        "files": [
+          "src/PopBlocks.Engine/Story/Region.cs (new)",
+          "src/PopBlocks.Engine/Story/RegionCatalog.cs (new)",
+          "src/PopBlocks.Engine/StoryConfig.cs",
+          "tests/PopBlocks.Tests/RegionCatalogTests.cs (new)"
+        ],
+        "regions": [
+          "1 Forgotten Garden 1-25",
+          "2 Crystal Caves 26-50",
+          "3 Verdant Wilds 51-75",
+          "4 Sunken City 76-100",
+          "5 Clockwork Wastes 101-125",
+          "6 Frozen Expanse 126-150",
+          "7 Shattered Citadel 151-175",
+          "8 Heart of Spectrum 176-200"
+        ],
+        "details": [
+          "Region record per bible section 13: RegionId, StartLevel, EndLevel, Title, MapDescription, OpeningSceneId, CompletionSceneId, FragmentId, JournalEntryIds, milestone levels.",
+          "Three visual states per bible section 7: Faded (not substantially restored), Recovering (after a configured mid-region milestone, default about level 13 of 25), Restored (final level cleared and chapter event done). All derived from HighestCleared.",
+          "Region unlocks when the player reaches its first level. The fragment is awarded on the region-clear event, once.",
+          "RegionCatalog.For(level) for levels above 200 returns a synthetic 'Beyond the Spectrum' band so the endless generator keeps working.",
+          "StoryConfig.TierFor stays the single source for difficulty tiers; regions sit on top of it."
+        ],
+        "acceptance": [
+          "Every level 1..200 maps to exactly one region; no gaps or overlaps",
+          "Region boundaries are changeable in one place"
+        ]
+      },
+      "dependencies": [
+        "step_02",
+        "step_03"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "region_table"
+      ]
+    },
+    {
+      "step_id": "step_05",
+      "tool": "code_edit",
+      "description": "Add the story data model and commit Region 1's text from the story bible (opening, first-burst and first-chain reactions, mid-region discovery, completion, map text, journal entry 'The First Light', plus the Archive's initial entries) with validation tests.",
+      "arguments": {
+        "name": "story_content_slice",
+        "phase": "P1",
+        "effort": "M",
+        "regions": "{{region_table}}",
+        "source": "docs/story/StoryText.md",
+        "files": [
+          "src/PopBlocks.Engine/Story/Characters.cs (new)",
+          "src/PopBlocks.Engine/Story/StoryScene.cs (new)",
+          "src/PopBlocks.Engine/Story/LoreEntry.cs (new)",
+          "src/PopBlocks.Engine/Story/StoryContent.cs (new)",
+          "src/PopBlocks.Engine/Story/Content/Region1.cs (new)",
+          "tests/PopBlocks.Tests/StoryContentTests.cs (new)"
+        ],
+        "details": [
+          "StoryScene: Id, Trigger (RegionOpening | Milestone | MidDiscovery | RegionCompletion | Ending | Reaction), ordered (SpeakerId, Text) lines, optional portrait key mapping to a procedural drawing, CanReplayInArchive.",
+          "LoreEntry: Id, Region, Title, Text, Kind (Journal | Character | Memory | Fragment).",
+          "Text is taken from the bible verbatim for Region 1 (section 6) and the Pip and Spectrum Archive entries (section 10). Pip reactions to the first burst and first chain are 'Reaction' scenes, shown as a banner, not a modal panel.",
+          "Tests: every referenced scene/entry/speaker exists; ids unique; no line over 200 characters (the bible's longest line is about 190); scene sizes within the bible's guideline (opening 3-7 lines, milestone 1-3, completion 4-8) reported as warnings, not failures."
+        ]
+      },
+      "dependencies": [
+        "step_04"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "story_content_api"
+      ]
+    },
+    {
+      "step_id": "step_06",
+      "tool": "code_edit",
+      "description": "Add CampaignService: the one place that decides what happens when a level is cleared or entered (scene to show, region state change, fragment, journal unlock, cosmetic unlock) and remembers which scenes were seen. Replays never repeat a reward.",
+      "arguments": {
+        "name": "campaign_service",
+        "phase": "P1",
+        "effort": "L",
+        "regions": "{{region_table}}",
+        "content": "{{story_content_api}}",
+        "save_api": "{{save_keys_api}}",
+        "files": [
+          "src/PopBlocks.Engine/Story/CampaignService.cs (new)",
+          "src/PopBlocks.Engine/Story/CampaignOutcome.cs (new)",
+          "src/PopBlocks.Engine/Services/PlayerProgress.cs",
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "src/PopBlocks/MauiProgram.cs",
+          "tests/PopBlocks.Tests/CampaignServiceTests.cs (new)"
+        ],
+        "details": [
+          "OnLevelEntered(level) -> opening scene the first time a region's first level starts.",
+          "OnLevelCompleted(level, CompletionResult) -> CampaignOutcome: region state, MidDiscovery?, RegionCompleted?, FragmentEarned?, JournalUnlocked[], ScenesToShow[], UnlocksGranted[].",
+          "OnFirstBurst / OnFirstChain: one-off Pip reaction banners (fed from GameEvent.Popped and chain length >= 2).",
+          "Scenes count as seen when finished OR skipped; skipping still grants progress, fragment and journal unlocks (bible section 12).",
+          "GameViewModel.HandleCompletion keeps its pay-once guard and passes the result to CampaignService.",
+          "Triggers are tied to stable progression events, never to frame timing or UI events (bible section 13)."
+        ],
+        "acceptance": [
+          "Region 1 entry shows its opening exactly once",
+          "Clearing level 25 awards the fragment exactly once",
+          "Replaying a cleared level duplicates nothing",
+          "No new persisted state except UnlockStore ids"
+        ]
+      },
+      "dependencies": [
+        "step_04",
+        "step_05",
+        "step_03"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "campaign_api"
+      ]
+    },
+    {
+      "step_id": "step_07",
+      "tool": "code_edit",
+      "description": "Draw Pip, the Spark companion, in code: a small floating spark with a rounded silhouette that gets brighter as regions are restored, with a handful of animation states.",
+      "arguments": {
+        "name": "pip_art",
+        "phase": "P1",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks/Graphics/PipDrawable.cs (new)",
+          "src/PopBlocks/Graphics/VisualDesign.cs"
+        ],
+        "details": [
+          "Inputs: regions restored 0-8, mood (Idle, Happy, Surprised, Worried), accessory ids (empty for now).",
+          "Procedural shapes only (spec rule). The animation timer runs only while something is animating.",
+          "Constants go in VisualDesign. Also a simple Warden silhouette (cloak/mask from basic shapes) for later scenes."
+        ]
+      },
+      "dependencies": [
+        "step_02"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "pip_drawable"
+      ]
+    },
+    {
+      "step_id": "step_08",
+      "tool": "code_edit",
+      "description": "Build the parameterised region-scene drawable that blends from faded to full colour across the three visual states. Region 1 (Forgotten Garden) is complete in this slice; other regions use a generic composer until their scenes are authored later.",
+      "arguments": {
+        "name": "scene_art",
+        "phase": "P1",
+        "effort": "L",
+        "regions": "{{region_table}}",
+        "files": [
+          "src/PopBlocks/Graphics/RegionSceneDrawable.cs (new)",
+          "src/PopBlocks/Graphics/Scenes/GardenScene.cs (new)"
+        ],
+        "details": [
+          "Draw(region, state Faded|Recovering|Restored, time). Colour change, line paths, opacity and small particles only; no bespoke illustrations (bible section 7).",
+          "Region 1: faded leaves, closed flowers and dim lights become green growth, open flowers and warm lights.",
+          "State must not rely on colour alone: also change shape (flowers open, lights on) so it reads for colour-blind players.",
+          "No per-frame allocations; redraw only when the state changes or an animation is playing."
+        ]
+      },
+      "dependencies": [
+        "step_04"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 1,
+        "fallback_step_id": "step_09"
+      },
+      "output_keys": [
+        "scene_drawable"
+      ]
+    },
+    {
+      "step_id": "step_09",
+      "tool": "code_edit",
+      "description": "FALLBACK ONLY (run only if scene_art fails twice): gradient sky plus layered silhouettes with a colour/grey blend and no animated landmarks.",
+      "arguments": {
+        "name": "scene_art_fallback",
+        "phase": "P1",
+        "effort": "S",
+        "fallback_only": true,
+        "files": [
+          "src/PopBlocks/Graphics/RegionSceneDrawable.cs"
+        ]
+      },
+      "dependencies": [
+        "step_04"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "scene_drawable"
+      ]
+    },
+    {
+      "step_id": "step_10",
+      "tool": "code_edit",
+      "description": "Add the single region-themed reward the slice needs: one nature-themed cosmetic (a Garden board accent) unlocked by clearing Region 1, equippable and persisted. Built as a thin hook that the full theme system absorbs later.",
+      "arguments": {
+        "name": "slice_cosmetic",
+        "phase": "P1",
+        "effort": "S",
+        "files": [
+          "src/PopBlocks.Engine/Services/CosmeticLoadout.cs (new, minimal)",
+          "src/PopBlocks/Graphics/GameDrawable.cs",
+          "src/PopBlocks/Graphics/VisualDesign.cs",
+          "src/PopBlocks/Views/MainPage.xaml(.cs)"
+        ],
+        "details": [
+          "New key cos_board (string id, default empty). Unlock id comes from UnlockStore.",
+          "Block colours and the five symbols are untouched. Resolved at game start, not mid-level."
+        ]
+      },
+      "dependencies": [
+        "step_03",
+        "step_04"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "slice_cosmetic_done"
+      ]
+    },
+    {
+      "step_id": "step_11",
+      "tool": "code_edit",
+      "description": "Spectrum Archive page: Story, Characters, Fragments, Memories and The Restored World sections. Locked entries show a placeholder such as 'More will be discovered in the Crystal Caves.' and never reveal text early.",
+      "arguments": {
+        "name": "archive_page",
+        "phase": "P1",
+        "effort": "M",
+        "campaign": "{{campaign_api}}",
+        "content": "{{story_content_api}}",
+        "files": [
+          "src/PopBlocks/Views/ArchivePage.xaml(.cs) (new)",
+          "src/PopBlocks/MauiProgram.cs",
+          "src/PopBlocks/Views/MainPage.xaml(.cs)"
+        ],
+        "details": [
+          "Seen scenes can be replayed from the Archive. Reads UnlockStore only. Free to read - never charge gold for essential story text."
+        ]
+      },
+      "dependencies": [
+        "step_06",
+        "step_05"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "archive_done"
+      ]
+    },
+    {
+      "step_id": "step_12",
+      "tool": "code_edit",
+      "description": "Add the World Map page: all eight regions, with Region 1 fully live and the rest showing a locked placeholder. Replaces the flat level list as the main way to browse; each region opens its own tile grid.",
+      "arguments": {
+        "name": "world_map",
+        "phase": "P1",
+        "effort": "L",
+        "scene": "{{scene_drawable}}",
+        "pip": "{{pip_drawable}}",
+        "campaign": "{{campaign_api}}",
+        "files": [
+          "src/PopBlocks/Views/WorldMapPage.xaml(.cs) (new)",
+          "src/PopBlocks/Views/RegionPage.xaml(.cs) (new)",
+          "src/PopBlocks/Views/LevelSelectPage.xaml.cs",
+          "src/PopBlocks/Views/MainPage.xaml(.cs)",
+          "src/PopBlocks/MauiProgram.cs"
+        ],
+        "details": [
+          "Shows state (Faded/Recovering/Restored), levels cleared, fragment and next milestone per region.",
+          "Reuse LevelSelectPage's tile building and 'show more' logic inside RegionPage, scoped to the region's range.",
+          "MainPage Continue still jumps straight to the next level; the Levels button becomes Map."
+        ]
+      },
+      "dependencies": [
+        "step_06",
+        "step_08",
+        "step_07"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "world_map_page"
+      ]
+    },
+    {
+      "step_id": "step_13",
+      "tool": "code_edit",
+      "description": "Add the short dialogue overlay (speaker, line, tap to continue, Skip) and the small Pip banner, wired into GamePage and the view model. Banners handle minor moments; full panels are reserved for openings, discoveries and chapter ends.",
+      "arguments": {
+        "name": "scene_ui",
+        "phase": "P1",
+        "effort": "L",
+        "campaign": "{{campaign_api}}",
+        "pip": "{{pip_drawable}}",
+        "files": [
+          "src/PopBlocks/Views/GamePage.xaml(.cs)",
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "src/PopBlocks/Views/StorySceneView.xaml(.cs) (new)",
+          "src/PopBlocks/Views/PipBannerView.xaml(.cs) (new)"
+        ],
+        "details": [
+          "Order on level start: story scene first, then the existing tutorial coach card; they never overlap. The game timer stays frozen while a scene is up (same mechanism the coach uses).",
+          "Replaying a cleared level shows no full scene (at most a brief Pip line).",
+          "Text readable on small screens with adequate contrast; story state never depends on animation to be understood."
+        ]
+      },
+      "dependencies": [
+        "step_06",
+        "step_07"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "scene_ui_done"
+      ]
+    },
+    {
+      "step_id": "step_14",
+      "tool": "code_edit",
+      "description": "Upgrade the level-complete card to the three reward layers: A) immediate feedback and progress line, B) regional milestone with visible restoration, C) region completion with fragment, journal entry, cosmetic and next-region unlock.",
+      "arguments": {
+        "name": "complete_overlay",
+        "phase": "P1",
+        "effort": "M",
+        "campaign": "{{campaign_api}}",
+        "scene_ui": "{{scene_ui_done}}",
+        "cosmetic": "{{slice_cosmetic_done}}",
+        "files": [
+          "src/PopBlocks/Views/GamePage.xaml(.cs)",
+          "src/PopBlocks/ViewModels/GameViewModel.cs"
+        ],
+        "details": [
+          "Keep the existing GoalNote logic for tutorials and replays.",
+          "Final-level text for Region 1 matches the bible: 'One region restored. Seven to go.'"
+        ]
+      },
+      "dependencies": [
+        "step_06",
+        "step_13",
+        "step_10"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "complete_overlay_done"
+      ]
+    },
+    {
+      "step_id": "step_15",
+      "tool": "run_tests",
+      "description": "Slice gate: full test suite, then the bible's section 13 checklist for Region 1.",
+      "arguments": {
+        "name": "gate_slice",
+        "phase": "P1",
+        "effort": "S",
+        "commands": [
+          "dotnet test tests/PopBlocks.Tests"
+        ],
+        "baseline": "{{baseline_test_report}}",
+        "checklist": [
+          "First entry into Region 1 triggers the opening once",
+          "Clearing level 25 awards the fragment exactly once",
+          "Replaying a cleared level does not duplicate rewards",
+          "Scenes can be skipped safely and skipping still unlocks progress and journal",
+          "'The First Light' unlocks at the right moment",
+          "Map state matches saved progress after restarting the app",
+          "Existing levels, Classic mode and the shop work as before",
+          "Works offline in airplane mode",
+          "Region 1 reachable and completable with no shop purchases"
+        ]
+      },
+      "dependencies": [
+        "step_12",
+        "step_14",
+        "step_11"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "slice_report"
+      ]
+    },
+    {
+      "step_id": "step_16",
+      "tool": "manual_review",
+      "description": "REVIEW GATE: play Region 1 end to end on the Samsung S24 and approve (or change) the experience before the remaining regions are authored or any gameplay generation is touched.",
+      "arguments": {
+        "name": "slice_review",
+        "phase": "P1",
+        "effort": "M",
+        "report": "{{slice_report}}",
+        "questions": [
+          "Do scenes interrupt play too much?",
+          "Is the restoration visible without reading?",
+          "Does the fragment/journal/cosmetic reward feel earned?",
+          "Is Pip's tone right?",
+          "Any wording the expert wants changed now (cheaper than later)?"
+        ]
+      },
+      "dependencies": [
+        "step_15"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "slice_approved"
+      ]
+    },
+    {
+      "step_id": "step_17",
+      "tool": "llm_write",
+      "description": "Write only what the story bible leaves out, in its voice: optional memory entries, Archive entries for characters and regions, Pip's brief replay lines, the final-choice theme options and cosmetic names, the achievement texts and Bram's workshop reactions.",
+      "arguments": {
+        "name": "story_gap_fill",
+        "phase": "P2",
+        "effort": "M",
+        "approved_slice": "{{slice_approved}}",
+        "source": "docs/story/StoryText.md",
+        "prompt": "Using docs/story/StoryText.md as the canon (tone: hopeful, curious, gently mysterious, occasionally playful; all ages), write: (1) one or two optional Memory entries per region, 40-100 words each, shaped as what was discovered / what it changes / one open question, using the bible's discovery ideas (inscription fragment, memory crystal, keeper's letter, Warden record, channel sketch); (2) Archive character entries for Mara, Bram and the Warden to match the existing Pip entry; (3) a one-line Pip replay remark per region for cleared-level replays; (4) three names and short descriptions for the final choice 'how should the world look going forward?' (a final visual theme), each with a matching cosmetic reward and epilogue line, none of which changes the story's meaning; (5) names and one-line descriptions in the bible's voice for the achievements listed in the achievements step; (6) any short Bram workshop reactions missing from section 9. Rules: never imply a branch, secret level or colour power that does not exist; each dialogue line at most 200 characters; do not reveal the Warden's motive before the region the bible reveals it.",
+        "output_format": "JSON matching the StoryContent data model, plus a short list of any canon questions found"
+      },
+      "dependencies": [
+        "step_16"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "story_gap_text"
+      ]
+    },
+    {
+      "step_id": "step_18",
+      "tool": "code_edit",
+      "description": "Commit Regions 2-8 from the story bible plus the gap-fill text as bundled data, with the same validation tests as the slice, and the Restored World / map text for every region.",
+      "arguments": {
+        "name": "story_content_rest",
+        "phase": "P2",
+        "effort": "L",
+        "gap_text": "{{story_gap_text}}",
+        "content": "{{story_content_api}}",
+        "regions": "{{region_table}}",
+        "source": "docs/story/StoryText.md",
+        "files": [
+          "src/PopBlocks.Engine/Story/Content/Region2.cs ... Region8.cs (new)",
+          "src/PopBlocks.Engine/Story/StoryContent.cs",
+          "tests/PopBlocks.Tests/StoryContentTests.cs"
+        ],
+        "details": [
+          "Every region: opening, mid-region discovery, completion scene, map text, journal entry, fragment id. Region 3 also holds the Workshop unlock scene; Region 7 the Warden's confession; Region 8 the main ending, narration and final Pip line.",
+          "Test: nothing in a region's text names a character before that character's introduction level (Mara: Region 2, Bram: Region 3, Warden direct: Region 7)."
+        ]
+      },
+      "dependencies": [
+        "step_16",
+        "step_17",
+        "step_04"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "story_content_full"
+      ]
+    },
+    {
+      "step_id": "step_19",
+      "tool": "manual_review",
+      "description": "NON-BLOCKING: the expert reviews the full text whenever convenient. Because the text is plain data, edits never need code changes and nothing waits on this step.",
+      "arguments": {
+        "name": "story_review",
+        "phase": "P2",
+        "effort": "M",
+        "optional": true,
+        "content": "{{story_content_full}}",
+        "checklist": [
+          "Mystery builds consistently across all regions",
+          "Warden motive is hinted in regions 2-4, evidenced in 5-6, revealed in 7",
+          "Tone stays whimsical and hopeful"
+        ]
+      },
+      "dependencies": [
+        "step_18"
+      ],
+      "on_failure": {
+        "strategy": "skip",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "story_review_notes"
+      ]
+    },
+    {
+      "step_id": "step_20",
+      "tool": "code_edit",
+      "description": "Author the region scenes for Regions 2-8 using the bible's map-state table (section 7): crystals brighten and inscriptions become readable, vines and workshop lamps, glowing water channels, moving mechanisms, clearing ice, reconnected bridges, and a reunited Heart with light flowing outward.",
+      "arguments": {
+        "name": "scene_art_rest",
+        "phase": "P2",
+        "effort": "L",
+        "scene": "{{scene_drawable}}",
+        "approved_slice": "{{slice_approved}}",
+        "files": [
+          "src/PopBlocks/Graphics/Scenes/*.cs (one small file per region)"
+        ],
+        "details": [
+          "Ship in region order; if time runs short, cut landmarks, never the three states.",
+          "Region 8's final state must show power flowing OUTWARD along paths to every region, not concentrating in the Heart (bible section 13 test)."
+        ]
+      },
+      "dependencies": [
+        "step_16",
+        "step_08"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "scenes_full"
+      ]
+    },
+    {
+      "step_id": "step_21",
+      "tool": "code_edit",
+      "description": "Make level generation region-aware so each region plays like its theme, and move the hard-coded level literals into one table. Starts with a regression snapshot so any change in generated levels is visible and deliberate.",
+      "arguments": {
+        "name": "region_rules",
+        "phase": "P3",
+        "effort": "L",
+        "regions": "{{region_table}}",
+        "decisions": "{{design_decisions}}",
+        "approved_slice": "{{slice_approved}}",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "src/PopBlocks.Engine/Story/RegionRules.cs (new)",
+          "src/PopBlocks.Engine/StoryConfig.cs",
+          "tests/PopBlocks.Tests/LevelSnapshotTests.cs (new)"
+        ],
+        "themes": {
+          "1": "core mechanics (existing tutorials)",
+          "2": "big groups and precise placement (BigGroup weight up)",
+          "3": "colour-specific objectives (PopColour weight up)",
+          "4": "limited moves, careful planning (tighter SlackFor, 'tight moves' variant more often)",
+          "5": "chains and complicated layouts (Chain weight up, scattered piles)",
+          "6": "difficult puzzles and unusual conditions (dense piles; first flip/penalty levels per D2)",
+          "7": "multiple objectives (2-3 goals) and mastery",
+          "8": "everything combined"
+        },
+        "details": [
+          "FIRST write a snapshot test that records goals, move limit and pile hash for levels 1-220 as they are today. Change region content only after that test exists (story bible section 5 implementation note).",
+          "Move the literals (flip at 151, penalty at 156, goal intro levels 13/16/20/26/32, triple goals at 161, variants 41-50) into RegionRules or StoryConfig so they are data.",
+          "Add region-themed intro cards; keep the existing goal-kind intro text.",
+          "Levels 1-11 stay identical. Later levels will change; approve the diff, then update the snapshot. A player's HighestCleared stays valid.",
+          "Do not change the solver-proof loop: every level stays bot-winnable with zero upgrades."
+        ],
+        "acceptance": [
+          "Replay test for levels 1-220 passes",
+          "A table-driven test shows each region's goal-kind distribution matches its theme"
+        ]
+      },
+      "dependencies": [
+        "step_04",
+        "step_16"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "region_rules_done"
+      ]
+    },
+    {
+      "step_id": "step_22",
+      "tool": "code_edit",
+      "description": "Add a goal kind for the finale, 'Make N separate chains of at least M waves', matching the bible's final puzzle ('let each connection support the next'). Follows the repo's own 9.2 checklist including the solver, and is tested against the solver before the finale text relies on it.",
+      "arguments": {
+        "name": "chain_goal",
+        "phase": "P3",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks.Engine/Levels/Goal.cs",
+          "src/PopBlocks.Engine/Levels/LevelSolver.cs",
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "tests/PopBlocks.Tests/StoryTests.cs",
+          "docs/09-extending.md"
+        ],
+        "details": [
+          "GoalKind.ChainSet (Target = number of chains, plus a minimum chain length on Goal).",
+          "GoalTracker.OnWave: a wave with ChainIndex == 1 closes the previous chain; count it if its length >= minimum.",
+          "LevelSolver: mirror the counting in its lightweight State and add the goal to Value(), otherwise the bot cannot guide itself and the generator will keep easing the goal.",
+          "Describe(), ProgressText ('1 / 3 chains'), MakeGoal sizing, Intros card.",
+          "The bot plan replayed through the real GameEngine must pass for levels using this goal."
+        ]
+      },
+      "dependencies": [
+        "step_21"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "chain_goal_done"
+      ]
+    },
+    {
+      "step_id": "step_23",
+      "tool": "code_edit",
+      "description": "Give each region a finale level (its last level) with a slightly tougher goal mix and a tip that matches the story, and make level 200 the final puzzle using the chain-set goal.",
+      "arguments": {
+        "name": "finales",
+        "phase": "P3",
+        "effort": "M",
+        "chain_goal": "{{chain_goal_done}}",
+        "content": "{{story_content_full}}",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "src/PopBlocks.Engine/Story/RegionRules.cs",
+          "src/PopBlocks.Engine/Levels/LevelDefinition.cs"
+        ],
+        "details": [
+          "Add LevelDefinition.IsFinale and AllowAbilities (default true; false on finales per D7).",
+          "Finales are still generated and solver-proven; only the goal mix and slack differ.",
+          "Level 200 uses the final puzzle text from the bible: 'Do not force every colour into one perfect shape. Let each connection support the next.'"
+        ],
+        "acceptance": [
+          "Every finale is bot-winnable",
+          "The ending is reachable with no purchases and no optional collectibles"
+        ]
+      },
+      "dependencies": [
+        "step_22",
+        "step_18"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "finales_done"
+      ]
+    },
+    {
+      "step_id": "step_24",
+      "tool": "code_edit",
+      "description": "Add RunStats (per level) and LifetimeStats (saved): largest group, longest chain, most cells cleared by one piece, moves left at finish, abilities used. Feeds optional memories, achievements and the journal.",
+      "arguments": {
+        "name": "run_stats",
+        "phase": "P3",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Services/RunStats.cs (new)",
+          "src/PopBlocks.Engine/Services/LifetimeStats.cs (new)",
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "tests/PopBlocks.Tests/RunStatsTests.cs (new)"
+        ],
+        "details": [
+          "Fed by GameEngine.WaveResolved and GameEvent.PieceLocked; cells cleared per lock = sum over the waves between one lock and the board settling.",
+          "Record 'board cleared' (CountOccupied() == 0 after settling) and MovesLeft at LevelComplete.",
+          "Persist only maxima and counters under new keys. Nothing leaves the device."
+        ]
+      },
+      "dependencies": [
+        "step_03",
+        "step_16"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "run_stats_api"
+      ]
+    },
+    {
+      "step_id": "step_25",
+      "tool": "code_edit",
+      "description": "Optional memory discoveries as lore pickups inside normal levels (D9): selected levels carry an optional objective; completing it unlocks that region's memory entry. Never blocks progress, and each objective is bot-verified before it is offered.",
+      "arguments": {
+        "name": "bonus_objectives",
+        "phase": "P3",
+        "effort": "L",
+        "stats": "{{run_stats_api}}",
+        "rules": "{{region_rules_done}}",
+        "content": "{{story_content_full}}",
+        "files": [
+          "src/PopBlocks.Engine/Levels/LevelDefinition.cs",
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "src/PopBlocks.Engine/Levels/LevelSolver.cs",
+          "src/PopBlocks.Engine/Story/CampaignService.cs",
+          "src/PopBlocks/Views/GamePage.xaml",
+          "tests/PopBlocks.Tests/BonusObjectiveTests.cs (new)"
+        ],
+        "details": [
+          "LevelDefinition.Bonus (optional Goal-like record), chosen deterministically from the level number: one or two memory levels per region.",
+          "Templates for now (no abilities exist yet): chain of 3, clear one colour, finish with N moves left, pop one large group.",
+          "Verification: run LevelSolver with the main goals PLUS the bonus under the level's move limit. If the bot cannot do both, that level simply has no bonus. Never ship an impossible optional goal.",
+          "Completion stored as memory_<region>_<n> in UnlockStore; reward is the Memory entry in the Archive. Finding at least one memory in every region feeds the 'Spectrum Seeker' achievement and the epilogue.",
+          "Shown as a clearly optional row under the goal bar; result shown on the complete card."
+        ]
+      },
+      "dependencies": [
+        "step_24",
+        "step_21",
+        "step_18"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "bonus_done"
+      ]
+    },
+    {
+      "step_id": "step_26",
+      "tool": "code_edit",
+      "description": "Implement the main ending and the cosmetic final choice: clearing level 200 plays the bible's ending, narration and final Pip line; the player then picks how the world looks going forward, which sets a final visual theme, a short epilogue scene and a cosmetic. Finding a memory in every region unlocks the optional epilogue and extra journal entry.",
+      "arguments": {
+        "name": "ending",
+        "phase": "P3",
+        "effort": "M",
+        "content": "{{story_content_full}}",
+        "finales": "{{finales_done}}",
+        "scenes": "{{scenes_full}}",
+        "memories": "{{bonus_done}}",
+        "decisions": "{{design_decisions}}",
+        "files": [
+          "src/PopBlocks.Engine/Story/CampaignService.cs",
+          "src/PopBlocks.Engine/Story/StoryContent.cs",
+          "src/PopBlocks.Engine/Services/CosmeticLoadout.cs",
+          "src/PopBlocks/Views/StorySceneView.xaml(.cs)",
+          "src/PopBlocks/Graphics/Scenes/Region8Scene.cs"
+        ],
+        "details": [
+          "ONE ending. The choice never changes what the story means (D3) and no text may imply a branch.",
+          "Persist the choice under a new key (ending_theme). It can be changed later from the Archive/Workshop so nobody is locked out of a cosmetic.",
+          "The final map state shows power flowing outward from the Heart to every region.",
+          "Levels above 200 stay as the endless 'Beyond the Spectrum' band, with no story scenes."
+        ]
+      },
+      "dependencies": [
+        "step_23",
+        "step_18",
+        "step_20",
+        "step_25"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "ending_done"
+      ]
+    },
+    {
+      "step_id": "step_27",
+      "tool": "run_tests",
+      "description": "Gate: full suite including the solver replay for levels 1-220 and the level snapshot test, plus a difficulty read-through of each region's first, middle and last level.",
+      "arguments": {
+        "name": "gate_p3",
+        "phase": "P3",
+        "effort": "S",
+        "commands": [
+          "dotnet test tests/PopBlocks.Tests"
+        ],
+        "manual_checks": [
+          "Sample 3 levels per region for fairness",
+          "Region 6 flip/penalty introductions read clearly",
+          "Level 200 feels like a climax",
+          "Ending plays and is skippable"
+        ]
+      },
+      "dependencies": [
+        "step_26",
+        "step_25",
+        "step_23",
+        "step_21"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "p3_report"
+      ]
+    },
+    {
+      "step_id": "step_28",
+      "tool": "llm_analyze",
+      "description": "Model the gold economy against the new shop. The measured numbers show the problem is gold with nothing to buy, not grinding.",
+      "arguments": {
+        "name": "economy_analysis",
+        "phase": "P4",
+        "effort": "M",
+        "regions": "{{region_table}}",
+        "measured_baseline": {
+          "formula": "Easy 10 + into/4; Medium 30 + into*2/5; Hard 60 + into*3/5; Extreme 100 + min(200, into/2); tutorials pay 0",
+          "cumulative_gold_by_level": {
+            "25": 208,
+            "50": 680,
+            "75": 1540,
+            "100": 2650,
+            "125": 4320,
+            "150": 6365,
+            "175": 9009,
+            "200": 11965
+          },
+          "gold_earned_per_region_of_25_levels": [
+            208,
+            472,
+            860,
+            1110,
+            1670,
+            2045,
+            2644,
+            2956
+          ],
+          "current_shop_total": 3050,
+          "level_at_which_everything_is_affordable": 107,
+          "unspent_by_level_200": "about 8,900"
+        },
+        "prompt": "Propose a price table and unlock schedule so the new sinks absorb roughly 9,000-10,000 gold across regions 3-8, the first purchase is affordable around level 15-20, no item needs replaying old levels, and story progress never depends on gold. Include region-clear and achievement gold, consumable prices with a stock cap of 3, and a per-region 'worth buying now' list. Fragments are never spent. Workshop restoration follows the bible's unlock table and is NOT paid for with gold.",
+        "constraints": [
+          "Every level stays completable without any purchase",
+          "Gold is paid only on first clear",
+          "Never charge gold for essential story text or essential accessibility",
+          "Cosmetics unlock through story or achievements first, then cost gold"
+        ]
+      },
+      "dependencies": [
+        "step_04",
+        "step_16"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "economy_model"
+      ]
+    },
+    {
+      "step_id": "step_29",
+      "tool": "code_edit",
+      "description": "Turn the hard-coded three-upgrade shop into a data-driven catalogue (categories, tiers, prices, unlock rules) without breaking existing purchases, and present it as Bram's Spectrum Workshop with category tabs.",
+      "arguments": {
+        "name": "shop_refactor",
+        "phase": "P4",
+        "effort": "L",
+        "economy": "{{economy_model}}",
+        "save_api": "{{save_keys_api}}",
+        "files": [
+          "src/PopBlocks.Engine/Services/Shop.cs",
+          "src/PopBlocks.Engine/Services/ShopCatalog.cs (new)",
+          "src/PopBlocks/Views/ShopPage.xaml(.cs)",
+          "tests/PopBlocks.Tests/ServicesAndBoardTests.cs"
+        ],
+        "details": [
+          "Keep the keys upgrade_preview, upgrade_popflair and upgrade_extramoves and their meaning exactly; new items use new keys.",
+          "Item = Id, Category (Gameplay | Cosmetic | Consumable), Tiers[] with prices, Requirement (none | region complete | achievement), EffectKey.",
+          "Lookout gains levels 3 and 4 (the engine already clamps previews to 1-5; UpcomingDrawable divides width evenly).",
+          "Locked items say how to discover them ('Restore the Crystal Caves')."
+        ],
+        "acceptance": [
+          "A save from the baseline build shows identical levels, prices and upgrades",
+          "No pricing logic in the page"
+        ]
+      },
+      "dependencies": [
+        "step_28",
+        "step_03",
+        "step_27"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "shop_catalog_api"
+      ]
+    },
+    {
+      "step_id": "step_30",
+      "tool": "code_edit",
+      "description": "Free accessibility options: landing guide style (Off / Outline / Outline plus column line, replacing the paid Landing Guide), basic near-match outline for everyone, and a reduced-motion option for scenes and effects.",
+      "arguments": {
+        "name": "accessibility_settings",
+        "phase": "P4",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Services/SettingsServices.cs",
+          "src/PopBlocks/Graphics/GameDrawable.cs",
+          "src/PopBlocks/Graphics/BlastEffects.cs",
+          "src/PopBlocks/Views/MainPage.xaml(.cs)"
+        ],
+        "details": [
+          "Keep show_ghost working; add landing_guide_style (0 off, 1 outline, 2 outline+column) and map the old bool onto it. Level 5's ForceGhost is unchanged.",
+          "Add reduced_motion (new key). It simplifies scene animation, pop shake and confetti.",
+          "Never put these behind a purchase."
+        ]
+      },
+      "dependencies": [
+        "step_03",
+        "step_16"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "accessibility_done"
+      ]
+    },
+    {
+      "step_id": "step_31",
+      "tool": "code_edit",
+      "description": "Colour Lens (D5): outline connected same-colour groups of 2-3 cells, i.e. groups one or two cells short of a burst, as a shop upgrade, with a free basic version for anyone who enables it.",
+      "arguments": {
+        "name": "colour_lens",
+        "phase": "P4",
+        "effort": "M",
+        "shop": "{{shop_catalog_api}}",
+        "settings": "{{accessibility_done}}",
+        "files": [
+          "src/PopBlocks.Engine/Logic/ColourMatcher.cs",
+          "src/PopBlocks/Graphics/GameDrawable.cs",
+          "tests/PopBlocks.Tests/ColourMatcherTests.cs"
+        ],
+        "details": [
+          "ColourMatcher.FindNearGroups(board, 2, 3): pure, no mutation, same adjacency (no diagonals).",
+          "Reuse the group-link logic in CellRenderer to avoid thick internal borders.",
+          "Upgrade tier 1 outlines groups of 3; tier 2 adds groups of 2. It never shows where to place the next piece."
+        ]
+      },
+      "dependencies": [
+        "step_29",
+        "step_30"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "colour_lens_done"
+      ]
+    },
+    {
+      "step_id": "step_32",
+      "tool": "code_edit",
+      "description": "Chain Sense: a subtle glow on the landing outline when dropping the piece exactly where it is would start a chain of 2+ waves, using the real engine classes so it cannot drift from the rules.",
+      "arguments": {
+        "name": "chain_sense",
+        "phase": "P4",
+        "effort": "M",
+        "shop": "{{shop_catalog_api}}",
+        "files": [
+          "src/PopBlocks.Engine/Logic/PlacementPreview.cs (new)",
+          "src/PopBlocks/Graphics/GameDrawable.cs",
+          "tests/PopBlocks.Tests/PlacementPreviewTests.cs (new)"
+        ],
+        "details": [
+          "PlacementPreview.CountWaves(board, piece) clones the board, locks the piece at its landing position and loops ColourMatcher + GravityResolver; no engine state is touched.",
+          "Only reports the piece's current position, so the player still has to find the placement.",
+          "Test: equals the chain count from a real GameEngine HardDrop on the same board."
+        ]
+      },
+      "dependencies": [
+        "step_29"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "chain_sense_done"
+      ]
+    },
+    {
+      "step_id": "step_33",
+      "tool": "code_edit",
+      "description": "Achievements: local-only, skill-based, with the bible's names plus the expert's skill ones, a small reward each and an unlock toast.",
+      "arguments": {
+        "name": "achievements",
+        "phase": "P4",
+        "effort": "L",
+        "stats": "{{run_stats_api}}",
+        "campaign": "{{campaign_api}}",
+        "shop": "{{shop_catalog_api}}",
+        "gap_text": "{{story_gap_text}}",
+        "files": [
+          "src/PopBlocks.Engine/Services/AchievementService.cs (new)",
+          "src/PopBlocks.Engine/Services/AchievementCatalog.cs (new)",
+          "src/PopBlocks/Views/AchievementsPage.xaml(.cs) (new)",
+          "tests/PopBlocks.Tests/AchievementTests.cs (new)"
+        ],
+        "catalogue": [
+          "First Connection (first burst)",
+          "Aftershock (first chain)",
+          "A Bigger Picture (large group)",
+          "Careful Planner (finish with moves left)",
+          "Restorer (first region)",
+          "Keeper of Memories (N Archive entries)",
+          "Spectrum Seeker (a memory in every region)",
+          "Balanced World (finish the campaign)",
+          "Classic Champion (Classic score)",
+          "Chain Master (5-wave chain)",
+          "Clean Sweep (empty board)",
+          "Perfectionist (every level of a region)",
+          "Puzzle Scholar (all tutorials)"
+        ],
+        "details": [
+          "Rules are pure functions over RunStats and CampaignOutcome so they unit-test with fake events.",
+          "Thresholds are tuned in playtest and never designed to pad play time. No grind achievements.",
+          "Stored through UnlockStore (ach_<id>); each reward granted once."
+        ]
+      },
+      "dependencies": [
+        "step_24",
+        "step_06",
+        "step_29",
+        "step_17"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "achievements_api"
+      ]
+    },
+    {
+      "step_id": "step_34",
+      "tool": "code_edit",
+      "description": "Puzzle Journal: a local, private record of the player's journey (largest group, longest chain, most cells in one move, most goals on a cleared level, levels completed, most-played region, Classic best, fragments).",
+      "arguments": {
+        "name": "journal_page",
+        "phase": "P4",
+        "effort": "M",
+        "stats": "{{run_stats_api}}",
+        "campaign": "{{campaign_api}}",
+        "files": [
+          "src/PopBlocks/Views/JournalPage.xaml(.cs) (new)",
+          "src/PopBlocks.Engine/Services/LifetimeStats.cs"
+        ],
+        "interpretations": [
+          "'Favourite region' = region with the most level attempts (small per-region play counter)",
+          "'Most objectives completed simultaneously' = most goals on one cleared level"
+        ],
+        "details": [
+          "No account, leaderboard or network.",
+          "Links through to the Archive for story discoveries."
+        ]
+      },
+      "dependencies": [
+        "step_24",
+        "step_06"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "journal_done"
+      ]
+    },
+    {
+      "step_id": "step_35",
+      "tool": "code_edit",
+      "description": "Turn the shop into the Spectrum Workshop hub that restores on the bible's schedule (section 9): bench at Region 3, cosmetic shelf after Region 3, archive shelf after 4, mechanic's bench after 5, fragment display case after 6, map table after 7, full workshop after 8. Stations link to Archive, Journal and Achievements.",
+      "arguments": {
+        "name": "workshop_hub",
+        "phase": "P4",
+        "effort": "M",
+        "shop": "{{shop_catalog_api}}",
+        "archive": "{{archive_done}}",
+        "journal": "{{journal_done}}",
+        "pip": "{{pip_drawable}}",
+        "content": "{{story_content_full}}",
+        "files": [
+          "src/PopBlocks/Views/WorkshopPage.xaml(.cs) (new)",
+          "src/PopBlocks/Views/ShopPage.xaml(.cs)",
+          "src/PopBlocks/Views/MainPage.xaml(.cs)"
+        ],
+        "details": [
+          "Workshop state is derived from region progress, not stored, and costs no gold.",
+          "ASSUMPTION: the existing three upgrades stay buyable from first launch (a plain shelf) so current players lose nothing; Bram's character and the restored stations appear on the bible's schedule.",
+          "The Map Table lists upcoming regions; Training Corner (replay tutorials 1-10 without gold) can be added later."
+        ]
+      },
+      "dependencies": [
+        "step_29",
+        "step_11",
+        "step_34",
+        "step_07",
+        "step_18"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "workshop_done"
+      ]
+    },
+    {
+      "step_id": "step_36",
+      "tool": "run_tests",
+      "description": "Gate: tests, plus checks that every level is winnable with zero purchases and that baseline saves load.",
+      "arguments": {
+        "name": "gate_p4",
+        "phase": "P4",
+        "effort": "S",
+        "commands": [
+          "dotnet test tests/PopBlocks.Tests"
+        ],
+        "new_tests": [
+          "BaselineSave_LoadsSameProgressAndUpgrades",
+          "AllLevels_1_to_200_BotWinnable_WithNoUpgrades"
+        ]
+      },
+      "dependencies": [
+        "step_31",
+        "step_32",
+        "step_30",
+        "step_33",
+        "step_35"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "p4_report"
+      ]
+    },
+    {
+      "step_id": "step_37",
+      "tool": "manual_review",
+      "description": "Economy and feel playtest on the S24: play to about level 60 spending as intended. Check purchase pacing, that Colour Lens helps without solving, and that nothing feels mandatory.",
+      "arguments": {
+        "name": "playtest_p4",
+        "phase": "P4",
+        "effort": "M",
+        "report": "{{p4_report}}",
+        "economy": "{{economy_model}}",
+        "questions": [
+          "Is something affordable and exciting every 6-8 levels?",
+          "Does Chain Sense hint without revealing the answer?",
+          "Is the Workshop readable on a small screen?"
+        ]
+      },
+      "dependencies": [
+        "step_36"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "playtest_p4_notes"
+      ]
+    },
+    {
+      "step_id": "step_38",
+      "tool": "code_edit",
+      "description": "Make visuals swappable: grow the minimal CosmeticLoadout into the full loadout (skin, burst style, board theme, trail, frame, victory, accessories), resolved at game start. Cosmetic data lives in the Engine as ids and hex values; the app maps them to drawing.",
+      "arguments": {
+        "name": "theme_system",
+        "phase": "P5",
+        "effort": "L",
+        "shop": "{{shop_catalog_api}}",
+        "slice": "{{slice_cosmetic_done}}",
+        "files": [
+          "src/PopBlocks.Engine/Services/CosmeticCatalog.cs (new)",
+          "src/PopBlocks.Engine/Services/CosmeticLoadout.cs",
+          "src/PopBlocks/Graphics/VisualDesign.cs",
+          "src/PopBlocks/Graphics/CellRenderer.cs",
+          "src/PopBlocks/Graphics/GameDrawable.cs",
+          "src/PopBlocks/Graphics/BlastEffects.cs",
+          "tests/PopBlocks.Tests/CosmeticCatalogTests.cs (new)"
+        ],
+        "details": [
+          "VisualDesign constants are static and duplicated in App.xaml on purpose; add an active-theme object read once per game (like shop upgrades) so there are no per-frame allocations and no mid-level changes.",
+          "Hard rule: a skin may change shape, border, texture and glow but must keep each colour's hue AND its symbol (diamond, circle, star, plus, triangle). Test that every skin defines all five colours with a minimum pairwise colour difference.",
+          "Persist equipped ids (cos_skin, cos_burst, cos_board, cos_trail, cos_frame, cos_victory); keep cos_board from the slice."
+        ]
+      },
+      "dependencies": [
+        "step_29",
+        "step_37",
+        "step_10"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "theme_api"
+      ]
+    },
+    {
+      "step_id": "step_39",
+      "tool": "code_edit",
+      "description": "Spectrum Skins, themed by region as in the bible's section 9: nature, crystal, leaf, water, clockwork, ice, citadel and Spectrum, all drawn procedurally.",
+      "arguments": {
+        "name": "skins",
+        "phase": "P5",
+        "effort": "M",
+        "theme": "{{theme_api}}",
+        "files": [
+          "src/PopBlocks/Graphics/CellRenderer.cs",
+          "src/PopBlocks.Engine/Services/CosmeticCatalog.cs"
+        ],
+        "details": [
+          "Skin = parameter set (corner radius, border width, highlight style, optional pattern lines) plus per-colour hex values.",
+          "The Region 8 skin doubles as the Spectrum-themed final reward."
+        ]
+      },
+      "dependencies": [
+        "step_38"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "skins_done"
+      ]
+    },
+    {
+      "step_id": "step_40",
+      "tool": "code_edit",
+      "description": "Burst Styles: alternative ring, particle and flash shapes layered on top of the existing Pop Flair intensity levels.",
+      "arguments": {
+        "name": "burst_styles",
+        "phase": "P5",
+        "effort": "M",
+        "theme": "{{theme_api}}",
+        "settings": "{{accessibility_done}}",
+        "files": [
+          "src/PopBlocks/Graphics/BlastEffects.cs"
+        ],
+        "details": [
+          "Style decides shapes; Flair level (0-3) decides how much. Keep the fixed-slot effect pool (no per-effect allocations).",
+          "Honour 'pop effects off' and reduced motion."
+        ]
+      },
+      "dependencies": [
+        "step_38",
+        "step_30"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "burst_styles_done"
+      ]
+    },
+    {
+      "step_id": "step_41",
+      "tool": "code_edit",
+      "description": "Board Themes: background, grid and decoration variants (leaf, crystal, water, ice, machine, citadel), including a high-contrast option, plus the three final-choice world themes from the ending.",
+      "arguments": {
+        "name": "board_themes",
+        "phase": "P5",
+        "effort": "M",
+        "theme": "{{theme_api}}",
+        "ending": "{{ending_done}}",
+        "files": [
+          "src/PopBlocks/Graphics/GameDrawable.cs",
+          "src/PopBlocks/Graphics/VisualDesign.cs",
+          "src/PopBlocks/App.xaml"
+        ],
+        "details": [
+          "Keep empty-cell and grid contrast legible so block colours still pop.",
+          "If a theme changes palette values that exist in both VisualDesign and App.xaml, change both."
+        ]
+      },
+      "dependencies": [
+        "step_38",
+        "step_26"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "board_themes_done"
+      ]
+    },
+    {
+      "step_id": "step_42",
+      "tool": "code_edit",
+      "description": "Trail Effects, Piece Frames, Chain Celebration and Victory Effects: small parameterised additions that reuse the effect pool and the existing animation timer. Lowest priority.",
+      "arguments": {
+        "name": "minor_cosmetics",
+        "phase": "P5",
+        "effort": "M",
+        "theme": "{{theme_api}}",
+        "settings": "{{accessibility_done}}",
+        "files": [
+          "src/PopBlocks/Graphics/BlastEffects.cs",
+          "src/PopBlocks/Graphics/GameDrawable.cs",
+          "src/PopBlocks/Views/GamePage.xaml.cs"
+        ],
+        "details": [
+          "Cut any that hurt frame time on the S24.",
+          "Chain Celebration triggers at chain length 4 or more."
+        ]
+      },
+      "dependencies": [
+        "step_38",
+        "step_30"
+      ],
+      "on_failure": {
+        "strategy": "skip",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "minor_cosmetics_done"
+      ]
+    },
+    {
+      "step_id": "step_43",
+      "tool": "code_edit",
+      "description": "Companion Accessories: hats, antennae and glow patterns for Pip, equipped from the Workshop. Pip also gains visible detail as regions are restored.",
+      "arguments": {
+        "name": "pip_accessories",
+        "phase": "P5",
+        "effort": "M",
+        "theme": "{{theme_api}}",
+        "pip": "{{pip_drawable}}",
+        "workshop": "{{workshop_done}}",
+        "files": [
+          "src/PopBlocks/Graphics/PipDrawable.cs",
+          "src/PopBlocks/Views/WorkshopPage.xaml(.cs)",
+          "src/PopBlocks.Engine/Services/CosmeticCatalog.cs"
+        ]
+      },
+      "dependencies": [
+        "step_38",
+        "step_07",
+        "step_35"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "accessories_done"
+      ]
+    },
+    {
+      "step_id": "step_44",
+      "tool": "code_edit",
+      "description": "Wire cosmetics to the story: finishing a region discovers its theme (1 nature, 2 crystal, 3 leaf, 4 water, 5 clockwork, 6 ice, 7 citadel, 8 Spectrum). Discovered items can then be equipped or bought.",
+      "arguments": {
+        "name": "cosmetic_unlocks",
+        "phase": "P5",
+        "effort": "S",
+        "campaign": "{{campaign_api}}",
+        "skins": "{{skins_done}}",
+        "bursts": "{{burst_styles_done}}",
+        "boards": "{{board_themes_done}}",
+        "files": [
+          "src/PopBlocks.Engine/Story/CampaignService.cs",
+          "src/PopBlocks.Engine/Services/CosmeticCatalog.cs",
+          "src/PopBlocks/Views/GamePage.xaml.cs"
+        ],
+        "details": [
+          "CampaignOutcome.UnlocksGranted already carries ids; this step supplies the mapping and the reward line on the region-complete card."
+        ]
+      },
+      "dependencies": [
+        "step_39",
+        "step_40",
+        "step_41",
+        "step_06"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "cosmetic_unlocks_done"
+      ]
+    },
+    {
+      "step_id": "step_45",
+      "tool": "run_tests",
+      "description": "Gate: tests, plus an accessibility and performance check of every skin and theme (symbols visible, colours distinguishable, no frame drops on the S24).",
+      "arguments": {
+        "name": "gate_p5",
+        "phase": "P5",
+        "effort": "S",
+        "commands": [
+          "dotnet test tests/PopBlocks.Tests"
+        ],
+        "manual_checks": [
+          "All five symbols visible under every skin",
+          "Symbols, not colour alone, carry meaning",
+          "Frame time acceptable during a 5-wave chain with the richest burst style"
+        ]
+      },
+      "dependencies": [
+        "step_44",
+        "step_43",
+        "step_42"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "p5_report"
+      ]
+    },
+    {
+      "step_id": "step_46",
+      "tool": "code_edit",
+      "description": "Engine support for Second Chance (undo of the last placement). Needs a full snapshot of logical state and a piece generator that can rewind, because System.Random cannot be rewound. Only after the core engine is proven stable.",
+      "arguments": {
+        "name": "undo_engine",
+        "phase": "P6",
+        "effort": "L",
+        "files": [
+          "src/PopBlocks.Engine/Logic/GameEngine.cs",
+          "src/PopBlocks.Engine/Logic/PieceGenerator.cs",
+          "src/PopBlocks.Engine/Levels/Goal.cs",
+          "src/PopBlocks.Engine/Models/EngineSnapshot.cs (new)",
+          "tests/PopBlocks.Tests/UndoTests.cs (new)"
+        ],
+        "details": [
+          "RewindableGenerator wraps any IPieceGenerator, records every piece it produces and can move its cursor back, so undo never rerolls the sequence (Story seeded levels and Classic's unseeded generator).",
+          "EngineSnapshot captures: Board clone, CurrentPiece, upcoming queue, Score, PiecesPlaced, Chain/LastChain, State, generator cursor, and a GoalTracker clone (TotalPopped, BestChain, BestGroup, per-colour counts, chain-set counters).",
+          "Snapshot before each lock. Undo only in GameState.Playing (not while ResolvingBursts or Paused) and one step back.",
+          "Undo must not re-raise audio or tutorial events and must not refund the move twice.",
+          "Tests: undo restores every field above; after undo the same moves give results identical to a game with no undo; refused during resolution; Classic and Story both covered."
+        ],
+        "acceptance": [
+          "Property test: random play with random undo points never diverges from replaying the kept moves"
+        ]
+      },
+      "dependencies": [
+        "step_36"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 1,
+        "fallback_step_id": "step_47"
+      },
+      "output_keys": [
+        "undo_api"
+      ]
+    },
+    {
+      "step_id": "step_47",
+      "tool": "llm_write",
+      "description": "FALLBACK ONLY (run only if undo_engine fails twice): drop Second Chance from this release, record why in the docs, and ship Prism Shift as the only consumable.",
+      "arguments": {
+        "name": "undo_descope",
+        "phase": "P6",
+        "effort": "S",
+        "fallback_only": true,
+        "files": [
+          "docs/04-story-mode.md"
+        ]
+      },
+      "dependencies": [
+        "step_36"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "undo_api"
+      ]
+    },
+    {
+      "step_id": "step_48",
+      "tool": "code_edit",
+      "description": "Consumable inventory and UI: purchasable stock (cap 3), one use per ability per level, disabled on flagged levels, one in-game button per ability.",
+      "arguments": {
+        "name": "consumables",
+        "phase": "P6",
+        "effort": "M",
+        "undo": "{{undo_api}}",
+        "shop": "{{shop_catalog_api}}",
+        "stats": "{{run_stats_api}}",
+        "finales": "{{finales_done}}",
+        "files": [
+          "src/PopBlocks.Engine/Services/ConsumableInventory.cs (new)",
+          "src/PopBlocks.Engine/Logic/GameEngine.cs",
+          "src/PopBlocks/Views/GamePage.xaml(.cs)",
+          "src/PopBlocks/ViewModels/GameViewModel.cs"
+        ],
+        "details": [
+          "Stock persisted under new keys (consumable_second_chance, consumable_prism_shift).",
+          "Abilities are copied into the engine at game start, like Lookout and Spare Moves, so buying mid-level changes nothing.",
+          "LevelDefinition.AllowAbilities=false disables them (finales). RunStats counts abilities used.",
+          "No level ever needs an ability; the solver proof is unchanged."
+        ]
+      },
+      "dependencies": [
+        "step_46",
+        "step_29",
+        "step_24",
+        "step_23"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "consumables_api"
+      ]
+    },
+    {
+      "step_id": "step_49",
+      "tool": "code_edit",
+      "description": "Prism Shift (D4, spec version): rearrange the colours within the NEXT piece while keeping its shape, with limited charges, plus the Prism Reserve upgrade. The spec asks that cost, limits and UI be defined first, so this step starts by writing that definition into the spec.",
+      "arguments": {
+        "name": "prism_shift",
+        "phase": "P6",
+        "effort": "M",
+        "consumables": "{{consumables_api}}",
+        "decisions": "{{design_decisions}}",
+        "files": [
+          "src/PopBlocks.Engine/Models/Piece.cs",
+          "src/PopBlocks.Engine/Logic/GameEngine.cs",
+          "src/PopBlocks/Views/GamePage.xaml(.cs)",
+          "PopBlocks_spec.md",
+          "docs/03-engine-reference.md",
+          "tests/PopBlocks.Tests/PrismShiftTests.cs (new)"
+        ],
+        "details": [
+          "Write cost, charges, limits and UI into spec 5.9 first.",
+          "Piece stays immutable: add Piece.WithColourOrder(permutation) that reassigns the existing colours among the cells; geometry never changes.",
+          "GameEngine.ShiftNextPiece(): Playing state only, once per level by default, replaces the first upcoming piece with its next distinct permutation, and does not consume or disturb the generator beyond that piece.",
+          "UI: tap the NEXT box to cycle through the distinct permutations, with a visible 'x1 left' badge.",
+          "Prism Reserve upgrade: +1 free charge per eligible level (introduced after the economy is balanced).",
+          "Add ability-free bonus-objective templates ('pop a big group without abilities') now that abilities exist."
+        ],
+        "acceptance": [
+          "A piece with one colour cannot be shifted (nothing to rearrange) and the button says so",
+          "Cannot be used while paused or resolving or on AllowAbilities=false levels"
+        ]
+      },
+      "dependencies": [
+        "step_48"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "prism_shift_done"
+      ]
+    },
+    {
+      "step_id": "step_50",
+      "tool": "run_tests",
+      "description": "Gate: full suite, undo and ability property tests, and a check that no main level needs any ability or purchase.",
+      "arguments": {
+        "name": "gate_p6",
+        "phase": "P6",
+        "effort": "S",
+        "commands": [
+          "dotnet test tests/PopBlocks.Tests"
+        ]
+      },
+      "dependencies": [
+        "step_49",
+        "step_45"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "p6_report"
+      ]
+    },
+    {
+      "step_id": "step_51",
+      "tool": "manual_review",
+      "description": "Full-campaign playtest on the S24 (using a debug level jump): story continuity, finale difficulty, ability usefulness, the ending and the final choice.",
+      "arguments": {
+        "name": "playtest_full",
+        "phase": "P6",
+        "effort": "M",
+        "report": "{{p6_report}}"
+      },
+      "dependencies": [
+        "step_50"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "playtest_full_notes"
+      ]
+    },
+    {
+      "step_id": "step_52",
+      "tool": "run_tests",
+      "description": "Lock in the fairness rule and save safety as permanent tests.",
+      "arguments": {
+        "name": "compat_and_fairness_tests",
+        "phase": "P7",
+        "effort": "M",
+        "tests": [
+          "EveryMainLevel_1_to_200_BotWinnable_WithNoUpgradesNoAbilities",
+          "BaselineSave_LoadsProgressGoldAndUpgrades",
+          "UnlockStore_RoundTrip",
+          "NoSaveKeyRenamed (compares SaveKeys with a frozen list)",
+          "ShopPricesAndIncome_AllItemsAffordableByLevel200_NoItemRequiresReplay",
+          "EndingReachable_WithNoPurchasesAndNoOptionalCollectibles",
+          "ReplayedLevels_NeverDuplicateRewards"
+        ],
+        "commands": [
+          "dotnet test tests/PopBlocks.Tests"
+        ]
+      },
+      "dependencies": [
+        "step_50"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "compat_report"
+      ]
+    },
+    {
+      "step_id": "step_53",
+      "tool": "code_edit",
+      "description": "Clipboard-only 'save code' so players can move progress to a new phone or after a reinstall (the manifest sets allowBackup=false).",
+      "arguments": {
+        "name": "save_code_export",
+        "phase": "P7",
+        "effort": "M",
+        "files": [
+          "src/PopBlocks.Engine/Services/SaveCode.cs (new)",
+          "src/PopBlocks/Views/AboutPage.xaml(.cs)",
+          "tests/PopBlocks.Tests/SaveCodeTests.cs (new)"
+        ],
+        "details": [
+          "Serialise HighestCleared, gold, upgrade levels, UnlockStore string, consumable stock, equipped cosmetics, ending_theme and stats into a checksummed base64 string.",
+          "Import validates length, checksum and ranges and never trusts its input. A bad code changes nothing.",
+          "No file permissions or network needed."
+        ]
+      },
+      "dependencies": [
+        "step_50"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "save_code_done"
+      ]
+    },
+    {
+      "step_id": "step_54",
+      "tool": "manual_review",
+      "description": "On-device pass on the S24 and one smaller screen: frame time, memory, text sizes, contrast, TalkBack labels on the new pages, reduced-motion behaviour and symbols under every skin.",
+      "arguments": {
+        "name": "perf_access_pass",
+        "phase": "P7",
+        "effort": "M",
+        "p5": "{{p5_report}}",
+        "playtest": "{{playtest_full_notes}}"
+      },
+      "dependencies": [
+        "step_45",
+        "step_51"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "perf_report"
+      ]
+    },
+    {
+      "step_id": "step_55",
+      "tool": "code_edit",
+      "description": "Update documentation as the repo's own checklist (docs/09 section 9.10) requires, add a campaign-and-content doc, and fix the README (it still lists sound as not built).",
+      "arguments": {
+        "name": "docs_update",
+        "phase": "P7",
+        "effort": "M",
+        "files": [
+          "docs/01-game-design.md",
+          "docs/02-architecture.md (new save keys)",
+          "docs/03-engine-reference.md",
+          "docs/04-story-mode.md",
+          "docs/05-app-layer.md",
+          "docs/06-graphics.md",
+          "docs/07-testing.md",
+          "docs/09-extending.md",
+          "docs/10-campaign-and-content.md (new)",
+          "docs/README.md",
+          "README.md",
+          "PopBlocks_spec.md"
+        ],
+        "details": [
+          "Describe what exists and why, not the history.",
+          "Spec section 13 'deferred' list: move Prism Shift, achievements and additional modes to implemented.",
+          "10-campaign-and-content.md explains how to edit story text (plain data, no code) and cites docs/story/StoryText.md as canon."
+        ]
+      },
+      "dependencies": [
+        "step_50"
+      ],
+      "on_failure": {
+        "strategy": "retry",
+        "max_retries": 2,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "docs_done"
+      ]
+    },
+    {
+      "step_id": "step_56",
+      "tool": "shell",
+      "description": "Repeat the spec section 10 checks for the larger app: release build has no INTERNET permission, no new dependencies, works in airplane mode.",
+      "arguments": {
+        "name": "offline_check",
+        "phase": "P7",
+        "effort": "S",
+        "commands": [
+          "dotnet publish src/PopBlocks/PopBlocks.csproj -f net10.0-android -c Release",
+          "powershell scripts/Check-Permissions.ps1 -Apk <path to release apk>",
+          "dotnet list src/PopBlocks/PopBlocks.csproj package --include-transitive"
+        ],
+        "notes": "Run on the Windows machine with Visual Studio 2026; the Linux sandbox cannot build the Android target.",
+        "acceptance": [
+          "Check-Permissions passes",
+          "No new PackageReference was added by this plan"
+        ]
+      },
+      "dependencies": [
+        "step_54",
+        "step_52"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "offline_report"
+      ]
+    },
+    {
+      "step_id": "step_57",
+      "tool": "shell",
+      "description": "Bump ApplicationVersion and the display version, build the signed release APK and install it over the previous build on the S24 to confirm progress, gold, upgrades and the save code round-trip.",
+      "arguments": {
+        "name": "release",
+        "phase": "P7",
+        "effort": "S",
+        "files": [
+          "src/PopBlocks/PopBlocks.csproj"
+        ],
+        "commands": [
+          "dotnet publish src/PopBlocks/PopBlocks.csproj -f net10.0-android -c Release -p:AndroidKeyStore=true ... (see README)"
+        ],
+        "acceptance": [
+          "Over-the-top install keeps save data",
+          "Airplane-mode run completes a region",
+          "Save code export then import on a fresh install restores progress"
+        ]
+      },
+      "dependencies": [
+        "step_56",
+        "step_55",
+        "step_53"
+      ],
+      "on_failure": {
+        "strategy": "abort",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "release_artifact"
+      ]
+    },
+    {
+      "step_id": "step_58",
+      "tool": "code_edit",
+      "description": "OPTIONAL, later: support optional challenge levels outside the 1..200 line with their own ids, completion records and gold-on-first-clear. Not needed for the story or the ending.",
+      "arguments": {
+        "name": "challenge_infra",
+        "phase": "P8",
+        "effort": "L",
+        "optional": true,
+        "abilities": "{{consumables_api}}",
+        "campaign": "{{campaign_api}}",
+        "files": [
+          "src/PopBlocks.Engine/Models/GameSetup.cs",
+          "src/PopBlocks.Engine/Levels/LevelCatalog.cs",
+          "src/PopBlocks.Engine/Services/PlayerProgress.cs",
+          "src/PopBlocks/ViewModels/GameViewModel.cs",
+          "src/PopBlocks/Views/WorkshopPage.xaml(.cs)",
+          "tests/PopBlocks.Tests/ChallengeTests.cs (new)"
+        ],
+        "details": [
+          "GameSetup.Story(level) clamps to >= 1 and PlayerProgress.Complete only accepts the next sequential level, so challenges need their own GameSetup kind and PlayerProgress.CompleteChallenge(id).",
+          "Completion never changes HighestCleared and never blocks the ending. Abilities and tutorial coaching are off.",
+          "A 'Puzzle Observatory' station lists unlocked challenges."
+        ]
+      },
+      "dependencies": [
+        "step_51",
+        "step_06"
+      ],
+      "on_failure": {
+        "strategy": "skip",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "challenge_api"
+      ]
+    },
+    {
+      "step_id": "step_59",
+      "tool": "code_edit",
+      "description": "OPTIONAL, later: author the challenge puzzles with unusual piles and strict limits, always proven by the bot (limit = the bot's own move count), plus a replay test through the real engine.",
+      "arguments": {
+        "name": "challenge_content",
+        "phase": "P8",
+        "effort": "L",
+        "optional": true,
+        "challenge": "{{challenge_api}}",
+        "files": [
+          "src/PopBlocks.Engine/Levels/ChallengeCatalog.cs (new)",
+          "tests/PopBlocks.Tests/ChallengeTests.cs"
+        ],
+        "details": [
+          "A hand-drawn puzzle the bot cannot solve has no verified solution, so each challenge is generated or proven.",
+          "Have a human play each one: provably solvable does not mean fun."
+        ]
+      },
+      "dependencies": [
+        "step_58"
+      ],
+      "on_failure": {
+        "strategy": "skip",
+        "max_retries": 0,
+        "fallback_step_id": null
+      },
+      "output_keys": [
+        "challenge_content_done"
+      ]
+    }
+  ]
+}

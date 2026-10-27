@@ -8,8 +8,14 @@ namespace PopBlocks.Engine;
 /// </summary>
 public static class StoryConfig
 {
-    /// <summary>Levels 1..this are guided tutorial levels (no gold).</summary>
+    /// <summary>
+    /// Story levels 1..this are the gentle opening levels. They are ordinary Story levels (generated, no coaching) but
+    /// pay no gold, as they always have. The guided lessons are not part of the Story: see <see cref="LessonCount"/>.
+    /// </summary>
     public const int TutorialLastLevel = 10;
+
+    /// <summary>Number of guided tutorial lessons (<c>LevelCatalog.Lesson</c>). They are played from the menu, outside the campaign.</summary>
+    public const int LessonCount = 10;
 
     public const int EasyLastLevel = 50;
     public const int MediumLastLevel = 100;

@@ -8,13 +8,14 @@
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
 
+    <!-- Tight padding and spacing on purpose: every dp saved here goes to the board (alpha 0.0.1 feedback: grid too small). -->
     <Grid RowDefinitions="Auto,Auto,*,Auto"
-          Padding="12,6,12,10"
-          RowSpacing="8">
+          Padding="6,2,6,6"
+          RowSpacing="4">
 
         <!-- HUD: pause, level and score, moves left, upcoming pieces -->
-        <Border Grid.Row="0" Style="{StaticResource Glass}" Padding="12,10">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+        <Border Grid.Row="0" Style="{StaticResource Glass}" Padding="10,6">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
                 <Button Grid.Column="0"
                         Text="II"
                         Style="{StaticResource RoundButton}"
@@ -24,7 +25,7 @@
                 <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
                     <Label Text="{Binding TitleText}" Style="{StaticResource CaptionLabel}" />
                     <Label Text="{Binding ScoreText}"
-                           FontSize="28"
+                           FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{StaticResource TextPrimary}" />
                     <Label Text="{Binding SubText}"
@@ -40,7 +41,7 @@
                                      MinimumWidthRequest="58">
                     <Label Text="MOVES" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
                     <Label Text="{Binding MovesText}"
-                           FontSize="30"
+                           FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{Binding MovesColour}"
                            HorizontalTextAlignment="Center" />
@@ -54,11 +55,12 @@
         </Border>
 
         <!-- Goals -->
-        <Border Grid.Row="1" Style="{StaticResource Glass}" Padding="14,10" IsVisible="{Binding HasGoals}">
-            <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Goals}">
+        <Border Grid.Row="1" Style="{StaticResource Glass}" Padding="12,6" IsVisible="{Binding HasGoals}">
+            <VerticalStackLayout Spacing="4">
+              <VerticalStackLayout Spacing="4" BindableLayout.ItemsSource="{Binding Goals}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="levels:GoalState">
-                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="2">
                             <Label Grid.Column="0"
                                    Text="{Binding Text}"
                                    FontSize="14"
@@ -79,10 +81,24 @@
                                          Progress="{Binding Fraction}"
                                          ProgressColor="{StaticResource Accent}"
                                          BackgroundColor="#22FFFFFF"
-                                         HeightRequest="6" />
+                                         HeightRequest="4" />
                         </Grid>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
+              </VerticalStackLayout>
+
+              <!-- Optional memory objective: clearly optional, never needed to progress -->
+              <Grid IsVisible="{Binding HasBonus}" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                  <Label Grid.Column="0" Text="◆" FontSize="12" TextColor="{StaticResource GoldColor}" VerticalOptions="Center" />
+                  <Label Grid.Column="1" Text="{Binding BonusText}" FontSize="12" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                  <Label Grid.Column="2" Text="{Binding BonusProgress}" FontSize="12" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center">
+                      <Label.Triggers>
+                          <DataTrigger TargetType="Label" Binding="{Binding BonusMet}" Value="True">
+                              <Setter Property="TextColor" Value="#39FF14" />
+                          </DataTrigger>
+                      </Label.Triggers>
+                  </Label>
+              </Grid>
             </VerticalStackLayout>
         </Border>
 
@@ -108,6 +124,26 @@
                    HorizontalOptions="Center"
                    VerticalOptions="Center"
                    InputTransparent="True" />
+
+            <!-- Pip's short remarks (first burst, first chain). Not modal: touches pass through. -->
+            <Border x:Name="PipBanner"
+                    Style="{StaticResource Glass}"
+                    BackgroundColor="#EE141B38"
+                    IsVisible="False"
+                    Opacity="0"
+                    InputTransparent="True"
+                    VerticalOptions="End"
+                    Margin="14,0,14,14"
+                    Padding="10,8">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <GraphicsView x:Name="BannerPipView" WidthRequest="44" HeightRequest="44" VerticalOptions="Center" />
+                    <Label x:Name="BannerLabel"
+                           Grid.Column="1"
+                           FontSize="14"
+                           TextColor="{StaticResource TextPrimary}"
+                           VerticalOptions="Center" />
+                </Grid>
+            </Border>
 
             <Border x:Name="CoachCard"
                     Style="{StaticResource Glass}"
@@ -154,10 +190,36 @@
         </Grid>
 
         <!-- Controls: fold away with the handle; the gestures on the board always work -->
-        <VerticalStackLayout Grid.Row="3" Spacing="2">
+        <VerticalStackLayout Grid.Row="3" Spacing="0">
+            <!-- Helpers: only when the level allows them and the player brought one in. Never needed to win. -->
+            <Grid IsVisible="{Binding HelpersVisible}" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,4">
+                <Button Grid.Column="0"
+                        Text="{Binding SecondChanceText}"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding SecondChanceCommand}"
+                        IsVisible="{Binding ShowSecondChance}"
+                        IsEnabled="{Binding CanSecondChance}"
+                        HeightRequest="38"
+                        SemanticProperties.Description="{Binding SecondChanceDescription}" />
+                <Button Grid.Column="1"
+                        Text="{Binding PrismShiftText}"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding PrismShiftCommand}"
+                        IsVisible="{Binding ShowPrismShift}"
+                        IsEnabled="{Binding CanPrismShift}"
+                        HeightRequest="38"
+                        SemanticProperties.Description="{Binding PrismShiftDescription}" />
+            </Grid>
+            <Label Text="{Binding HelperHint}"
+                   IsVisible="{Binding HasHelperHint}"
+                   Style="{StaticResource CaptionLabel}"
+                   HorizontalTextAlignment="Center"
+                   Margin="0,0,0,2" />
+
             <Button x:Name="DrawerToggle"
                     Text="HIDE CONTROLS  ▼"
                     Style="{StaticResource GhostButton}"
+                    HeightRequest="30"
                     HorizontalOptions="Center"
                     Clicked="OnToggleControls" />
 
@@ -174,7 +236,7 @@
         <Grid Grid.RowSpan="4"
               IsVisible="{Binding IsOverlayVisible}"
               BackgroundColor="{StaticResource Overlay}"
-              Margin="-12,-6,-12,-10">
+              Margin="-6,-2,-6,-6">
             <Border Style="{StaticResource Glass}"
                     BackgroundColor="#F2141B38"
                     VerticalOptions="Center"
@@ -209,7 +271,39 @@
                            FontSize="12"
                            HorizontalTextAlignment="Center" />
 
-                    <Button Text="NEXT LEVEL"
+                    <!-- Layer B: progress through the region -->
+                    <VerticalStackLayout IsVisible="{Binding HasRegionProgress}" Spacing="4">
+                        <Label Text="{Binding RegionProgressText}"
+                               Style="{StaticResource CaptionLabel}"
+                               HorizontalTextAlignment="Center" />
+                        <ProgressBar Progress="{Binding RegionFraction}"
+                                     ProgressColor="{StaticResource Accent}"
+                                     BackgroundColor="#22FFFFFF"
+                                     HeightRequest="5" />
+                    </VerticalStackLayout>
+
+                    <!-- Layer C: story rewards (fragment, journal entry, board style) -->
+                    <VerticalStackLayout IsVisible="{Binding HasRewardLines}"
+                                         Spacing="2"
+                                         BindableLayout.ItemsSource="{Binding RewardLines}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Label Text="{Binding .}"
+                                       FontSize="14"
+                                       FontAttributes="Bold"
+                                       TextColor="{StaticResource GoldColor}"
+                                       HorizontalTextAlignment="Center" />
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                    <Label Text="{Binding BonusResultText}"
+                           IsVisible="{Binding HasBonusResult}"
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="12"
+                           HorizontalTextAlignment="Center" />
+
+                    <Button Text="{Binding NextText}"
                             Style="{StaticResource PrimaryButton}"
                             IsVisible="{Binding IsComplete}"
                             Command="{Binding NextLevelCommand}" />
@@ -232,6 +326,164 @@
                     <Button Text="MENU"
                             Style="{StaticResource SecondaryButton}"
                             Clicked="OnMenuClicked" />
+
+                    <!-- Development builds only: ShowDevTools is false otherwise -->
+                    <Grid IsVisible="{Binding ShowDevTools}" ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0" Text="DEV: WIN LEVEL" Style="{StaticResource GhostButton}"
+                                TextColor="{StaticResource Danger}" Command="{Binding DevSkipLevelCommand}" />
+                        <Button Grid.Column="1" Text="DEV: +1,000 GOLD" Style="{StaticResource GhostButton}"
+                                TextColor="{StaticResource Danger}" Command="{Binding DevGoldCommand}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Story scene: a short panel from Pip or a stage direction. Always skippable. Sits above the other overlays. -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding SceneVisible}"
+              BackgroundColor="#CC070A16"
+              Margin="-6,-2,-6,-6">
+            <Border Style="{StaticResource Glass}"
+                    BackgroundColor="#F2141B38"
+                    VerticalOptions="Center"
+                    Margin="18,0"
+                    Padding="20,18">
+                <VerticalStackLayout Spacing="10">
+                    <!-- The stage: the region's picture, its ambience and whatever this line calls for (Pip emerging, the Warden's
+                         mark, a restoration sweep...). Drawn by StageDrawable from StageDirections. Decorative: the text carries the story. -->
+                    <GraphicsView x:Name="StageView" HeightRequest="150" />
+
+                    <!-- Each speaker is drawn on their own side (Pip left, others alternating), so it is clear who is talking.
+                         Narration has no portrait. Only one of the two portrait views is visible at a time. -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" MinimumHeightRequest="72">
+                        <GraphicsView x:Name="ScenePipView"
+                                      Grid.Column="0"
+                                      IsVisible="{Binding ScenePortraitLeft}"
+                                      WidthRequest="72" HeightRequest="72" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
+                            <Label Text="{Binding SceneTitle}"
+                                   Style="{StaticResource CaptionLabel}"
+                                   HorizontalTextAlignment="{Binding SceneNameAlignment}" />
+                            <Label Text="{Binding SceneSpeaker}"
+                                   IsVisible="{Binding SceneHasSpeaker}"
+                                   FontSize="20"
+                                   FontAttributes="Bold"
+                                   HorizontalTextAlignment="{Binding SceneNameAlignment}"
+                                   TextColor="{StaticResource GoldColor}" />
+                        </VerticalStackLayout>
+                        <GraphicsView x:Name="ScenePipRightView"
+                                      Grid.Column="2"
+                                      IsVisible="{Binding ScenePortraitRight}"
+                                      WidthRequest="72" HeightRequest="72" VerticalOptions="Center" />
+                    </Grid>
+
+                    <Label Text="{Binding SceneText}"
+                           FontSize="17"
+                           LineHeight="1.3"
+                           MinimumHeightRequest="90"
+                           TextColor="{StaticResource TextPrimary}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding SceneIsNarration}" Value="True">
+                                <Setter Property="FontAttributes" Value="Italic" />
+                                <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
+                        <HorizontalStackLayout Grid.Column="0" Spacing="4">
+                            <Button Text="SKIP"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="0,0,8,0"
+                                    Command="{Binding SkipSceneCommand}" />
+                            <Button Text="BACK"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="0,0,8,0"
+                                    IsVisible="{Binding SceneCanGoBack}"
+                                    Command="{Binding PreviousSceneCommand}" />
+                        </HorizontalStackLayout>
+                        <Label Grid.Column="1"
+                               Text="{Binding SceneProgressText}"
+                               Style="{StaticResource CaptionLabel}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+                        <Button Grid.Column="2"
+                                Text="{Binding SceneButtonText}"
+                                Style="{StaticResource PrimaryButton}"
+                                HeightRequest="44"
+                                MinimumWidthRequest="110"
+                                CornerRadius="22"
+                                FontSize="14"
+                                Command="{Binding AdvanceSceneCommand}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- First Story level, first time only: does the player want the tutorial? The game is held still until they answer. -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding TutorialPromptVisible}"
+              BackgroundColor="#CC070A16"
+              Margin="-6,-2,-6,-6">
+            <Border Style="{StaticResource Glass}"
+                    BackgroundColor="#F2141B38"
+                    VerticalOptions="Center"
+                    Margin="18,0"
+                    Padding="22,22">
+                <VerticalStackLayout Spacing="14">
+                    <Label Text="New to PopBlocks?"
+                           FontSize="24"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}" />
+                    <Label Text="Want a quick tutorial first? It is a handful of short lessons. You can also play it any time from the menu."
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="15" />
+                    <Button Text="SHOW ME HOW"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding TutorialYesCommand}" />
+                    <Button Text="NO THANKS, LET ME PLAY"
+                            Style="{StaticResource SecondaryButton}"
+                            Command="{Binding TutorialNoCommand}" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- After the ending: how should the world look from now on? Cosmetic only; there is one ending. -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding ChoiceVisible}"
+              BackgroundColor="#CC070A16"
+              Margin="-6,-2,-6,-6">
+            <Border Style="{StaticResource Glass}"
+                    BackgroundColor="#F2141B38"
+                    VerticalOptions="Center"
+                    Margin="18,0"
+                    Padding="20,18">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="How should the world look now?"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}" />
+                    <Label Text="This only changes how things are drawn. You can change it again any time in the Archive."
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="13" />
+
+                    <!-- The three looks (ids match StoryContent.FinalChoices) -->
+                    <Button Text="{Binding LookOneText}" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ChooseLookCommand}" CommandParameter="lanterns" />
+                    <Button Text="{Binding LookTwoText}" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ChooseLookCommand}" CommandParameter="aurora" />
+                    <Button Text="{Binding LookThreeText}" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ChooseLookCommand}" CommandParameter="meadow" />
+
+                    <Label Text="{Binding ChoiceNote}"
+                           IsVisible="{Binding ChoiceHasNote}"
+                           FontSize="15"
+                           FontAttributes="Italic"
+                           TextColor="{StaticResource GoldColor}" />
+
+                    <Button Text="{Binding ChoiceDoneText}"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding ChoiceDoneCommand}" />
                 </VerticalStackLayout>
             </Border>
         </Grid>

@@ -99,3 +99,56 @@ public sealed class ScriptedPieceGenerator : IPieceGenerator
 
     public Piece Next(int colourCount) => _script.Count > 0 ? _script.Dequeue() : _fallback.Next(colourCount);
 }
+
+/// <summary>
+/// Wraps a generator so the sequence it hands out can be wound back. <see cref="System.Random"/> cannot be rewound,
+/// so every piece is remembered; after <see cref="Rewind"/> the same pieces are given again, in the same order, before
+/// the wrapped generator is asked for anything new. That is what keeps undo from rerolling the level.
+/// </summary>
+public sealed class RewindableGenerator : IPieceGenerator
+{
+    private readonly IPieceGenerator _inner;
+    private readonly List<Piece> _log = new();
+    private int _dropped;   // pieces trimmed off the front of the log
+
+    public RewindableGenerator(IPieceGenerator inner) => _inner = inner;
+
+    /// <summary>How many pieces have been handed out so far (counting any that were rewound and handed out again).</summary>
+    public int Position { get; private set; }
+
+    public Piece Next(int colourCount)
+    {
+        int index = Position - _dropped;
+        if (index < 0) throw new InvalidOperationException("Cannot go back past the trimmed part of the sequence.");
+
+        Piece piece;
+        if (index < _log.Count)
+        {
+            piece = _log[index];
+        }
+        else
+        {
+            piece = _inner.Next(colourCount);
+            _log.Add(piece);
+        }
+        Position++;
+        return piece;
+    }
+
+    /// <summary>Goes back so the next piece handed out is number <paramref name="position"/> again.</summary>
+    public void Rewind(int position)
+    {
+        if (position < _dropped || position > Position)
+            throw new ArgumentOutOfRangeException(nameof(position), "Can only go back to a position still remembered.");
+        Position = position;
+    }
+
+    /// <summary>Forgets pieces before <paramref name="position"/>: nothing will rewind that far any more.</summary>
+    public void Trim(int position)
+    {
+        int count = Math.Min(position, Position) - _dropped;
+        if (count <= 0) return;
+        _log.RemoveRange(0, count);
+        _dropped += count;
+    }
+}

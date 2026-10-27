@@ -28,7 +28,8 @@ Five colours: Cyan, Coral, Yellow, Purple, Lime. Each also has a **symbol** draw
 Piece shapes live in `Models/ShapeCatalog.cs`:
 
 - **Classic set:** Pair, Bar (3), Elbow, Block (2x2), Hook, Tee. These appear everywhere.
-- **Exotic set:** Plus, Zig, Zag, Corner, Cup, Long (5 in a row), Stair, Diagonal (two cells touching only at a corner), Gap (two cells with a hole between). They appear in Story from level 11 on, at a share that grows with difficulty. Exotic shapes with 4+ cells are always two-coloured, because a single-colour piece of five would pop by itself the moment it landed.
+- **Exotic set:** Plus, Zig, Zag, Corner, Cup, Long (5 in a row), Stair. They appear in Story from level 11 on, at a share that grows with difficulty. Exotic shapes with 4+ cells are always two-coloured, because a single-colour piece of five would pop by itself the moment it landed.
+- **Every shape is one solid piece:** each cell touches another cell sideways or up/down, in every rotation. There are no lines with a missing middle and no cells that touch only at a corner. Alpha 0.0.1 had a "Gap" and a "Diagonal" piece; playtesters could not read or place them, so they were removed. `ShapeCatalogTests` fails if a shape like that is ever added again.
 - **Dot:** a single cell. Never drawn at random; only hand-made tutorials use it.
 
 A random piece is one-coloured 40% of the time and two-coloured otherwise.
@@ -51,7 +52,9 @@ Starts from an empty board and never ends until the stack overflows. Difficulty 
 
 ### Story
 
-Numbered levels. Each level has:
+The main mode, and a campaign: **200 levels in eight regions of 25** (the Forgotten Garden, the Crystal Caves, the Verdant Wilds, the Sunken City, the Clockwork Wastes, the Frozen Expanse, the Shattered Citadel and the Heart of the Spectrum), followed by an endless band, **Beyond the Spectrum**, that plays like the last region and has no scenes. The story (Pip, the Prism Heart, the Warden) is told in short skippable scenes between levels; see [Campaign and content](10-campaign-and-content.md).
+
+Each level has:
 
 - a **starting pile** of blocks (hand-drawn for levels 1 to 11, generated afterwards),
 - one to three **goals**,
@@ -70,20 +73,26 @@ Goal types (`Levels/Goal.cs`):
 | Chain | Make a chain of this many waves from one piece. |
 | Big group | Pop one group of at least this size. |
 | Clear down | End with this many blocks or fewer on the board. Zero means "clear the board". |
+| Chain set | Make several *separate* chains, each of at least a given length (used by the final puzzle, level 200). |
 
 Goals are checked against the **settled** board after a piece has fully resolved, never mid-chain, so a goal cannot be met by a state that is about to change.
 
-Difficulty tiers (numbers adjustable in `StoryConfig.cs`; they are recommendations, not hard caps):
+Difficulty tiers (numbers adjustable in `StoryConfig.cs`; they are recommendations, not hard caps) and the region that each tier sits in:
 
 | Levels | Tier | Character |
 |---|---|---|
-| 1 to 10 | Tutorials | Hand-made, coached, no gold. |
-| 11 to 50 | Easy | Four colours, low piles, generous moves. Level 11 introduces the exotic shapes. The last ten levels have variants (rainbow, tall pile, tight moves, shape-heavy, scattered). |
-| 51 to 100 | Medium | Five colours, taller piles, fewer spare moves. |
-| 101 to 150 | Hard | Dense scattered piles, faster pieces, often two goals. |
-| 151 and up | Extreme | Upside-down boards, a points penalty for a piece that pops nothing, up to three goals, the fastest pieces. Endless. |
+| 1 to 10 | Opening levels | Generated Easy levels with no coaching, no gold. (The hand-made, coached tutorial is a separate ten-lesson sequence; see [Story mode](04-story-mode.md) 4.5.) |
+| 11 to 50 | Easy | Four colours, low piles, generous moves. Level 11 introduces the exotic shapes. Regions 1 and 2. |
+| 51 to 100 | Medium | Five colours, taller piles, fewer spare moves. Regions 3 and 4. |
+| 101 to 150 | Hard | Dense scattered piles, faster pieces, often two goals. Regions 5 and 6. |
+| 151 to 200 | Extreme | Upside-down boards, a points penalty for a piece that pops nothing, up to three goals, the fastest pieces. Regions 7 and 8. |
+| 201 and up | Extreme, endless | Beyond the Spectrum: more of the same, no story scenes. |
 
-New goal types and mechanics are introduced one at a time with a short card (level 13 colour goals, 16 clear-down, 20 chains, 26 big groups, 32 double goals, 151 flipped board, 156 no-pop penalty, 161 triple goals). See [Story mode](04-story-mode.md).
+Each region also leans on one idea (big groups, colour goals, tight moves, chains, unusual conditions, several goals, everything combined) through its `RegionRule`. The last level of every region is a **finale**: a little tougher and played without helpers. New goal types and mechanics are introduced one at a time with a short card (level 13 colour goals, 16 clear-down, 20 chains, 26 big groups, 32 double goals, 128 flipped board, 134 no-pop penalty, 151 extreme levels, 161 triple goals, 200 the chain-set puzzle). See [Story mode](04-story-mode.md).
+
+### Optional memories
+
+Two levels in each region (offsets 11 and 17 into it, never a finale) carry an **optional objective**, such as "pop a group of 8" or "finish with 2 moves to spare". Meeting it as well as the main goals uncovers one of the region's *memories* in the Archive. A memory pays no gold and is never needed to finish a level or the game. From region 5 the second memory's Chain and Big Group objectives also ask for it "without helpers".
 
 ### Extreme mechanics
 
@@ -92,15 +101,31 @@ New goal types and mechanics are introduced one at a time with a short card (lev
 
 ## 1.6 Gold and the shop
 
-- Clearing a **non-tutorial** level for the **first time** pays gold. Harder tiers pay more (`Services/PlayerProgress.cs`, `GoldRewards`).
-- Replaying a cleared level pays nothing. Tutorials pay nothing. Gold is paid exactly once per level, at the moment the level is completed.
-- Gold buys permanent upgrades (`Services/Shop.cs`):
+Gold comes only from playing and is spent only on things that make the game easier or prettier. It is never needed to finish the game.
 
-| Upgrade | Levels | Effect |
+**Where gold comes from** (about 14,000 over the whole campaign; see `docs/story/economy.md`):
+
+- Clearing a **non-tutorial** level for the **first time** pays gold; harder tiers pay more (`Services/PlayerProgress.cs`, `GoldRewards`). Replaying a cleared level pays nothing, and gold is paid exactly once per level.
+- Restoring a region in play pays a one-off reward (`ShopCatalog.RegionClearGold`: 50, 75, ... 225). Catching a save up quietly (`CampaignService.Reconcile`) pays nothing retroactively.
+- Achievements pay small one-off amounts (`AchievementCatalog`).
+
+**What gold buys** (all data in `Services/ShopCatalog.cs`, `ConsumableInventory.cs`, `CosmeticCatalog.cs`):
+
+| Where | Item | Effect |
 |---|---|---|
-| Lookout | 2 | See the next 2, then 3 upcoming pieces. |
-| Pop Flair | 3 | Richer pop effects: shockwave, sparks and screen shake, confetti. |
-| Spare Moves | 3 | +2, +4, +6 pieces on every non-tutorial Story level. |
+| Workbench, HELPERS | Lookout (4 levels) | See the next 2 to 5 pieces. |
+| | Pop Flair (3) | Richer pop effects. |
+| | Spare Moves (3) | +2, +4, +6 pieces on every non-tutorial Story level. |
+| | Colour Lens (2) | Outlines groups that are one or two blocks short of a burst. |
+| | Chain Sense (1) | The landing outline glows when dropping there would start a chain. |
+| | Prism Reserve (2) | Free Prism Shifts on every level that allows helpers. |
+| Workbench, SUPPLIES | Second Chance | Take back the last placement. Used up. |
+| | Prism Shift | Rearrange the colours of the NEXT piece. Used up. |
+| Paint shelf | Skins, burst styles, boards | How blocks, pops and the board look. Never change a rule. |
+
+Some items open only after a region is restored or an achievement is earned. A locked item shows **how to find it, never its price.** Looks that are rewards (the Garden board, piece frames, Pip's accessories, the post-ending boards) cost nothing at all.
+
+**Helpers** (Second Chance, Prism Shift) are the only things that are used up. At most 3 of each are held, a level can use at most one of each (plus Prism Reserve's free shifts), and they are off on tutorials, finales and Classic. See `docs/story/helpers.md` for the exact rules.
 
 There is nothing to buy with real money. Gold can only be earned by playing. That is a product promise (it is also stated on the About page), not just a current limitation.
 
@@ -125,7 +150,9 @@ These are constraints on every future change, not features:
 1. **Offline.** The Android manifest requests no permissions. Release builds must not contain `INTERNET` (`scripts/Check-Permissions.ps1` checks this).
 2. **No ads, no tracking, no accounts, no analytics, no crash-reporting SDK.** The only diagnostics write to the device's own log (`adb logcat -s PopBlocks`).
 3. **No pay-to-win and no real-money purchases.** Gold is earned only by playing.
-4. **Progress is local.** It lives in the app's private preferences; backups are disabled (`android:allowBackup="false"`).
-5. **Respect the player's time.** No nag timers, no interruptions, no fake urgency.
+4. **Progress is local.** It lives in the app's private preferences; backups are disabled (`android:allowBackup="false"`). A player who changes phone moves their progress by hand with a **save code** (copied from, and pasted into, the About page; see [Architecture](02-architecture.md#26-persistence)).
+5. **Respect the player's time.** No nag timers, no interruptions, no fake urgency. Every story scene can be skipped.
+6. **Every level can be won with no purchases and no helpers.** Move limits are tuned for a player with nothing; a bot proves each level winnable, and the tests refuse a level it cannot win.
+7. **Gold never gates the story or accessibility.** Cosmetics are discovered through the story or an achievement first, then bought; a locked item shows a hint, never a price.
 
 The About page states these promises to the player. If one of them ever has to change, the About page and this document must change in the same commit.

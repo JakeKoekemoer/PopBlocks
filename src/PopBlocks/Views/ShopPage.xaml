@@ -5,11 +5,11 @@
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" RowSpacing="12">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="20,16,20,0" RowSpacing="12">
         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
             <Button Grid.Column="0" Text="←" Style="{StaticResource RoundButton}" FontSize="18" Clicked="OnBackClicked" />
             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="0">
-                <Label Text="Shop" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                <Label Text="The workbench" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                 <Label Text="SPEND YOUR GOLD" Style="{StaticResource CaptionLabel}" />
             </VerticalStackLayout>
             <Border Grid.Column="2" Style="{StaticResource Glass}" Padding="12,6" VerticalOptions="Center">
@@ -24,7 +24,11 @@
             </Border>
         </Grid>
 
-        <ScrollView Grid.Row="1">
+        <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout x:Name="TabsHost" Spacing="8" />
+        </ScrollView>
+
+        <ScrollView Grid.Row="2">
             <VerticalStackLayout x:Name="ItemsHost" Spacing="14" Padding="0,4,0,28" />
         </ScrollView>
     </Grid>

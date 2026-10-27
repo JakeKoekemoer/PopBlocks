@@ -1,3 +1,5 @@
+using PopBlocks.Engine.Story;
+
 namespace PopBlocks.Engine.Services;
 
 public enum Upgrade
@@ -20,76 +22,154 @@ public sealed record UpgradeInfo(
     public bool IsMaxed => Level >= MaxLevel;
 }
 
-/// <summary>Gold-for-upgrades shop. Each upgrade has a few levels, each costing more. Purchases are saved.</summary>
+/// <summary>
+/// One row of the Workshop, ready to show. <see cref="Locked"/> items cannot be bought yet and say why in
+/// <see cref="LockHint"/> (a hint to discover, never a price).
+/// </summary>
+public sealed record ShopEntry(
+    ShopItem Item, int Level, int? NextPrice, string CurrentEffect, string NextEffect,
+    bool Locked, string LockHint, bool CanAfford)
+{
+    public bool IsMaxed => Level >= Item.MaxLevel;
+    public bool CanBuy => !IsMaxed && !Locked && CanAfford;
+}
+
+/// <summary>
+/// Gold-for-upgrades shop, driven by <see cref="ShopCatalog"/>. Each item has levels; each level has a price and may
+/// need a region restored or an achievement first. Purchases are saved under the item's own key.
+/// </summary>
 public sealed class ShopService
 {
-    private static readonly int[][] Costs =
-    {
-        new[] { 120, 400 },          // Preview: 1 -> 2 -> 3 upcoming pieces
-        new[] { 80, 250, 600 },      // PopFlair: 0 -> 3
-        new[] { 150, 450, 1000 },    // ExtraMoves: +0 -> +6
-    };
-
-    private static readonly string[] PreviewEffects = { "Next piece", "Next 2 pieces", "Next 3 pieces" };
-    private static readonly string[] FlairEffects = { "Neon pop", "Shockwaves", "Sparks and screen shake", "Confetti finale" };
-    private static readonly string[] MoveEffects = { "No bonus", "+2 moves per level", "+4 moves per level", "+6 moves per level" };
-
     private readonly ILocalSettings _settings;
     private readonly PlayerProgress _progress;
+    private readonly UnlockStore? _unlocks;
 
-    public ShopService(ILocalSettings settings, PlayerProgress progress)
+    /// <param name="unlocks">Needed only for items that ask for an achievement; without it those stay locked.</param>
+    public ShopService(ILocalSettings settings, PlayerProgress progress, UnlockStore? unlocks = null)
     {
         _settings = settings;
         _progress = progress;
+        _unlocks = unlocks;
     }
 
     public event Action? Changed;
 
-    private static string Key(Upgrade u) => $"upgrade_{u.ToString().ToLowerInvariant()}";
-
-    public int MaxLevel(Upgrade u) => Costs[(int)u].Length;
-
-    public int Level(Upgrade u) => Math.Clamp(_settings.GetInt(Key(u), 0), 0, MaxLevel(u));
-
-    public int? NextCost(Upgrade u) => Level(u) >= MaxLevel(u) ? null : Costs[(int)u][Level(u)];
-
-    public bool CanAfford(Upgrade u) => NextCost(u) is { } cost && _progress.Gold >= cost;
-
-    /// <summary>Buys the next level of an upgrade if there is one and the player has the gold.</summary>
-    public bool TryBuy(Upgrade u)
+    private static string IdOf(Upgrade u) => u switch
     {
-        if (NextCost(u) is not { } cost) return false;
+        Upgrade.Preview => ShopCatalog.Preview,
+        Upgrade.PopFlair => ShopCatalog.PopFlair,
+        _ => ShopCatalog.ExtraMoves,
+    };
+
+    // ---- Generic API (by item id) ----
+
+    public int MaxLevel(string id) => ShopCatalog.Get(id).MaxLevel;
+
+    public int Level(string id)
+    {
+        var item = ShopCatalog.Get(id);
+        return Math.Clamp(_settings.GetInt(item.SaveKey, 0), 0, item.MaxLevel);
+    }
+
+    public int? NextCost(string id)
+    {
+        var item = ShopCatalog.Get(id);
+        int level = Level(id);
+        return level >= item.MaxLevel ? null : item.Tiers[level].Price;
+    }
+
+    /// <summary>The thing the next level asks for, or <see cref="Requirement.None"/>.</summary>
+    public Requirement NextRequirement(string id)
+    {
+        var item = ShopCatalog.Get(id);
+        int level = Level(id);
+        return level >= item.MaxLevel ? Requirement.None : item.Tiers[level].Requires;
+    }
+
+    public bool IsMet(Requirement r) => r.IsMetBy(_progress.HighestCleared, _unlocks);
+
+    /// <summary>The next level of this item is not open yet.</summary>
+    public bool IsLocked(string id) => NextCost(id) != null && !IsMet(NextRequirement(id));
+
+    public bool CanAfford(string id) => NextCost(id) is { } cost && !IsLocked(id) && _progress.Gold >= cost;
+
+    /// <summary>Buys the next level if there is one, it is unlocked and the player has the gold.</summary>
+    public bool TryBuy(string id)
+    {
+        if (NextCost(id) is not { } cost || IsLocked(id)) return false;
         if (!_progress.TrySpend(cost)) return false;
-        _settings.SetInt(Key(u), Level(u) + 1);
+        _settings.SetInt(ShopCatalog.Get(id).SaveKey, Level(id) + 1);
         Changed?.Invoke();
         return true;
     }
 
+    /// <summary>Sets an item level directly, without paying or checking. For testing (see DevTools).</summary>
+    public void DevSetLevel(string id, int level)
+    {
+        var item = ShopCatalog.Get(id);
+        _settings.SetInt(item.SaveKey, Math.Clamp(level, 0, item.MaxLevel));
+        Changed?.Invoke();
+    }
+
+    public ShopEntry Entry(string id)
+    {
+        var item = ShopCatalog.Get(id);
+        int level = Level(id);
+        bool maxed = level >= item.MaxLevel;
+        string current = level == 0 ? item.BaseEffect : item.Tiers[level - 1].Effect;
+        string next = maxed ? "" : item.Tiers[level].Effect;
+        bool locked = IsLocked(id);
+        return new ShopEntry(item, level, NextCost(id), current, next, locked,
+            locked ? NextRequirement(id).Describe() : "", CanAfford(id));
+    }
+
+    public IReadOnlyList<ShopEntry> Entries(ItemCategory? category = null) =>
+        ShopCatalog.Items.Where(i => category == null || i.Category == category).Select(i => Entry(i.Id)).ToList();
+
+    // ---- Legacy API (the three original upgrades) ----
+
+    public int MaxLevel(Upgrade u) => MaxLevel(IdOf(u));
+
+    public int Level(Upgrade u) => Level(IdOf(u));
+
+    public int? NextCost(Upgrade u) => NextCost(IdOf(u));
+
+    public bool CanAfford(Upgrade u) => CanAfford(IdOf(u));
+
+    public bool TryBuy(Upgrade u) => TryBuy(IdOf(u));
+
+    public void DevSetLevel(Upgrade u, int level) => DevSetLevel(IdOf(u), level);
+
     // ---- What the upgrades do ----
 
-    /// <summary>Upcoming pieces shown (1 to 3).</summary>
-    public int PreviewCount => 1 + Level(Upgrade.Preview);
+    /// <summary>Upcoming pieces shown (1 to 5).</summary>
+    public int PreviewCount => 1 + Level(ShopCatalog.Preview);
 
     /// <summary>Pop effect richness (0 to 3).</summary>
-    public int FlairLevel => Level(Upgrade.PopFlair);
+    public int FlairLevel => Level(ShopCatalog.PopFlair);
 
     /// <summary>Bonus moves on non-tutorial Story levels.</summary>
-    public int ExtraMoves => 2 * Level(Upgrade.ExtraMoves);
+    public int ExtraMoves => 2 * Level(ShopCatalog.ExtraMoves);
+
+    /// <summary>Colour Lens: 0 off, 1 outlines groups of 3, 2 also groups of 2.</summary>
+    public int LensLevel => Level(ShopCatalog.ColourLens);
+
+    /// <summary>Chain Sense: the landing outline glows when the drop would start a chain.</summary>
+    public bool ChainSenseOwned => Level(ShopCatalog.ChainSense) > 0;
+
+    /// <summary>Prism Reserve: Prism Shifts per level that cost nothing (0 to 2).</summary>
+    public int PrismFreeCharges => Level(ShopCatalog.PrismReserve);
 
     public IReadOnlyList<UpgradeInfo> Items() => new[]
     {
-        Describe(Upgrade.Preview, "Lookout", "See more of the pieces that are coming.", PreviewEffects),
-        Describe(Upgrade.PopFlair, "Pop Flair", "Fancier effects when blocks burst.", FlairEffects),
-        Describe(Upgrade.ExtraMoves, "Spare Moves", "Extra moves on every Story level.", MoveEffects),
+        Describe(Upgrade.Preview),
+        Describe(Upgrade.PopFlair),
+        Describe(Upgrade.ExtraMoves),
     };
 
-    private UpgradeInfo Describe(Upgrade u, string title, string description, string[] effects)
+    private UpgradeInfo Describe(Upgrade u)
     {
-        int level = Level(u);
-        int max = MaxLevel(u);
-        // Preview has two purchasable levels but its effects start at "Next piece" (level 0).
-        string current = effects[Math.Min(level, effects.Length - 1)];
-        string next = level >= max ? "" : effects[Math.Min(level + 1, effects.Length - 1)];
-        return new UpgradeInfo(u, title, description, level, max, NextCost(u), current, next);
+        var e = Entry(IdOf(u));
+        return new UpgradeInfo(u, e.Item.Title, e.Item.Description, e.Level, e.Item.MaxLevel, e.NextPrice, e.CurrentEffect, e.NextEffect);
     }
 }

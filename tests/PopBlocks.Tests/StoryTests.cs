@@ -238,7 +238,7 @@ public class StoryRuleTests
     public void Timed_chains_highlight_every_wave()
     {
         var e = new GameEngine(new ScriptedGenerator()) { Timing = new PopTiming(100, 100) };
-        e.StartLevel(LevelCatalog.Get(3));
+        e.StartLevel(LevelCatalog.Lesson(3));
         Story.MoveTo(e, 0);
         e.HardDrop();
 
@@ -409,17 +409,19 @@ public class StoryRuleTests
     {
         Assert.Equal("CLASSIC", GameSetup.Classic.Title);
         Assert.Equal("LEVEL 7", GameSetup.Story(7).Title);
+        Assert.Equal("LESSON 3", GameSetup.Lesson(3).Title);
         Assert.Equal(1, GameSetup.Story(-4).Level);
+        Assert.Equal(1, GameSetup.Lesson(0).Level);
     }
 }
 
-/// <summary>The hand-made tutorial levels can be played through with the moves their text asks for.</summary>
+/// <summary>The hand-made tutorial lessons can be played through with the moves their text asks for.</summary>
 public class TutorialLevelTests
 {
     private static GameEngine Play(int level, params (int Rotations, int Column)[] moves)
     {
         var e = new GameEngine(new ScriptedGenerator());
-        e.StartLevel(LevelCatalog.Get(level));
+        e.StartLevel(LevelCatalog.Lesson(level));
         foreach (var (rot, col) in moves)
         {
             Assert.Equal(GameState.Playing, e.State);
@@ -452,9 +454,10 @@ public class TutorialLevelTests
     [Fact]
     public void Tutorials_are_flagged_and_start_with_coaching()
     {
-        for (int n = 1; n <= 10; n++)
+        for (int n = 1; n <= StoryConfig.LessonCount; n++)
         {
-            var level = LevelCatalog.Get(n);
+            var level = LevelCatalog.Lesson(n);
+            Assert.Equal(n, level.Number);
             Assert.True(level.IsTutorial);
             Assert.True(level.Steps.Count > 0);
         }
@@ -465,7 +468,7 @@ public class TutorialLevelTests
     [Fact]
     public void Level_1_teaches_by_doing()
     {
-        var steps = LevelCatalog.Get(1).Steps;
+        var steps = LevelCatalog.Lesson(1).Steps;
         Assert.Equal(StepMode.Tap, steps[0].Mode);
         Assert.Equal(StepMode.Do, steps[1].Mode);
         Assert.Equal(GameEvent.Moved, steps[1].Advance);
@@ -563,7 +566,7 @@ public class TutorialControllerTests
     public void Level_1_can_be_coached_end_to_end_with_real_engine_events()
     {
         var e = new GameEngine(new ScriptedGenerator());
-        e.StartLevel(LevelCatalog.Get(1));
+        e.StartLevel(LevelCatalog.Lesson(1));
         var t = new TutorialController(e.Story!.Steps);
         e.EventRaised += t.Notify;
 
@@ -698,10 +701,11 @@ public class ProgressAndShopTests
         Assert.False(p.TrySpend(-5));
     }
 
-    private static (ShopService Shop, PlayerProgress Progress, InMemorySettings Settings) Shop(int gold)
+    private static (ShopService Shop, PlayerProgress Progress, InMemorySettings Settings) Shop(int gold, int highestCleared = 0)
     {
         var settings = new InMemorySettings();
         settings.SetInt(PlayerProgress.GoldKey, gold);
+        if (highestCleared > 0) settings.SetInt(PlayerProgress.HighestClearedKey, highestCleared);
         var progress = new PlayerProgress(settings);
         return (new ShopService(settings, progress), progress, settings);
     }
@@ -756,7 +760,8 @@ public class ProgressAndShopTests
     {
         foreach (Upgrade u in Enum.GetValues(typeof(Upgrade)))
         {
-            var (shop, _, _) = Shop(1_000_000);
+            // Some later levels ask for a region to be restored, so give the player the whole campaign.
+            var (shop, _, _) = Shop(1_000_000, 200);
             int previous = 0;
             while (shop.NextCost(u) is { } cost)
             {
@@ -988,21 +993,6 @@ public class LevelCatalogueTests
     }
 
     [Fact]
-    public void Only_extreme_levels_flip_or_penalise()
-    {
-        for (int n = 1; n <= 150; n++)
-        {
-            var level = LevelCatalog.Get(n);
-            Assert.False(level.FlipView);
-            Assert.Equal(0, level.NoPopPenalty);
-        }
-
-        Assert.True(LevelCatalog.Get(151).FlipView);
-        Assert.True(Enumerable.Range(151, 60).Any(n => LevelCatalog.Get(n).NoPopPenalty > 0));
-        Assert.True(Enumerable.Range(151, 60).Any(n => !LevelCatalog.Get(n).FlipView));
-    }
-
-    [Fact]
     public void Difficulty_ramps_up_across_the_tiers()
     {
         Assert.True(LevelCatalog.Get(12).FallIntervalMs > LevelCatalog.Get(60).FallIntervalMs);
@@ -1022,7 +1012,7 @@ public class LevelCatalogueTests
     [Fact]
     public void New_features_get_an_introduction_card()
     {
-        foreach (int n in new[] { 13, 16, 20, 26, 32, 51, 101, 151, 156, 161 })
+        foreach (int n in new[] { 13, 16, 20, 26, 32, 51, 101, 128, 134, 151, 161 })
             Assert.True(LevelCatalog.Get(n).Steps.Count > 0);
     }
 

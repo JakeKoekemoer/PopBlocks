@@ -9,13 +9,15 @@ A level is one immutable `LevelDefinition` record. It is *data*; the engine inte
 | Field | Meaning |
 |---|---|
 | `Number`, `Tier`, `Title`, `Tip` | Identity and the one-line hint on the level intro. |
-| `IsTutorial` | Guided level (1 to 10): no gold. |
+| `IsTutorial` | A tutorial lesson (`LevelCatalog.Lesson`): coached, never paid, not part of the Story. |
 | `StartRows` **or** `BoardSeed` + `Profile` | Either a hand-drawn pile (rows of letters `C R Y P L` and `.`) or the seed and profile that generate one. |
 | `Goals` | One to three goals. |
 | `MoveLimit` | Pieces allowed. 0 means unlimited (the earliest tutorials). |
 | `FallIntervalMs`, `Colours`, `ExoticShare` | Pace, colour count, share of pieces from the exotic shape set. |
 | `PieceSeed`, `Script` | Seed for the random piece sequence, and optionally a hand-written opening sequence (`"Pair:RC"`). |
 | `FlipView`, `NoPopPenalty` | Extreme mechanics. |
+| `IsFinale`, `AllowAbilities` | The last level of a region, and whether helpers (Second Chance, Prism Shift) may be used. Finales set `AllowAbilities` false. |
+| `Bonus` | The optional memory objective, if the level carries one (see below). |
 | `Steps` | Coaching cards shown during the level. |
 | `ForceGhost` | Show the landing outline even if the player turned it off (used by the tutorial that explains it). |
 
@@ -27,11 +29,13 @@ A level is one immutable `LevelDefinition` record. It is *data*; the engine inte
 - **Endless without storage.** Nothing is stored per level. Level 5,000 exists as soon as someone asks for it.
 - **Testable.** A level is checked by replaying a plan through the real engine (see 4.5).
 
-## 4.2 Hand-made levels (1 to 11)
+## 4.2 Hand-made levels (the ten lessons, and Story level 11)
 
-Authored in `LevelCatalog` as `Tutorial1()` to `Tutorial10()` and `NewShapesLevel()`. They have fixed piles, scripted pieces and coaching steps.
+Authored in `LevelCatalog` as `Tutorial1()` to `Tutorial10()` (the **lessons**) and `NewShapesLevel()` (Story level 11). They have fixed piles, scripted pieces and coaching steps.
 
-| Level | Title | Teaches |
+The lessons are **not Story levels**. They were Story levels 1 to 10 once, but that made new players sit through ten lessons before the game began, so the tutorial was split off: `LevelCatalog.Lesson(1..10)` serves them, `GameSetup.Lesson(n)` plays them, and Story levels 1 to 10 are now ordinary generated levels (`Generated(n)`, no coaching, still no gold). The lesson definitions did not change, and `LessonSnapshotData` freezes them.
+
+| Lesson | Title | Teaches |
 |---|---|---|
 | 1 | Pop it! | Match four, move a piece, drop it. |
 | 2 | Turn it around | Rotating to fit a gap. |
@@ -45,17 +49,17 @@ Authored in `LevelCatalog` as `Tutorial1()` to `Tutorial10()` and `NewShapesLeve
 | 10 | Final exam | Two goals at once, with a generated pile and a solver-set limit. |
 | 11 | New shapes | The exotic shapes. Not a tutorial: it pays gold. |
 
-Level 10 is generated and solver-limited, but still `IsTutorial`. Level 11 is hand-tuned (its first piece is scripted to be a Plus) but pays gold.
+Lesson 10 is generated and solver-limited, but still `IsTutorial`. Story level 11 is hand-tuned (its first piece is scripted to be a Plus) but pays gold.
 
 ## 4.3 Generated levels (12 and up)
 
 `LevelCatalog.Generated(n)` builds a level in these steps. It is deterministic in `n`.
 
 1. **Tier and progress.** `StoryConfig.TierFor(n)` and `ProgressInTier(n)` (0 to 1 through the band).
-2. **Variant.** In the last ten Easy levels (41 to 50) `variant = (n - 41) % 5` selects: 0 rainbow (five colours), 1 tall pile, 2 tight moves, 3 shape-heavy, 4 scattered pile.
+2. **Region rule.** `RegionRules.For(n)` (in `Story/RegionRules.cs`) is the one table that gives each region its character: goal-kind weights, the chance of two or three goals, a tighter or looser move limit, taller or more scattered piles, and a repeating **variant** cycle from a given level (0 rainbow, 1 tall pile, 2 tight moves, 3 shape-heavy, 4 scattered). The generator reads the rule and keeps no level numbers of its own.
 3. **Starting pile.** `ProfileFor(tier, p, variant)` gives a `DifficultyProfile`; `BoardGenerator.Generate(n, profile)` builds the pile.
-4. **Extreme flags.** `flip` is on at 151 and then on levels where `n % 4 == 3`; `penalty` is on at 156 and then where `n % 3 == 0`.
-5. **Goals.** `PickKinds` chooses which goal kinds appear. A kind only becomes *available* once it has been introduced (colour goals from 13, clear-down from 16, chain from 20, big group from 26), and the introduction level always uses the new kind. From 32 on a second goal appears with a probability that grows by tier (always at 32 itself); from 161 a third can appear (always at 161). A penalty level always includes a Score goal. `MakeGoal` sizes each goal from the tier's *demand* (roughly how many good pieces the level asks for).
+4. **Special conditions.** `RegionRules.Flips(n)` and `Penalises(n)`: a few listed levels in region 6 (128, 138, 146; 134, 141, 148), then from the Citadel (151) on a pattern (`n % 4 == 3` flips, `n % 3 == 0` penalises from 156). Finales never flip or penalise. Level 200 is built specially from the chain-set goal.
+5. **Goals.** `PickKinds` chooses which goal kinds appear. A kind only becomes *available* once it has been introduced (colour goals from 13, clear-down from 16, chain from 20, big group from 26), and the introduction level always uses the new kind. From 32 on a second goal appears with a probability that grows by tier (always at 32 itself), and the region rule can raise it; from 161 a third can appear (always at 161). A penalty level always includes a Score goal. `MakeGoal` sizes each goal from the tier's *demand* (roughly how many good pieces the level asks for).
 6. **Prove it.** The solver plays the draft level. If it wins, the move limit becomes `ceil(botMoves * slack) + add`, where slack shrinks as tiers get harder (`SlackFor`). If the bot fails, the goals are eased by 10% per attempt (up to 8 attempts) until it wins.
 7. **Fallback.** If even the eased goals fail (should not happen) a plain generous level (pop 8 blocks, 40 moves) is returned so the player is never stuck.
 8. **Intro card.** Levels in the `Intros` table get a coaching card describing what is new.
@@ -97,7 +101,9 @@ A second implementation of the rules is a liability: if it drifts from the real 
 
 How the app uses it (`GameViewModel`):
 
-- A controller is created only for a level that has steps, **not yet cleared**, and not already shown in this page instance. So the lessons never nag a player who has done them, and a retry within one visit does not replay them, while the first play of any level always coaches.
+- A controller is created only for a level that has steps, **not yet cleared** (a lesson always coaches when entered fresh, because replaying the tutorial is its purpose), and not already shown in this page instance. So the intro cards never nag a player who has cleared the level, and a retry within one visit does not replay them.
+- **Offering the tutorial.** A brand-new player (`HighestCleared == 0`, never asked, no lesson done: `TutorialProgress.ShouldOffer`) who starts Story level 1 is asked once whether they want it. The game is held still and the region's opening scene waits for the answer. *Yes* switches the same page to lesson 1; *No* restarts level 1 with its scene. The answer and each finished lesson are kept as ids in the `UnlockStore` (`tutorial_offered`, `tutorial_l1` to `tutorial_l10`), so they are in the save code and a dev reset clears them. The menu's TUTORIAL button always starts lesson 1.
+- **Lessons stay outside the Story.** `GameViewModel` records only `TutorialProgress.Complete` when a lesson is won: no `PlayerProgress.Complete`, gold, scenes, region progress, lifetime stats or achievements. After the last lesson the button reads START PLAYING and goes to the player's next Story level.
 - The game timer skips ticks while the controller `FreezesGame`, **except** while the piece is still in the hidden spawn rows. It is allowed to step into view first so the player can see the piece they are being told to move.
 - Engine events are forwarded to the controller, which is how "drop it" completes when the piece is dropped.
 
@@ -114,20 +120,30 @@ Why engine events rather than polling the state: the tutorial reacts to *what th
 
 `GoldRewards.For(level, isTutorial)`: 0 for tutorials and levels up to the last tutorial; otherwise by tier, growing slowly inside the tier (`Easy 10 + into/4`, `Medium 30 + into*2/5`, `Hard 60 + into*3/5`, `Extreme 100 + min(200, into/2)`, where `into` is the level's offset within its tier).
 
+**Region reward.** Restoring a region for the first time in play also pays `ShopCatalog.RegionClearGold(region)` (`25 + 25 * region`), recorded as the unlock id `gold_<region>` so it is paid once. `CampaignService.Reconcile` (a save caught up to a jump or an older build) never pays it.
+
 `GameViewModel.HandleCompletion` calls `Complete` exactly once per completed game (guarded by a flag), so a repeated engine notification cannot double-pay. The result tells the overlay whether to show "+N gold" or an explanatory note ("Tutorial levels don't pay gold" / "Gold is only paid the first time a level is cleared").
 
-## 4.7 The shop
+## 4.7 The shop and the workshop
 
-`ShopService` has three upgrades. Each has a price per level (`Costs` table), and the owned level is saved under `upgrade_<name>`.
+Every upgrade is a row in **`ShopCatalog`** (`Services/ShopCatalog.cs`): an id, a save key, a base effect, and tiers. A `ShopTier` has a price, an effect text and a `Requirement` (nothing, a region restored, an achievement earned, or the campaign finished). `ShopService` reads the catalogue generically (`Level`, `Entry`, `Entries(category)`, `TryBuy(id)`), keeps the three original `Upgrade` calls working, and saves the owned level under the item's own key. A locked tier exposes the requirement's `Describe()` text and no price.
 
-| Upgrade | Prices | What the game reads |
+| Item | Prices | What the game reads |
 |---|---|---|
-| Lookout (`Preview`) | 120, 400 | `PreviewCount` = 1 + level, passed to `GameEngine.PreviewCount`. The queue shown grows to 2 then 3 pieces. |
-| Pop Flair (`PopFlair`) | 80, 250, 600 | `FlairLevel` 0 to 3, passed to `BlastEffects.Flair`. |
-| Spare Moves (`ExtraMoves`) | 150, 450, 1000 | `ExtraMoves` = 2 x level (+2, +4, +6), added to non-tutorial Story move limits. |
+| Lookout | 120, 400, 900 (region 3), 1,500 (region 6) | `PreviewCount` = 1 + level (2 to 5 pieces shown). |
+| Pop Flair | 80, 250, 600 | `FlairLevel` 0 to 3, passed to `BlastEffects.Flair`. |
+| Spare Moves | 150, 450, 1,000 | `ExtraMoves` = 2 x level, added to non-tutorial Story move limits. |
+| Colour Lens | 500 (region 2), 1,100 (region 4) | `LensLevel`: outlines groups one (or two) blocks short of a burst. |
+| Chain Sense | 700 (region 3) | `ChainSenseOwned`: the landing outline glows when the drop would start a chain. |
+| Prism Reserve | 600 (region 5), 1,200 (region 7) | `PrismFreeCharges`: free Prism Shifts per level. |
+
+Two helpers are *used up* rather than owned: **Second Chance** (150) and **Prism Shift** (100), handled by `ConsumableInventory`. Looks are on the paint shelf (`CosmeticCatalog`). Prices, requirements and the reasoning for the numbers are in `docs/story/economy.md`; the helper rules are in `docs/story/helpers.md`.
 
 The values are pushed into the engine and the effects at the **start of each game** (`GameViewModel.NewGame`, `GamePage.OnGameStarted`), so buying something mid-level never changes the level in progress.
 
-The game's difficulty and the move limits are tuned for a player with **no** upgrades. Spare Moves is a convenience, not a requirement. Keep it that way: if a level can only be cleared with upgrades, the generator's slack is wrong.
+The game's difficulty and the move limits are tuned for a player with **no** upgrades and no helpers. Everything here is a convenience, not a requirement. Keep it that way: if a level can only be cleared with a purchase, the generator's slack is wrong. `P4GateTests` and `P7Tests` prove every level winnable by the bot with nothing bought, that the ending is reachable with no purchase and no optional memory, and that everything for sale is affordable from the campaign's own income.
+
+**The workshop** (`WorkshopService`, `WorkshopPage`) is Bram's hub. Its lamps light as regions are restored; lighting a corner is the only thing region progress changes there. Every door (workbench, paint shelf, archive, achievements, journal) is open from the start, so the workshop never stands between the player and the story.
 
 To add or change an upgrade see [Extending](09-extending.md).
+

@@ -72,6 +72,33 @@
                     </VerticalStackLayout>
                 </Border>
 
+                <!-- Save code: progress moved by hand, no account and no network -->
+                <Border Style="{StaticResource Glass}" Padding="24,20">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="YOUR PROGRESS" Style="{StaticResource CaptionLabel}" />
+                        <Label Style="{StaticResource BodyLabel}"
+                               Text="PopBlocks keeps everything on this phone and never uploads it. To move to a new phone, or to keep a copy before reinstalling, copy your save code and paste it in on the other side." />
+                        <Button x:Name="CopyButton"
+                                Text="COPY MY SAVE CODE"
+                                Style="{StaticResource GhostButton}"
+                                HeightRequest="46"
+                                Clicked="OnCopyCode"
+                                SemanticProperties.Hint="Copies a line of text that holds your progress" />
+                        <Editor x:Name="CodeEditor"
+                                Placeholder="Paste a save code here"
+                                AutoSize="TextChanges"
+                                MinimumHeightRequest="70"
+                                FontSize="13"
+                                TextColor="{StaticResource TextPrimary}"
+                                SemanticProperties.Description="Save code to restore" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <Button Grid.Column="0" x:Name="PasteButton" Text="PASTE" Style="{StaticResource GhostButton}" HeightRequest="46" Clicked="OnPasteCode" />
+                            <Button Grid.Column="1" x:Name="RestoreButton" Text="RESTORE" Style="{StaticResource GhostButton}" HeightRequest="46" Clicked="OnRestoreCode" />
+                        </Grid>
+                        <Label x:Name="CodeStatus" Style="{StaticResource BodyLabel}" FontSize="13" IsVisible="False" />
+                    </VerticalStackLayout>
+                </Border>
+
                 <Label Text="Thanks for playing."
                        Style="{StaticResource BodyLabel}"
                        HorizontalOptions="Center" />

@@ -10,6 +10,12 @@ Code: `src/PopBlocks/Graphics/`. Everything on the board is drawn from vector op
 | `BlastEffects.cs` | The burst after a pop: flash, rings, sparks, shockwave, confetti, shake, chain tag. |
 | `BoardSpace.cs` | Board coordinate to screen coordinate mapping, including the upside-down view. |
 | `PreviewDrawables.cs` | `UpcomingDrawable` (the NEXT pieces), `LogoDrawable` (the row of five blocks), `GoldCoinDrawable`. |
+| `StoryPalette.cs` | The five Spectrum colours from the artist brief, for story pictures only (not the block colours), plus easing helpers. |
+| `StoryDrawables.cs` | `PipDrawable` (Pip: leaf antennae, glow tail, moods, bob and blink), `RegionSceneDrawable`, `PortraitTints`. |
+| `WardenDrawables.cs` | `WardenDrawable` (the cloaked silhouette) and `WardenMarkDrawable` (the mark, drawn on a stroke at a time). |
+| `StageProps.cs` | Memory crystal, Prism shard (glow and body as separate passes), cracked stone, ice slab. |
+| `StageEffects.cs` | `LightFlow` (inward and outward) and `Ambience` (one loop per region). |
+| `StageDrawable.cs` | `StageDrawable` (the picture above a dialogue panel) and `PortraitDrawable` (who is drawn beside a line). |
 
 ## 6.1 Principles
 
@@ -92,7 +98,40 @@ Defined in two places that must be kept in step: `App.xaml` (XAML colours, brush
 
 The UI is dark-themed throughout, and `App` forces `AppTheme.Dark` so system chrome (status bar icons) matches.
 
-## 6.8 Android drawing traps (learned the hard way)
+## 6.8 Looks: skins, bursts, boards, frames and Pip
+
+All looks are data in `CosmeticCatalog` and drawn by the existing pipeline; none changes a rule.
+
+- **Skins** (`SkinSpec`, applied with `VisualDesign.UseSkin` when a level starts): each of the five colours is defined as a hex value, plus a corner radius, border weight, highlight style (soft or facet) and optional texture (lines, dots, grain, kept away from the centre). **The symbols are never part of a skin.** `SkinRuleTests` enforces that every skin keeps each colour's hue within 30 degrees of the classic one, keeps the five colours at least 28 apart (Lab delta E), and keeps the symbol readable (contrast at least 3.0), with the same checks against every board. The shipped hand-tuned colours stay as `VisualDesign.Classic*`.
+- **Bursts** (`BurstStyle`): `BlastEffects.DrawSpark` draws petals, shards, bubbles, cogs, frost or a starburst per fragment. Pop Flair still decides how many; Reduced motion caps a burst at 450 ms with no fall slide, shake or sparks.
+- **Boards** (`GameDrawable.BoardPalette`, built from the catalogue): colours, rim and a faint motif that is kept quiet so blocks stay legible. `board_contrast` is black with a white grid and is always free.
+- **Piece frames** outline only the piece in play (`DrawFrame`).
+- **Pip's accessories** and the orbiting lights (one per restored region) are drawn by `PipDrawable`.
+- **Helpers** draw nothing of their own beyond the Colour Lens outline (`DrawLens`, solid for groups of 3, dashed for 2) and the Chain Sense glow on the landing outline.
+
+Not drawn, by decision: trail effects, chain celebrations, victory effects. Nothing is for sale that the game does not draw.
+
+## 6.9 The story stage (pictures in dialogue panels)
+
+Code: `Graphics/Stage*.cs`, `WardenDrawables.cs`, `Engine/Story/StageDirections.cs`. Art direction: `docs/PopBlocks_Shattered_Spectrum_Artist_Brief.md` (the atlas `docs/ArtBoard.png` is a mood reference, not slicing material). Tests: `StageDirectionTests`.
+
+A dialogue panel has a **stage strip** above the text and a small **portrait** beside each line. Both are drawn, not image files, like everything else.
+
+**What decides what is shown.** `StageDirections` (engine, no graphics) maps a scene id and line to a `StageCue` (flags): `PipHidden`/`PipReveal`, `Mark`, `RestoreSweep`, `Shard`/`ShardPair`, `FlowInward`/`FlowOutward`, `MemoryCrystal`, `WardenEntrance`/`WardenStand`, `Stillness`. A cue stays in force until the scene's next entry. `Describe(scene, line)` returns a `StageInfo` (region, how restored the picture starts, where a sweep ends, the cues, and the line they began on). `GameViewModel.SceneStage` exposes it; `GamePage.ApplyStage` hands it to `StageDrawable`. A scene with no entry still gets its region's picture and ambience, so no scene is an empty box.
+
+**One-shot animations** (the sweep, the mark drawing on, a shard rising, Pip coming out) play from the line where the cue begins and are finished on any later line, so moving to the next line never replays them. **Loops** (ambience, flow, crystal pulse, Pip's bob and blink) run on a clock.
+
+**Portraits follow the brief:** Pip is Pip; the Warden is the Warden's silhouette (never a recoloured Pip); a recorded voice is a memory crystal and the Warden's message is the mark (a recording is never a character). Mara and Bram are still a tinted stand-in until they are designed.
+
+**Reduced motion** shows every picture as its final still frame: no ambience, no loops, no timer. The stage timer (~30 fps) runs only while a panel is open and not reduced. Skipping a scene closes the panel as before; nothing a cue draws is needed to understand the story, because the text carries it.
+
+**Palette.** Story pictures use the brief's Spectrum (`StoryPalette`: cyan `#00D4FF`, magenta `#FF4ED8`, amber `#FFC837`, lime `#7CFF68`, violet `#986BFF`). The block colours in `VisualDesign` are a separate set on purpose: they are tuned and tested for contrast and colour-blind reading (`SkinRuleTests`), and a story palette change must never alter play.
+
+**Adding a cue to a scene:** add an entry in `StageDirections` (`["scene_id"] = new[] { new StageEntry(line, cue) }`); `StageDirectionTests` checks the scene and line exist. **Adding a new kind of cue:** add a flag, draw it in `StageDrawable.DrawProps` from a prop in `StageProps` or `StageEffects`, and give it a final still frame for Reduced motion.
+
+Not built yet (the brief's P1): gears and machine states, the finale (fragments orbit and join, the Heart reforms, five coloured streams), and the larger Pip pose set (look, hop and the sad and excited moods exist as properties but no scene uses them yet).
+
+## 6.10 Android drawing traps (learned the hard way)
 
 These are the places where MAUI Graphics on a real Android device behaves differently from what you would assume. They cost real time; read them before touching drawing code.
 

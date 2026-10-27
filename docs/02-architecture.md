@@ -61,8 +61,8 @@ Menu pages (`MainPage`, `LevelSelectPage`, `ShopPage`, `AboutPage`) are thin. Th
 
 | Lifetime | Types | Reason |
 |---|---|---|
-| Singleton | `ILocalSettings`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
-| Transient | `GamePage`, `GameViewModel`, `LevelSelectPage`, `ShopPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
+| Singleton | `ILocalSettings`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
+| Transient | `GamePage`, `GameViewModel`, `LevelSelectPage`, `ShopPage`, `WorkshopPage`, `WardrobePage`, `ArchivePage`, `AchievementsPage`, `JournalPage`, `DevMenuPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
 
 Rules to keep:
 
@@ -109,21 +109,30 @@ A separate ~60 fps **animation timer** in `GamePage` repaints the board only whi
 
 ## 2.6 Persistence
 
-The engine defines `ILocalSettings` (int, bool, string get/set). The app implements it with MAUI `Preferences` (Android SharedPreferences) in `Services/LocalSettingsService.cs`; the tests implement it in memory. Services in the engine (`PlayerProgress`, `ShopService`, `HighScoreService`, `GameSettings`) depend only on the interface.
+The engine defines `ILocalSettings` (int, bool, string get/set). The app implements it with MAUI `Preferences` (Android SharedPreferences) in `Services/LocalSettingsService.cs`; the tests implement it in memory. Services in the engine depend only on the interface.
 
 Why: save logic (gold, unlocks, purchases) is some of the most important code in the game, because a bug there loses a player's progress. Putting it behind an interface keeps it fully testable.
 
-Saved keys:
+**Every key lives in `Services/SaveKeys.cs`** (and in `SaveKeys.All`). The tests freeze the list: a key may be added, never renamed or removed, because an existing install would silently lose or misread the value.
 
 | Key | Owner | Meaning |
 |---|---|---|
-| `progress_highest` | `PlayerProgress` | Highest Story level cleared. |
-| `gold` | `PlayerProgress` | Gold balance. |
-| `upgrade_preview`, `upgrade_popflair`, `upgrade_extramoves` | `ShopService` | Level owned of each upgrade. |
+| `save_version` | `SaveMigrator` | Format version (currently 1). Not carried in a save code. |
+| `progress_highest`, `gold` | `PlayerProgress` | Highest Story level cleared; gold balance. |
+| `upgrade_preview`, `upgrade_popflair`, `upgrade_extramoves`, `upgrade_colourlens`, `upgrade_chainsense`, `upgrade_prismreserve` | `ShopService` | Level owned of each upgrade (the item's `SaveKey` in `ShopCatalog`). |
+| `consumable_second_chance`, `consumable_prism_shift` | `ConsumableInventory` | Helpers in stock, 0 to 3. |
+| `unlocks_v1` | `UnlockStore` | One comma-separated set of ids: scenes seen (`seen_*`), lore and memories (`lore_*`), Prism fragments (`frag_*`), region rewards paid (`gold_*`), achievements (`ach_*`), cosmetics owned (`cosmetic_*`, which also covers the look chosen after the ending). |
+| `cos_board`, `cos_skin`, `cos_burst`, `cos_frame`, `cos_pip` | `CosmeticLoadout` | What is equipped (ids; empty means the default). |
+| `ending_theme` | `EndingService` | The look chosen after the ending. |
+| `stat_*` | `LifetimeStats` | Personal bests and counters only (largest group, longest chain, ...). |
 | `best_score` | `HighScoreService` | Classic personal best. |
-| `blast_effects` | `GameSettings` | Pop effects on or off. |
-| `show_ghost` | `GameSettings` | Landing outline on or off. |
-| `controls_collapsed` | `GameSettings` | Button drawer folded away. |
+| `blast_effects`, `show_ghost`, `landing_guide_style`, `reduced_motion`, `controls_collapsed`, `sound_effects` | `GameSettings` | Options. |
+
+Story state is **derived, not stored twice**: a region's state comes from `PlayerProgress.HighestCleared`, and everything else the story needs is one more id in `UnlockStore`. Rewards are granted through `UnlockStore.Unlock`, which returns true only the first time, so a reward is paid once however often a level is replayed or a scene is skipped.
+
+### Save code
+
+`Services/SaveCode.cs` turns the keys above (except the format version) into one line of text, `PB1.` plus checksummed, compressed, URL-safe base64, for moving progress to a new phone or past a reinstall. It needs no file access, permission or network. Reading a code never trusts it: the checksum is checked before unpacking, the unpacked size is capped, only known keys are accepted, values are range-checked and clamped, ids are character-checked, and nothing is written unless the whole code is valid. The app must be restarted after a restore, because services read their data once at start. `SaveCodeTests` covers the round trip, tampering, truncation, a forged compression bomb and out-of-range values; a test also fails when a new key is added without deciding whether the code should carry it.
 
 Changing a key name loses existing players' data. Add new keys; do not rename old ones.
 

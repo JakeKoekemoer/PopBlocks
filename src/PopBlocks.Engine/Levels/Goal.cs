@@ -21,9 +21,13 @@ public enum GoalKind
 
     /// <summary>Leave this many blocks or fewer on the board (0 = clear it completely).</summary>
     ClearDown,
+
+    /// <summary>Make this many separate chains, each of at least <see cref="Goal.MinWaves"/> waves.</summary>
+    ChainSet,
 }
 
-public sealed record Goal(GoalKind Kind, int Target, CellColour Colour = CellColour.Empty)
+/// <param name="MinWaves">Chain sets only: how many waves one chain needs to count.</param>
+public sealed record Goal(GoalKind Kind, int Target, CellColour Colour = CellColour.Empty, int MinWaves = 0)
 {
     public static string ColourName(CellColour c) => c switch
     {
@@ -44,6 +48,7 @@ public sealed record Goal(GoalKind Kind, int Target, CellColour Colour = CellCol
         GoalKind.Chain => $"Make a x{Target} chain",
         GoalKind.BigGroup => $"Pop a group of {Target}",
         GoalKind.ClearDown => Target == 0 ? "Clear the board" : $"Leave {Target} blocks or fewer",
+        GoalKind.ChainSet => $"Make {Target} separate chains of x{MinWaves} or more",
         _ => "",
     };
 }
@@ -69,9 +74,12 @@ public sealed record GoalState(Goal Goal, int Current, int Start, bool IsComplet
     }
 
     /// <summary>"12 / 40", or "9 left" for clear-down goals.</summary>
-    public string ProgressText => Goal.Kind == GoalKind.ClearDown
-        ? $"{Current} left"
-        : $"{Math.Min(Current, Goal.Target):N0} / {Goal.Target:N0}";
+    public string ProgressText => Goal.Kind switch
+    {
+        GoalKind.ClearDown => $"{Current} left",
+        GoalKind.ChainSet => $"{Math.Min(Current, Goal.Target)} / {Goal.Target} chains",
+        _ => $"{Math.Min(Current, Goal.Target):N0} / {Goal.Target:N0}",
+    };
 }
 
 /// <summary>Tracks a level's goals. Fed one burst wave at a time, then asked to evaluate against the settled board.</summary>
@@ -80,6 +88,8 @@ public sealed class GoalTracker
     private readonly IReadOnlyList<Goal> _goals;
     private readonly int _startBlocks;
     private readonly int[] _poppedByColour = new int[6];
+    private readonly List<int> _closedChains = new();
+    private int _openChain;
 
     public GoalTracker(IReadOnlyList<Goal> goals, int startBlocks)
     {
@@ -91,15 +101,44 @@ public sealed class GoalTracker
     public int BestChain { get; private set; }
     public int BestGroup { get; private set; }
 
+    /// <summary>An independent copy of everything tracked so far (for undo). Goals and the start count are shared; they never change.</summary>
+    public GoalTracker Clone()
+    {
+        var copy = new GoalTracker(_goals, _startBlocks)
+        {
+            TotalPopped = TotalPopped,
+            BestChain = BestChain,
+            BestGroup = BestGroup,
+            _openChain = _openChain,
+        };
+        Array.Copy(_poppedByColour, copy._poppedByColour, _poppedByColour.Length);
+        copy._closedChains.AddRange(_closedChains);
+        return copy;
+    }
+
     public void OnWave(BurstWave wave)
     {
         TotalPopped += wave.ClearedCells.Count;
         BestChain = Math.Max(BestChain, wave.ChainIndex);
+
+        // A wave with index 1 is the first of a new chain, so it closes the one before.
+        if (wave.ChainIndex <= 1 && _openChain > 0) _closedChains.Add(_openChain);
+        _openChain = wave.ChainIndex;
         foreach (var g in wave.Groups)
         {
             _poppedByColour[(int)g.Colour] += g.Size;
             BestGroup = Math.Max(BestGroup, g.Size);
         }
+    }
+
+    /// <summary>Separate chains so far (the one still open included) with at least this many waves.</summary>
+    public int ChainsOfAtLeast(int waves)
+    {
+        int count = 0;
+        foreach (int length in _closedChains)
+            if (length >= waves) count++;
+        if (_openChain >= waves) count++;
+        return count;
     }
 
     public IReadOnlyList<GoalState> Evaluate(int score, int blocksOnBoard)
@@ -115,6 +154,7 @@ public sealed class GoalTracker
                 GoalKind.PopColour => _poppedByColour[(int)goal.Colour],
                 GoalKind.Chain => BestChain,
                 GoalKind.BigGroup => BestGroup,
+                GoalKind.ChainSet => ChainsOfAtLeast(Math.Max(2, goal.MinWaves)),
                 _ => blocksOnBoard,
             };
             bool done = goal.Kind == GoalKind.ClearDown ? current <= goal.Target : current >= goal.Target;

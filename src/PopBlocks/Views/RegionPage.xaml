@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PopBlocks.Views.RegionPage"
+             NavigationPage.HasNavigationBar="False"
+             Background="{StaticResource PageGradient}">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" RowSpacing="12">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+            <Button Grid.Column="0" Text="←" Style="{StaticResource RoundButton}" FontSize="18" Clicked="OnBackClicked" />
+            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="0">
+                <Label x:Name="TitleLabel" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                <Label x:Name="StateLabel" Style="{StaticResource CaptionLabel}" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout x:Name="Host" Spacing="14" Padding="0,0,0,28" />
+        </ScrollView>
+    </Grid>
+</ContentPage>

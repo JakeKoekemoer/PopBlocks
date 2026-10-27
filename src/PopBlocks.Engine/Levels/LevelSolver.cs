@@ -1,5 +1,6 @@
 using PopBlocks.Engine.Logic;
 using PopBlocks.Engine.Models;
+using PopBlocks.Engine.Services;
 
 namespace PopBlocks.Engine.Levels;
 
@@ -21,6 +22,14 @@ public static class LevelSolver
     private const int H = GameConfig.TotalRows;
     private const int Hidden = GameConfig.HiddenRows;
     private const int TopCandidates = 6;
+    private const int ChainSlots = 9;
+
+    private static int ChainsOfAtLeast(State s, int waves)
+    {
+        int count = 0;
+        for (int i = Math.Max(1, waves); i < ChainSlots; i++) count += s.ChainsByLength[i];
+        return count;
+    }
 
     private sealed class Scratch
     {
@@ -36,20 +45,32 @@ public static class LevelSolver
         public int Score, Popped, BestChain, BestGroup;
         public int[] ByColour = new int[6];
 
+        /// <summary>How many finished chains had 1, 2, ... waves (the last slot holds longer ones too).</summary>
+        public int[] ChainsByLength = new int[ChainSlots];
+
         public State Clone()
         {
             var c = new State { Score = Score, Popped = Popped, BestChain = BestChain, BestGroup = BestGroup };
             Array.Copy(Cells, c.Cells, Cells.Length);
             Array.Copy(ByColour, c.ByColour, ByColour.Length);
+            Array.Copy(ChainsByLength, c.ChainsByLength, ChainsByLength.Length);
             return c;
         }
     }
 
-    private readonly record struct Placement(int Rotations, int Left, int[] CellIndexes, byte[] Colours);
+    private readonly record struct Placement(int Rotations, int Left, int[] CellIndexes, byte[] Colours, int Drop);
 
-    public static SolveResult Solve(LevelDefinition level, int maxMoves)
+    /// <summary>
+    /// Plays the level with the bot. With a <paramref name="bonus"/> the bot must also meet that optional objective
+    /// (used to check that a memory objective is possible before a level offers it).
+    /// </summary>
+    public static SolveResult Solve(LevelDefinition level, int maxMoves, BonusObjective? bonus = null)
     {
         var scratch = new Scratch();
+
+        // The bot normally ignores drop-bonus points (conservative). When checking an objective it must know exactly
+        // when the real game would end the level, so it counts them like the engine does.
+        bool exactScore = bonus is not null;
         var generator = level.CreateGenerator();
         var sequence = new List<Piece>();
         Piece PieceAt(int i)
@@ -81,9 +102,10 @@ public static class LevelSolver
             var firsts = new List<(double Value, Placement P, State S)>();
             foreach (var p in Placements(state, current))
             {
-                var after = Apply(state, p, level, scratch);
+                var after = Apply(state, p, level, scratch, exactScore);
                 if (Dead(after)) continue;
-                double v = Value(after, level, startBlocks, scratch, out bool done);
+                double v = Value(after, level, startBlocks, scratch, bonus, out bool done, out bool dead);
+                if (dead) continue;   // the level would end here with the objective missed
                 if (done)
                 {
                     plan.Add(new SolvedMove(p.Rotations, p.Left));
@@ -102,9 +124,10 @@ public static class LevelSolver
                 double v2 = double.NegativeInfinity;
                 foreach (var p2 in Placements(s1, next))
                 {
-                    var after2 = Apply(s1, p2, level, scratch);
+                    var after2 = Apply(s1, p2, level, scratch, exactScore);
                     if (Dead(after2)) continue;
-                    double v = Value(after2, level, startBlocks, scratch, out bool done2);
+                    double v = Value(after2, level, startBlocks, scratch, bonus, out bool done2, out bool dead2);
+                    if (dead2) continue;
                     if (done2) v += 50000;
                     if (v > v2) v2 = v;
                 }
@@ -122,6 +145,44 @@ public static class LevelSolver
         }
 
         return new SolveResult(false, maxMoves, plan);
+    }
+
+    /// <summary>
+    /// Plays a bot plan through the real <see cref="GameEngine"/> (no timing) and returns the finished engine and what
+    /// happened. The engine, not the bot's lightweight copy of the rules, is the final word on whether a plan works.
+    /// </summary>
+    public static (GameEngine Engine, RunStats Run) ReplayInEngine(LevelDefinition level, SolveResult plan)
+    {
+        var engine = new GameEngine(new PieceGenerator(new Random(1)));
+        engine.StartLevel(level);
+        var run = new RunStats();
+        run.Attach(engine);
+
+        foreach (var move in plan.Plan)
+        {
+            if (engine.State != GameState.Playing || engine.CurrentPiece is null) break;
+
+            for (int r = 0; r < move.Rotations; r++)
+            {
+                int guard = 0;
+                while (!engine.Rotate())
+                {
+                    engine.Tick();
+                    if (++guard > 4 || engine.State != GameState.Playing) return (engine, run);
+                }
+            }
+
+            for (int guard = 0; guard < 12; guard++)
+            {
+                int left = engine.CurrentPiece!.BoardCells().Min(c => c.X);
+                if (left == move.LeftColumn) break;
+                if (left > move.LeftColumn) engine.MoveLeft(); else engine.MoveRight();
+            }
+
+            engine.HardDrop();
+            for (int i = 0; i < 50 && engine.State == GameState.ResolvingBursts; i++) engine.Tick();
+        }
+        return (engine, run);
     }
 
     // ------------------------------------------------------------------ placements
@@ -187,17 +248,19 @@ public static class LevelSolver
             idx[i] = (ys[i] + drop) * W + xs[i];
             col[i] = (byte)rotated.Cells[i].Colour;
         }
-        return new Placement(rotations, left, idx, col);
+        return new Placement(rotations, left, idx, col, drop);
     }
 
     // ------------------------------------------------------------------ rules (mirrors GameEngine)
 
-    private static State Apply(State before, Placement p, LevelDefinition level, Scratch sc)
+    private static State Apply(State before, Placement p, LevelDefinition level, Scratch sc, bool exactScore)
     {
         var s = before.Clone();
+        if (exactScore) s.Score += p.Drop * GameConfig.HardDropPointsPerRow;
         for (int i = 0; i < p.CellIndexes.Length; i++) s.Cells[p.CellIndexes[i]] = p.Colours[i];
 
         int chain = Settle(s, sc);
+        if (chain > 0) s.ChainsByLength[Math.Min(chain, ChainSlots - 1)]++;
         if (chain == 0 && level.NoPopPenalty > 0 && s.Score > 0)
             s.Score -= Math.Min(s.Score, level.NoPopPenalty);
         return s;
@@ -287,17 +350,25 @@ public static class LevelSolver
 
     // ------------------------------------------------------------------ evaluation
 
-    private static double Value(State s, LevelDefinition level, int startBlocks, Scratch sc, out bool done)
+    /// <summary>
+    /// Scores a position. <paramref name="done"/> means the level is won (and the objective, if any, is met).
+    /// <paramref name="dead"/> means the main goals are met but the objective is not: the real game ends the level the
+    /// moment the main goals are met, so such a position can never lead to the objective.
+    /// </summary>
+    private static double Value(State s, LevelDefinition level, int startBlocks, Scratch sc, BonusObjective? bonus,
+        out bool done, out bool dead)
     {
-        int cells = 0, holes = 0, maxHeight = 0;
+        int cells = 0, holes = 0, maxHeight = 0, bonusColour = 0;
         for (int x = 0; x < W; x++)
         {
             int top = -1;
             for (int y = 0; y < H; y++)
             {
-                if (s.Cells[y * W + x] == 0) continue;
+                byte here = s.Cells[y * W + x];
+                if (here == 0) continue;
                 if (top < 0) top = y;
                 cells++;
+                if (bonus is not null && here == (byte)bonus.Colour) bonusColour++;
             }
             if (top >= 0)
             {
@@ -309,6 +380,7 @@ public static class LevelSolver
 
         double progress = 0;
         done = level.Goals.Count > 0;
+        dead = false;
         foreach (var g in level.Goals)
         {
             double p = g.Kind switch
@@ -318,10 +390,22 @@ public static class LevelSolver
                 GoalKind.PopColour => s.ByColour[(int)g.Colour] / (double)Math.Max(1, g.Target),
                 GoalKind.Chain => s.BestChain / (double)Math.Max(1, g.Target),
                 GoalKind.BigGroup => s.BestGroup / (double)Math.Max(1, g.Target),
+                GoalKind.ChainSet => ChainsOfAtLeast(s, Math.Max(2, g.MinWaves)) / (double)Math.Max(1, g.Target),
                 _ => cells <= g.Target ? 1.0 : 1.0 - (cells - g.Target) / (double)Math.Max(1, startBlocks - g.Target),
             };
             if (p < 1.0) done = false;
             progress += Math.Clamp(p, 0.0, 1.0);
+        }
+
+        if (bonus is not null)
+        {
+            double p = bonus.ProgressFraction(s.BestChain, s.BestGroup, bonusColour);
+            if (p < 1.0)
+            {
+                if (done) dead = true;
+                done = false;
+            }
+            progress += p;
         }
 
         // Pairs and triples of one colour are one block away from popping: worth building.

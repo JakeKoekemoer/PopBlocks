@@ -1,5 +1,6 @@
 using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
+using PopBlocks.Engine.Story;
 using PopBlocks.Graphics;
 using PopBlocks.ViewModels;
 
@@ -18,11 +19,17 @@ public partial class GamePage : ContentPage
 
     private readonly GameViewModel _vm;
     private readonly GameSettings _settings;
+    private readonly CosmeticLoadout _loadout;
     private readonly ShopService _shop;
     private readonly GameDrawable _board = new();
     private readonly UpcomingDrawable _upcoming = new();
+    private readonly PortraitDrawable _portrait = new();   // the small portrait beside a line: Pip, the Warden, a crystal or the mark
+    private readonly StageDrawable _stage = new();           // the picture above the panel
+    private readonly PipDrawable _bannerPip = new() { Mood = PipMood.Happy };
+    private int _bannerVersion;
 
     private IDispatcherTimer? _animationTimer;
+    private IDispatcherTimer? _stageTimer;
     private IDispatcherTimer? _repeatTimer;
     private Action? _repeatAction;
     private Window? _hookedWindow;
@@ -34,13 +41,14 @@ public partial class GamePage : ContentPage
     private DragAxis _axis;
     private bool _dragged;
 
-    public GamePage(GameViewModel viewModel, GameSettings settings, ShopService shop)
+    public GamePage(GameViewModel viewModel, GameSettings settings, ShopService shop, CosmeticLoadout loadout)
     {
         InitializeComponent();
 
         _vm = viewModel;
         _settings = settings;
         _shop = shop;
+        _loadout = loadout;
         BindingContext = _vm;
 
         _board.Game = _vm.Game;
@@ -48,11 +56,17 @@ public partial class GamePage : ContentPage
         BoardView.Drawable = _board;
         NextView.Drawable = _upcoming;
         CoinView.Drawable = new GoldCoinDrawable();
+        ScenePipView.Drawable = _portrait;
+        ScenePipRightView.Drawable = _portrait;   // the same portrait, shown on whichever side the speaker stands
+        StageView.Drawable = _stage;
+        BannerPipView.Drawable = _bannerPip;
 
         _vm.Redraw += OnRedraw;
         _vm.WaveResolved += OnWaveResolved;
         _vm.GameStarted += OnGameStarted;
         _vm.Toast += OnToast;
+        _vm.Banner += OnBanner;
+        _vm.PropertyChanged += OnViewModelPropertyChanged;
 
         BoardView.StartInteraction += OnTouchStart;
         BoardView.DragInteraction += OnTouchDrag;
@@ -66,7 +80,7 @@ public partial class GamePage : ContentPage
         WireButton(DropButton, _vm.HardDrop, repeat: false);
     }
 
-    /// <summary>Picks Classic or a Story level. Call before the page is shown.</summary>
+    /// <summary>Picks Classic, a Story level or a tutorial lesson. Call before the page is shown.</summary>
     public void Configure(GameSetup setup) => _vm.Configure(setup);
 
     // ------------------------------------------------------------------ page lifecycle
@@ -77,6 +91,7 @@ public partial class GamePage : ContentPage
 
         HookWindow(Window);
         _vm.Attach(Dispatcher);
+        if (_vm.SceneVisible) ApplyStage();   // coming back to a page with a story panel still open: restart its animation
 
         if (!_started)
         {
@@ -91,6 +106,7 @@ public partial class GamePage : ContentPage
         base.OnDisappearing();
         StopRepeat();
         StopAnimation();
+        StopStage();
         UnhookWindow();
         _vm.Detach();
     }
@@ -98,6 +114,14 @@ public partial class GamePage : ContentPage
     /// <summary>Back button: pause first, and only leave the game when it is already paused or over.</summary>
     protected override bool OnBackButtonPressed()
     {
+        if (_vm.TutorialPromptVisible) return base.OnBackButtonPressed();   // leave without answering: it is asked again next time
+        if (_vm.SceneVisible)
+        {
+            // Back steps to the previous message; on the first message it skips the panel rather than leaving the level.
+            if (_vm.SceneCanGoBack) _vm.PreviousScene();
+            else _vm.SkipScene();
+            return true;
+        }
         if (_vm.IsPlaying)
         {
             _vm.Pause();
@@ -141,9 +165,26 @@ public partial class GamePage : ContentPage
     {
         // Level-dependent drawing: upside-down board, landing guide, pop richness.
         _board.Flip = _vm.IsFlipped;
-        _board.ShowGhost = _settings.ShowGhost || (_vm.Level?.ForceGhost ?? false);
+        _board.ShowGhost = _settings.LandingGuideStyle > 0 || (_vm.Level?.ForceGhost ?? false);
+        _board.GuideBold = _settings.LandingGuideStyle == 2;
+        _board.ReducedMotion = _settings.ReducedMotion;
         _board.Effects.Enabled = _settings.BlastEffects;
+        _board.Effects.ReducedMotion = _settings.ReducedMotion;
         _board.Effects.Flair = _shop.FlairLevel;
+
+        // Looks from the wardrobe. They are read once here, so nothing changes in the middle of a level.
+        VisualDesign.UseSkin(_loadout.Skin);
+        _board.Effects.Style = _loadout.Burst;
+        _board.Frame = _loadout.Frame;
+        _bannerPip.Accessory = _vm.PipAccessory;
+        _bannerPip.Detail = _vm.PipDetail;
+        ApplySpeaker();
+        BannerPipView.Invalidate();
+
+        // Helpers from the workbench. They only show what is on the board; none of them plays a move.
+        _board.LensLevel = _shop.LensLevel;
+        _board.ChainGlow = _shop.ChainSenseOwned;
+        _board.Theme = BoardPalette.For(_vm.BoardStyle);
 
         // The DOWN button points up the screen on an upside-down board.
         DownButton.Text = _vm.IsFlipped ? "UP" : "DOWN";
@@ -204,6 +245,120 @@ public partial class GamePage : ContentPage
         _animationTimer.Tick -= OnAnimationTick;
         _animationTimer = null;
         BoardView.Invalidate();
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(GameViewModel.PipBrightness) or nameof(GameViewModel.SceneMood) or nameof(GameViewModel.SceneSpeakerId))
+        {
+            _bannerPip.Brightness = _vm.PipBrightness;
+            ApplySpeaker();
+            BannerPipView.Invalidate();
+        }
+        else if (e.PropertyName == nameof(GameViewModel.SceneStage))
+        {
+            ApplyStage();
+        }
+    }
+
+    /// <summary>
+    /// Sets up the portrait for whoever is speaking. Pip keeps their accessory and lights; Warden lines show the Warden's
+    /// silhouette; recordings show a memory crystal (or the Warden's mark for a message), never a character; Mara and Bram
+    /// are a plain tinted stand-in until they are designed. (Which side it is on is decided by the view model.)
+    /// </summary>
+    private void ApplySpeaker()
+    {
+        bool pip = _vm.SceneSpeakerId is "" or Cast.Pip;
+        _portrait.SpeakerId = _vm.SceneSpeakerId;
+
+        var face = _portrait.Pip;
+        face.Tint = PortraitTints.For(_vm.SceneSpeakerId);
+        face.Brightness = pip ? _vm.PipBrightness : 0.75f;
+        face.Accessory = pip ? _vm.PipAccessory : AccessoryStyle.None;
+        face.Detail = pip ? _vm.PipDetail : 0;
+        face.Mood = _vm.SceneMood;
+        ScenePipView.Invalidate();
+        ScenePipRightView.Invalidate();
+    }
+
+    // ------------------------------------------------------------------ the story stage
+
+    /// <summary>
+    /// Points the stage strip at the current line and starts or stops its animation timer. Under Reduced motion the
+    /// stage and portraits are still pictures (final frames), so no timer runs at all.
+    /// </summary>
+    private void ApplyStage()
+    {
+        var info = _vm.SceneStage;
+        bool reduced = _settings.ReducedMotion;
+
+        _stage.ReducedMotion = reduced;
+        _stage.PipBrightness = _vm.PipBrightness;
+        _stage.SpeakerId = _vm.SceneSpeakerId;
+        _stage.Info = info;
+        _portrait.Animated = info is not null && !reduced;
+
+        StageView.Invalidate();
+        ScenePipView.Invalidate();
+        ScenePipRightView.Invalidate();
+
+        if (info is not null && !reduced) StartStage();
+        else StopStage();
+    }
+
+    /// <summary>~30 fps is plenty for gentle motion, and it runs only while a scene panel is open.</summary>
+    private void StartStage()
+    {
+        if (_stageTimer is not null) return;
+        _stageTimer = Dispatcher.CreateTimer();
+        _stageTimer.Interval = TimeSpan.FromMilliseconds(33);
+        _stageTimer.IsRepeating = true;
+        _stageTimer.Tick += OnStageTick;
+        _stageTimer.Start();
+    }
+
+    private void OnStageTick(object? sender, EventArgs e)
+    {
+        StageView.Invalidate();
+        ScenePipView.Invalidate();
+        ScenePipRightView.Invalidate();
+    }
+
+    private void StopStage()
+    {
+        if (_stageTimer is null) return;
+        _stageTimer.Stop();
+        _stageTimer.Tick -= OnStageTick;
+        _stageTimer = null;
+    }
+
+    /// <summary>Pip's first-burst / first-chain remark: fades in over the lower board, then away. Touches pass through it.</summary>
+    private void OnBanner(StoryScene scene) => _ = ShowBannerAsync(scene);
+
+    private async Task ShowBannerAsync(StoryScene scene)
+    {
+        int version = ++_bannerVersion;
+        try
+        {
+            BannerLabel.Text = string.Join("\n", scene.Lines.Where(l => !l.IsNarration).Select(l => l.Text));
+            _bannerPip.Brightness = _vm.PipBrightness;
+            BannerPipView.Invalidate();
+            PipBanner.IsVisible = true;
+            PipBanner.Opacity = 0;
+            await PipBanner.FadeToAsync(1, 180);
+
+            // Long enough to read at a glance; a second line gets a little longer.
+            await Task.Delay(2600 + 900 * scene.Lines.Count);
+            if (version != _bannerVersion) return;   // a newer banner took over
+
+            await PipBanner.FadeToAsync(0, 400);
+            if (version == _bannerVersion) PipBanner.IsVisible = false;
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.Error("Banner", ex);
+            PipBanner.IsVisible = false;
+        }
     }
 
     private void OnToast(string message) => _ = ShowToastAsync(message);

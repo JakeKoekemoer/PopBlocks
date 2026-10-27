@@ -5,8 +5,58 @@
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
 
-    <ScrollView>
+    <Grid>
+
+    <!-- First screen: just PLAY and MORE. MORE reveals the full menu below. -->
+    <VerticalStackLayout x:Name="StartMenu"
+                         VerticalOptions="Center"
+                         Padding="32,0"
+                         Spacing="18">
+        <GraphicsView x:Name="StartLogoView"
+                      HeightRequest="64"
+                      WidthRequest="320"
+                      HorizontalOptions="Center" />
+
+        <Label Text="PopBlocks"
+               FontSize="44"
+               FontAttributes="Bold"
+               CharacterSpacing="1"
+               TextColor="{StaticResource TextPrimary}"
+               HorizontalOptions="Center" />
+
+        <Label Text="Connect four or more of a colour to pop them."
+               Style="{StaticResource BodyLabel}"
+               HorizontalTextAlignment="Center"
+               HorizontalOptions="Center" />
+
+        <Button x:Name="StartPlayButton"
+                Text="PLAY"
+                Style="{StaticResource PrimaryButton}"
+                FontSize="22"
+                HeightRequest="64"
+                WidthRequest="260"
+                HorizontalOptions="Center"
+                Margin="0,24,0,0"
+                Clicked="OnPlayClicked" />
+
+        <Button x:Name="MoreButton"
+                Text="MORE"
+                Style="{StaticResource SecondaryButton}"
+                WidthRequest="260"
+                HorizontalOptions="Center"
+                Clicked="OnMoreClicked" />
+    </VerticalStackLayout>
+
+    <!-- The full menu, as it always was. Shown by MORE. -->
+    <ScrollView x:Name="FullMenu" IsVisible="False">
         <VerticalStackLayout Padding="24,20,24,28" Spacing="16">
+
+            <Button Text="BACK"
+                    Style="{StaticResource GhostButton}"
+                    HorizontalOptions="Start"
+                    Padding="0"
+                    Margin="0,0,0,-8"
+                    Clicked="OnBackToStartClicked" />
 
             <!-- Gold -->
             <Border Style="{StaticResource Glass}"
@@ -60,15 +110,19 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="12">
-                <Button Grid.Row="0" Grid.Column="0" Text="LEVELS" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnLevelsClicked" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+                <Button Grid.Row="0" Grid.Column="0" Text="MAP" Style="{StaticResource SecondaryButton}"
+                        MinimumWidthRequest="0" Clicked="OnMapClicked" />
                 <Button Grid.Row="0" Grid.Column="1" Text="CLASSIC" Style="{StaticResource SecondaryButton}"
                         MinimumWidthRequest="0" Clicked="OnClassicClicked" />
-                <Button Grid.Row="1" Grid.Column="0" Text="SHOP" Style="{StaticResource SecondaryButton}"
+                <Button Grid.Row="1" Grid.Column="0" Text="WORKSHOP" Style="{StaticResource SecondaryButton}"
                         MinimumWidthRequest="0" Clicked="OnShopClicked" />
-                <Button Grid.Row="1" Grid.Column="1" Text="ABOUT" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnAboutClicked" />
+                <Button Grid.Row="1" Grid.Column="1" Text="ARCHIVE" Style="{StaticResource SecondaryButton}"
+                        MinimumWidthRequest="0" Clicked="OnArchiveClicked" />
+                <Button Grid.Row="2" Grid.Column="0" Text="LEVELS" Style="{StaticResource GhostButton}"
+                        HorizontalOptions="Center" Clicked="OnLevelsClicked" />
+                <Button Grid.Row="2" Grid.Column="1" Text="TUTORIAL" Style="{StaticResource GhostButton}"
+                        HorizontalOptions="Center" Clicked="OnTutorialClicked" />
             </Grid>
 
             <Label x:Name="BestLabel"
@@ -93,15 +147,59 @@
                     <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
                         <VerticalStackLayout VerticalOptions="Center">
                             <Label Text="Landing guide" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                            <Label Text="Outline where the piece will land" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                            <Label Text="Shows where the piece will land. Bold is thicker and easier to see." FontSize="12" TextColor="{StaticResource TextSecondary}" />
                         </VerticalStackLayout>
-                        <Switch x:Name="GhostSwitch"
+                        <Button x:Name="GuideButton"
+                                Grid.Column="1"
+                                Style="{StaticResource SecondaryButton}"
+                                MinimumWidthRequest="0"
+                                WidthRequest="120"
+                                HeightRequest="40"
+                                CornerRadius="20"
+                                FontSize="13"
+                                Clicked="OnGuideClicked" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                        <VerticalStackLayout VerticalOptions="Center">
+                            <Label Text="Reduced motion" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                            <Label Text="No screen shake, flashes or confetti. The game plays the same." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                        </VerticalStackLayout>
+                        <Switch x:Name="MotionSwitch"
                                 Grid.Column="1"
                                 OnColor="{StaticResource Accent}"
-                                Toggled="OnGhostToggled" />
+                                Toggled="OnMotionToggled" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                        <VerticalStackLayout VerticalOptions="Center">
+                            <Label Text="Sound effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                            <Label Text="Beeps for turning, placing, dropping and popping" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                        </VerticalStackLayout>
+                        <Switch x:Name="SoundSwitch"
+                                Grid.Column="1"
+                                OnColor="{StaticResource Accent}"
+                                Toggled="OnSoundToggled" />
+                    </Grid>
+                    <Grid x:Name="BoardStyleRow" ColumnDefinitions="*,Auto" MinimumHeightRequest="48" IsVisible="False">
+                        <VerticalStackLayout VerticalOptions="Center">
+                            <Label Text="Board style" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                            <Label Text="Earned by restoring regions. Looks only." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                        </VerticalStackLayout>
+                        <Button x:Name="BoardStyleButton"
+                                Grid.Column="1"
+                                Style="{StaticResource SecondaryButton}"
+                                MinimumWidthRequest="0"
+                                WidthRequest="120"
+                                HeightRequest="40"
+                                CornerRadius="20"
+                                FontSize="13"
+                                Clicked="OnBoardStyleClicked" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
+
+            <Button Text="ABOUT" Style="{StaticResource GhostButton}" HorizontalOptions="Center" Clicked="OnAboutClicked" />
+            <Button x:Name="DevButton" Text="DEV MENU" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                    HorizontalOptions="Center" IsVisible="False" Clicked="OnDevClicked" />
 
             <VerticalStackLayout Spacing="4" HorizontalOptions="Center" Margin="0,8,0,0">
                 <Label Text="HOW TO PLAY" Style="{StaticResource CaptionLabel}" HorizontalOptions="Center" />
@@ -113,4 +211,6 @@
 
         </VerticalStackLayout>
     </ScrollView>
+
+    </Grid>
 </ContentPage>

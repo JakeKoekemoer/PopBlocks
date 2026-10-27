@@ -19,6 +19,9 @@ public sealed class InMemorySettings : ILocalSettings
 {
     private readonly Dictionary<string, object> _values = new();
 
+    /// <summary>Everything stored, in key order, for comparing two saves.</summary>
+    public string Dump() => string.Join("|", _values.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key}={kv.Value}"));
+
     public int GetInt(string key, int defaultValue) => _values.TryGetValue(key, out var v) ? (int)v : defaultValue;
     public void SetInt(string key, int value) => _values[key] = value;
     public bool GetBool(string key, bool defaultValue) => _values.TryGetValue(key, out var v) ? (bool)v : defaultValue;

@@ -153,19 +153,6 @@ public partial class LevelSelectPage : ContentPage
                 Margin = new Thickness(0, -2, 0, 0),
             });
         }
-        else if (level <= StoryConfig.TutorialLastLevel)
-        {
-            content.Children.Add(new Label
-            {
-                Text = "LESSON",
-                FontSize = 7,
-                FontAttributes = FontAttributes.Bold,
-                TextColor = colour,
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.End,
-                Margin = new Thickness(0, 0, 0, -4),
-            });
-        }
 
         var tile = new Border
         {

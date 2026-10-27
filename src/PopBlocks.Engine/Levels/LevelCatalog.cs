@@ -1,11 +1,13 @@
 using PopBlocks.Engine.Logic;
 using PopBlocks.Engine.Models;
+using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Engine.Levels;
 
 /// <summary>
-/// The Story levels. Levels 1-11 are hand-made (the tutorials and the first "new shapes" level);
-/// everything after that is generated from the level number, so it is endless and identical on every device.
+/// The Story levels. Level 11 (the first "new shapes" level) is hand-made; every other level is generated from the
+/// level number, so it is endless and identical on every device. The ten guided tutorial lessons are hand-made too, but
+/// they live in their own sequence (<see cref="Lesson"/>) and are not Story levels.
 ///
 /// Generated levels are proven winnable: a bot plays the level first, and the move limit is set from
 /// how many pieces it needed plus slack that shrinks as the tiers get harder. If the bot cannot reach the
@@ -14,6 +16,10 @@ namespace PopBlocks.Engine.Levels;
 public static class LevelCatalog
 {
     private const int SolverCap = 80;
+
+    /// <summary>Finales ask for a little more than their neighbours and leave a little less slack.</summary>
+    private const double FinaleDemand = 1.1;
+    private const double FinaleSlackShift = 0.08;
 
     private static readonly Dictionary<int, LevelDefinition> Cache = new();
     private static readonly object Gate = new();
@@ -42,6 +48,37 @@ public static class LevelCatalog
 
     private static LevelDefinition Build(int n) => n switch
     {
+        11 => NewShapesLevel(),
+        _ => Generated(n),
+    };
+
+    // ====================================================================== the tutorial lessons
+
+    private static readonly Dictionary<int, LevelDefinition> LessonCache = new();
+
+    /// <summary>
+    /// Lesson <paramref name="lesson"/> (1 to <see cref="StoryConfig.LessonCount"/>) of the tutorial: a hand-made, coached level.
+    /// Lessons are separate from the Story, so clearing one never moves Story progress or pays gold.
+    /// </summary>
+    public static LevelDefinition Lesson(int lesson)
+    {
+        lesson = Math.Clamp(lesson, 1, StoryConfig.LessonCount);
+        lock (Gate)
+        {
+            if (LessonCache.TryGetValue(lesson, out var cached)) return cached;
+        }
+
+        var built = BuildLesson(lesson);
+
+        lock (Gate)
+        {
+            LessonCache[lesson] = built;
+        }
+        return built;
+    }
+
+    private static LevelDefinition BuildLesson(int n) => n switch
+    {
         1 => Tutorial1(),
         2 => Tutorial2(),
         3 => Tutorial3(),
@@ -51,9 +88,7 @@ public static class LevelCatalog
         7 => Tutorial7(),
         8 => Tutorial8(),
         9 => Tutorial9(),
-        10 => Tutorial10(),
-        11 => NewShapesLevel(),
-        _ => Generated(n),
+        _ => Tutorial10(),
     };
 
     // ====================================================================== hand-made levels
@@ -239,39 +274,28 @@ public static class LevelCatalog
 
     // ====================================================================== generated levels
 
-    private static readonly Dictionary<int, TutorialStep> Intros = new()
-    {
-        [13] = Tap("Colour goals", "Some goals ask you to pop a particular colour. Check the goal bar above the board."),
-        [16] = Tap("Clear it out", "This goal counts the blocks left on the board. Pop them until you reach the target."),
-        [20] = Tap("Chain goals", "Build a chain: pop a group so the blocks that fall form another group, again and again."),
-        [26] = Tap("Big groups", "Join lots of same-coloured blocks together and pop them in one go."),
-        [32] = Tap("Double goals", "Now you must meet two goals at once. Both bars have to fill before your moves run out."),
-        [51] = Tap("Medium levels", "Five colours, taller piles and fewer spare moves from here on."),
-        [101] = Tap("Hard levels", "Dense, scattered piles and faster pieces. Plan every move."),
-        [151] = Tap("Extreme levels", "Things get strange. In this level the board is flipped: pieces enter from the bottom " +
-                                      "of the screen. Controls follow the picture, so drag toward the top to drop."),
-        [156] = Tap("Keep popping", "On some levels, a piece that pops nothing costs you points. Always aim for a match."),
-        [161] = Tap("Triple goals", "Three goals at once. Make every move count."),
-    };
-
     private static LevelDefinition Generated(int n)
     {
         var tier = StoryConfig.TierFor(n);
         double p = StoryConfig.ProgressInTier(n);
-        int variant = tier == Tier.Easy && n >= 41 ? (n - 41) % 5 : -1;   // the last ten Easy levels vary
+        var rule = RegionRules.For(n);
+        bool finale = RegionRules.IsFinale(n);
+        int variant = finale ? -1 : rule.VariantAt(n);
 
-        var profile = ProfileFor(tier, p, variant);
+        var profile = RegionProfile(ProfileFor(tier, p, variant), rule);
         var board = BoardGenerator.Generate(n, profile);
         int startBlocks = board.CountOccupied();
 
-        bool flip = tier == Tier.Extreme && (n == 151 || (n > 151 && n % 4 == 3));
-        bool penalty = tier == Tier.Extreme && (n == 156 || (n > 156 && n % 3 == 0));
+        bool flip = RegionRules.Flips(n);
+        bool penalty = RegionRules.Penalises(n);
         double exotic = ExoticShareFor(tier, p, variant);
 
         var rng = new Random(unchecked(n * 7919 + 13));
-        var kinds = PickKinds(n, tier, p, penalty, rng);
+        var kinds = n == RegionRules.FinalLevel
+            ? new List<GoalKind> { GoalKind.ChainSet }
+            : PickKinds(n, tier, rule, penalty, finale, rng);
 
-        double demand = DemandFor(tier, p);
+        double demand = DemandFor(tier, p) * (finale ? FinaleDemand : 1.0);
         double split = kinds.Count == 1 ? 1.0 : kinds.Count == 2 ? 0.75 : 0.6;
 
         LevelDefinition result = null!;
@@ -293,13 +317,16 @@ public static class LevelCatalog
                 Colours = profile.Colours,
                 ExoticShare = exotic,
                 FlipView = flip,
-                NoPopPenalty = penalty ? 15 + Math.Min(25, (n - 156) / 6) : 0,
+                NoPopPenalty = penalty ? RegionRules.PenaltyAmount(n) : 0,
+                IsFinale = finale,
+                AllowAbilities = !finale,
             };
 
             var solved = LevelSolver.Solve(draft, SolverCap);
             if (!solved.Won) continue;
 
             var (slack, add) = SlackFor(tier, p, variant);
+            slack = Math.Max(RegionRules.SlackFloor, slack - rule.SlackShift - (finale ? FinaleSlackShift : 0.0));
             int limit = Math.Max(6, (int)Math.Ceiling(solved.Moves * slack) + add);
             result = draft with { MoveLimit = limit };
             break;
@@ -319,15 +346,19 @@ public static class LevelCatalog
             FallIntervalMs = FallFor(tier, p),
             Colours = profile.Colours,
             ExoticShare = exotic,
+            IsFinale = finale,
+            AllowAbilities = !finale,
         };
 
-        var steps = new List<TutorialStep>();
-        if (Intros.TryGetValue(n, out var intro)) steps.Add(intro);
+        // A memory objective is offered only where the bot has shown it fits alongside the main goals.
+        var bonus = BonusPlanner.Choose(result);
+
         return result with
         {
+            Bonus = bonus,
             FlipView = flip,
-            Steps = steps,
-            Tip = TipFor(result, flip, penalty),
+            Steps = RegionRules.IntroCards(n),
+            Tip = finale ? RegionRules.FinaleTip(n) : TipFor(result, flip, penalty),
         };
     }
 
@@ -368,11 +399,31 @@ public static class LevelCatalog
 
         return variant switch
         {
-            0 => profile with { Colours = 5 },                                                   // rainbow
-            1 => profile with { BaseHeight = profile.BaseHeight + 2, MaxHeight = 8 },            // tall pile
-            4 => profile with { Scatter = 0.30, Clump = 0.25 },                                  // scattered
+            0 => profile with { Colours = Math.Max(5, profile.Colours) },                        // rainbow
+            1 => TallPile(profile),                                                              // tall pile
+            4 => profile with { Scatter = Math.Max(0.30, profile.Scatter), Clump = Math.Min(0.25, profile.Clump) },   // scattered
             _ => profile,
         };
+    }
+
+    private static DifficultyProfile TallPile(DifficultyProfile profile)
+    {
+        int max = Math.Max(profile.MaxHeight, 8);
+        return profile with { BaseHeight = Math.Min(max, profile.BaseHeight + 2), MaxHeight = max };
+    }
+
+    /// <summary>A region can lean on the tier's piles: a little taller, a little more scattered.</summary>
+    private static DifficultyProfile RegionProfile(DifficultyProfile profile, RegionRule rule)
+    {
+        if (rule.HeightBonus > 0)
+            profile = profile with { BaseHeight = Math.Min(profile.MaxHeight, profile.BaseHeight + rule.HeightBonus) };
+        if (rule.ScatterBonus > 0)
+            profile = profile with
+            {
+                Scatter = Math.Min(0.9, profile.Scatter + rule.ScatterBonus),
+                Clump = Math.Max(0.05, profile.Clump - rule.ScatterBonus / 2),
+            };
+        return profile;
     }
 
     private static double ExoticShareFor(Tier tier, double p, int variant)
@@ -418,33 +469,39 @@ public static class LevelCatalog
         return (slack, add);
     }
 
-    private static List<GoalKind> PickKinds(int n, Tier tier, double p, bool penalty, Random rng)
+    private static List<GoalKind> PickKinds(int n, Tier tier, RegionRule rule, bool penalty, bool finale, Random rng)
     {
-        // Which kinds exist at this level.
-        var available = new List<(GoalKind Kind, int Weight)> { (GoalKind.PopBlocks, 3), (GoalKind.Score, 3) };
-        if (n >= 13) available.Add((GoalKind.PopColour, 2));
-        if (n >= 16) available.Add((GoalKind.ClearDown, 2));
-        if (n >= 20) available.Add((GoalKind.Chain, 1));
-        if (n >= 26) available.Add((GoalKind.BigGroup, 1));
+        // Which kinds exist at this level, weighted by the region.
+        var available = new List<(GoalKind Kind, int Weight)>
+        {
+            (GoalKind.PopBlocks, rule.WeightOf(GoalKind.PopBlocks)),
+            (GoalKind.Score, rule.WeightOf(GoalKind.Score)),
+        };
+        if (n >= RegionRules.PopColourIntro) available.Add((GoalKind.PopColour, rule.WeightOf(GoalKind.PopColour)));
+        if (n >= RegionRules.ClearDownIntro) available.Add((GoalKind.ClearDown, rule.WeightOf(GoalKind.ClearDown)));
+        if (n >= RegionRules.ChainIntro) available.Add((GoalKind.Chain, rule.WeightOf(GoalKind.Chain)));
+        if (n >= RegionRules.BigGroupIntro) available.Add((GoalKind.BigGroup, rule.WeightOf(GoalKind.BigGroup)));
 
         int count = 1;
-        if (n >= 32)
+        if (n >= RegionRules.DualGoalIntro)
         {
-            double pDual = tier switch { Tier.Easy => 0.25, Tier.Medium => 0.5, Tier.Hard => 0.75, _ => 1.0 };
+            double pDual = rule.DualChance ?? tier switch { Tier.Easy => 0.25, Tier.Medium => 0.5, Tier.Hard => 0.75, _ => 1.0 };
             if (rng.NextDouble() < pDual) count = 2;
-            if (n >= 161 && rng.NextDouble() < 0.5) count = 3;
+            if (rule.TripleChance > 0 && n >= rule.TripleFrom && rng.NextDouble() < rule.TripleChance) count = 3;
         }
-        if (n == 32 || n == 161 && count < 3) count = n == 32 ? 2 : 3;   // intro levels show the new thing
+        if (n == RegionRules.DualGoalIntro) count = 2;                              // intro levels show the new thing
+        else if (n == RegionRules.TripleGoalIntro) count = 3;
+        if (finale && n >= RegionRules.DualGoalIntro) count = Math.Max(count, 2);   // finales ask for a mix
 
         var kinds = new List<GoalKind>();
 
         // The level that introduces a goal kind uses it.
         GoalKind? introKind = n switch
         {
-            13 => GoalKind.PopColour,
-            16 => GoalKind.ClearDown,
-            20 => GoalKind.Chain,
-            26 => GoalKind.BigGroup,
+            RegionRules.PopColourIntro => GoalKind.PopColour,
+            RegionRules.ClearDownIntro => GoalKind.ClearDown,
+            RegionRules.ChainIntro => GoalKind.Chain,
+            RegionRules.BigGroupIntro => GoalKind.BigGroup,
             _ => null,
         };
         if (introKind is not null) kinds.Add(introKind.Value);
@@ -509,6 +566,9 @@ public static class LevelCatalog
                 };
                 return new Goal(kind, Math.Max(5, baseTarget - relax));
             }
+
+            case GoalKind.ChainSet:
+                return new Goal(kind, Math.Max(2, 3 - relax / 4), CellColour.Empty, relax < 3 ? 3 : 2);
 
             default:
             {

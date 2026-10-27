@@ -24,11 +24,20 @@ public sealed class GameEngine
     private readonly IPieceGenerator _defaultGenerator;
     private readonly List<Piece> _queue = new();
     private IPieceGenerator _generator;
+    private RewindableGenerator? _rewindable;
     private GoalTracker? _goals;
     private int _extraMoves;
     private int _previewCount = 1;
     private Phase _phase = Phase.None;
     private GameState _stateBeforePause = GameState.Playing;
+
+    // Undo: the state when the piece in play appeared, and when the one before it did. Going back restores the latter.
+    private EngineSnapshot? _atSpawn;
+    private EngineSnapshot? _beforeLast;
+
+    // Helpers (see "Helpers" below). Stock is what the app carries in; the "Left" counts are for the level being played.
+    private int _secondChanceStock, _prismShiftStock, _prismFreeCharges;
+    private int _secondChanceLeft, _shiftPaidLeft, _shiftFreeLeft;
 
     public GameEngine(IPieceGenerator generator, Board? board = null)
     {
@@ -70,6 +79,29 @@ public sealed class GameEngine
     {
         get => _extraMoves;
         set => _extraMoves = Math.Max(0, value);
+    }
+
+    /// <summary>
+    /// Helpers carried into the next game (Story levels that allow them). Like <see cref="ExtraMoves"/> they are copied
+    /// when a game starts, so buying one mid-level changes nothing. At most one Second Chance and one paid Prism Shift
+    /// can be used per level, however many are in stock; free Prism Shifts (a shop upgrade) come on top.
+    /// </summary>
+    public int SecondChanceStock
+    {
+        get => _secondChanceStock;
+        set => _secondChanceStock = Math.Max(0, value);
+    }
+
+    public int PrismShiftStock
+    {
+        get => _prismShiftStock;
+        set => _prismShiftStock = Math.Max(0, value);
+    }
+
+    public int PrismFreeCharges
+    {
+        get => _prismFreeCharges;
+        set => _prismFreeCharges = Math.Max(0, value);
     }
 
     /// <summary>How the app wants pops paced. Instant (the default) resolves a wave the moment a piece locks.</summary>
@@ -150,10 +182,16 @@ public sealed class GameEngine
     /// with the generator the engine was built with.
     /// </summary>
     public void Start(GameSetup setup) =>
-        StartCore(setup, setup.Mode == GameMode.Story ? LevelCatalog.Get(setup.Level) : null);
+        StartCore(setup, setup.Mode switch
+        {
+            GameMode.Story => LevelCatalog.Get(setup.Level),
+            GameMode.Tutorial => LevelCatalog.Lesson(setup.Level),
+            _ => null,
+        });
 
-    /// <summary>Starts a Story game from an explicit level definition (previews, tests).</summary>
-    public void StartLevel(LevelDefinition level) => StartCore(GameSetup.Story(level.Number), level);
+    /// <summary>Starts a game from an explicit level definition (previews, tests). A tutorial level starts as a lesson.</summary>
+    public void StartLevel(LevelDefinition level) =>
+        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number) : GameSetup.Story(level.Number), level);
 
     private void StartCore(GameSetup setup, LevelDefinition? level)
     {
@@ -165,13 +203,24 @@ public sealed class GameEngine
         if (level is not null)
         {
             Board.CopyFrom(level.CreateBoard());
-            _generator = level.CreateGenerator();
+            _rewindable = new RewindableGenerator(level.CreateGenerator());
             _goals = new GoalTracker(level.Goals, Board.CountOccupied());
         }
         else
         {
-            _generator = _defaultGenerator;
+            _rewindable = new RewindableGenerator(_defaultGenerator);
         }
+        _generator = _rewindable;
+
+        _atSpawn = null;
+        _beforeLast = null;
+        bool helpers = level is { AllowAbilities: true, IsTutorial: false };
+        _secondChanceLeft = helpers && _secondChanceStock > 0 ? 1 : 0;
+        _shiftPaidLeft = helpers && _prismShiftStock > 0 ? 1 : 0;
+        _shiftFreeLeft = helpers ? _prismFreeCharges : 0;
+        SecondChanceUsed = 0;
+        PrismShiftsUsed = 0;
+        LastShiftWasPaid = false;
 
         Score = 0;
         PiecesPlaced = 0;
@@ -197,6 +246,24 @@ public sealed class GameEngine
     {
         if (Story is not null) StartLevel(Story);
         else Start(Setup);
+    }
+
+    /// <summary>
+    /// Development tool: ends the current Story level as won, as if every goal had just been met, so the normal
+    /// completion path (gold, story, rewards) runs. Returns false when there is no Story level in progress.
+    /// </summary>
+    public bool ForceComplete()
+    {
+        if (Story is null || State is GameState.Ready or GameState.LevelComplete) return false;
+
+        Chain = 0;
+        PendingGroups = NoGroups;
+        _phase = Phase.None;
+        CurrentPiece = null;
+        State = GameState.LevelComplete;
+        Raise(GameEvent.LevelComplete);
+        Notify();
+        return true;
     }
 
     public void Pause()
@@ -465,6 +532,120 @@ public sealed class GameEngine
 
         CurrentPiece = piece;
         State = GameState.Playing;
+
+        _beforeLast = _atSpawn;
+        _atSpawn = Capture(piece);
+        // Nothing can rewind further back than the older of the two snapshots.
+        _rewindable?.Trim(_beforeLast?.GeneratorPosition ?? _atSpawn.GeneratorPosition);
+    }
+
+    private EngineSnapshot Capture(Piece piece) => new(
+        Board.Clone(), piece, _queue.ToArray(), Score, PiecesPlaced, _poppedClassic,
+        LastChain, LastPenalty, LastWave, _goals?.Clone(), _rewindable?.Position ?? 0);
+
+    // ------------------------------------------------------------------ helpers
+
+    /// <summary>Second Chances used this level (0 or 1).</summary>
+    public int SecondChanceUsed { get; private set; }
+
+    /// <summary>Prism Shifts used this level, free ones included.</summary>
+    public int PrismShiftsUsed { get; private set; }
+
+    /// <summary>The most recent Prism Shift came out of the player's stock (not the free allowance), so the app should take one off.</summary>
+    public bool LastShiftWasPaid { get; private set; }
+
+    /// <summary>Second Chances still available this level (0 or 1).</summary>
+    public int SecondChancesLeft => _secondChanceLeft;
+
+    /// <summary>Prism Shifts still available this level.</summary>
+    public int PrismShiftsLeft => _shiftFreeLeft + _shiftPaidLeft;
+
+    /// <summary>Helpers are for Story levels that allow them: not tutorials, not finales, not Classic.</summary>
+    public bool HelpersAllowed => Story is { AllowAbilities: true, IsTutorial: false };
+
+    /// <summary>The piece in play can be swapped for the one before it and the last placement taken back (no charge needed).</summary>
+    public bool CanRewind => State == GameState.Playing && CurrentPiece is not null && _beforeLast is not null;
+
+    public AbilityStatus SecondChanceStatus =>
+        !HelpersAllowed ? AbilityStatus.NotAllowed
+        : _secondChanceLeft <= 0 ? AbilityStatus.NoCharges
+        : State != GameState.Playing || CurrentPiece is null ? AbilityStatus.Busy
+        : _beforeLast is null ? AbilityStatus.NothingToUndo
+        : AbilityStatus.Ready;
+
+    public AbilityStatus PrismShiftStatus =>
+        !HelpersAllowed ? AbilityStatus.NotAllowed
+        : PrismShiftsLeft <= 0 ? AbilityStatus.NoCharges
+        : State != GameState.Playing || NextPiece is null ? AbilityStatus.Busy
+        : NextPiece.DistinctColourOrders < 2 ? AbilityStatus.SingleColour
+        : AbilityStatus.Ready;
+
+    /// <summary>
+    /// Second Chance: takes back the last placement. The board, score, goals, move count and pieces return to how they
+    /// were when that piece appeared, and the same pieces come again (the level is never rerolled). One step only, and
+    /// only while a piece is in play, never mid-pop. Uses up the level's charge; does not refund the move twice.
+    /// </summary>
+    public bool UseSecondChance()
+    {
+        if (SecondChanceStatus != AbilityStatus.Ready) return false;
+        _secondChanceLeft--;
+        SecondChanceUsed++;
+        Rewind();
+        Raise(GameEvent.SecondChanceUsed);
+        Notify();
+        return true;
+    }
+
+    /// <summary>The undo itself, without the helper rules (tests and tools). False when there is nothing to take back.</summary>
+    public bool Rewind()
+    {
+        if (!CanRewind) return false;
+
+        var snap = _beforeLast!;
+        Board.CopyFrom(snap.Board);
+        _queue.Clear();
+        _queue.AddRange(snap.Queue);
+        NextPiece = _queue[0];
+        CurrentPiece = snap.Current;
+        Score = snap.Score;
+        PiecesPlaced = snap.PiecesPlaced;
+        _poppedClassic = snap.PoppedBlocks;
+        Chain = 0;
+        LastChain = snap.LastChain;
+        LastPenalty = snap.LastPenalty;
+        LastWave = snap.LastWave;
+        _goals = snap.Goals?.Clone();
+        PendingGroups = NoGroups;
+        _phase = Phase.None;
+        _rewindable?.Rewind(snap.GeneratorPosition);
+
+        // Only one step back: the restored state is now the newest, and nothing older is kept.
+        _atSpawn = snap;
+        _beforeLast = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Prism Shift: deals the colours of the NEXT piece out again in a different order. The shape never changes and
+    /// nothing else is touched. Each use moves to the next different colouring, so a piece with several can be cycled.
+    /// Free charges (the Prism Reserve upgrade) are spent before stock.
+    /// </summary>
+    public bool ShiftNextPiece()
+    {
+        if (PrismShiftStatus != AbilityStatus.Ready) return false;
+
+        var shifted = NextPiece!.WithNextColourOrder();
+        if (shifted is null) return false;
+
+        if (_shiftFreeLeft > 0) { _shiftFreeLeft--; LastShiftWasPaid = false; }
+        else { _shiftPaidLeft--; LastShiftWasPaid = true; }
+        PrismShiftsUsed++;
+
+        _queue[0] = shifted;
+        NextPiece = shifted;
+        Raise(GameEvent.PrismShifted);
+        Notify();
+        return true;
     }
 
     private void Raise(GameEvent e) => EventRaised?.Invoke(e);

@@ -30,14 +30,15 @@ A goal is `GoalKind` plus a target. Everything that understands goals:
    - Add the value to `GoalKind`.
    - `Goal.Describe()`: the player-facing sentence.
    - `GoalTracker`: record whatever the goal needs while waves are applied (see how `BestChain` or `_poppedByColour` is tracked) and add the case to the `current` switch in the evaluation. Decide whether "done" means `current >= Target` (default) or the opposite (as `ClearDown` does).
-   - `GoalState.Fraction` and `ProgressText`: only if the goal does not read as "n / target".
+   - `GoalState.Fraction` and `ProgressText`: only if the goal does not read as "n / target". (`ChainSet` shows "1 / 3 chains".)
+   - A goal that needs more than a target can add an optional field to `Goal`: `ChainSet` ("make N separate chains of at least M waves") uses `MinWaves`, and counts a chain as closed when the next wave with `ChainIndex == 1` arrives.
 2. **`PopBlocks.Engine/Levels/LevelSolver.cs`**
    - `Value`: add the goal to the progress switch. If you skip this, the bot has nothing guiding it toward the goal and will fail to win levels that use it, so the generator will keep easing the goal.
    - If the goal needs new state, add it to the solver's lightweight state and update it where the solver applies a wave. Keep it identical to the engine's counting; the replay test checks that.
 3. **`PopBlocks.Engine/Levels/LevelCatalog.cs`**
    - `PickKinds`: make it available from a given level (the "introduced at" table: a goal appears only once introduced, and the introduction level always uses it).
    - `MakeGoal`: how to size the target from the tier's demand.
-   - `Intros`: add a coaching card for the introduction level.
+   - `Story/RegionRules.cs`: the introduction level constant and its coaching card (`IntroCards`). A goal that should only appear on a special level (like `ChainSet` on level 200) is set directly in `Generated` and is not in the random pool.
 4. **App:** nothing for display. The goal bar is bound to `GoalState` and the text comes from `Describe()` and `ProgressText`.
 5. **Tests:** add the new kind to the goal rule tests in `StoryRuleTests`; the catalogue replay will exercise it in generated levels.
 
@@ -51,24 +52,24 @@ To **move a boundary**, change the constant. Then check:
 
 - `GoldRewards` (in `Services/PlayerProgress.cs`) is by tier and offset into the tier, so payouts shift with the boundary.
 - `LevelCatalogTests` has tests that pin the tier boundaries; update them deliberately.
-- Several one-off level numbers are not tied to a tier: the extreme flags (151/156), variants at 41 to 50, goal introduction levels, and the "second goal from 32" and "third goal from 161" rules. They are written as literals in `LevelCatalog.cs`. Search that file for the numbers when you move a boundary.
+- Several one-off level numbers are not tied to a tier: flipped boards and pop penalties, layout variants, goal introduction levels, and the "second goal from 32" and "third goal from 161" rules. They live in **`PopBlocks.Engine/Story/RegionRules.cs`** (one rule per region plus named constants). Regions are 25 levels each, so a region boundary is also a tier boundary for the shipped campaign (two regions per tier).
 
 To **add a tier**, add a `Tier` value (in `Models/GameSetup.cs`), extend every `switch` on `Tier` (search for `Tier.`; the project does not treat warnings as errors, so the compiler will not list them for you), add rows to the tuning tables (`ProfileFor`, `FallFor`, `DemandFor`, `SlackFor`, `ExoticShareFor`, `GoldRewards`), and give `LevelSelectPage` a section heading. Remember the About page and README describe the tiers.
 
-To **tune difficulty** without changing structure, edit only the tables at the bottom of `LevelCatalog.cs`. Then run the tests: the replay test proves every level is still winnable.
+To **tune difficulty** without changing structure, edit only the tables at the bottom of `LevelCatalog.cs` and the region rules in `RegionRules.cs`. Then run the tests: the replay test proves every level is still winnable, and `LevelSnapshotTests` shows exactly which levels changed (see 9.11).
 
 ---
 
 ## 9.4 Add or change an authored level or tutorial step
 
-Hand-made levels are methods in `LevelCatalog.cs` (`Tutorial1` to `Tutorial10`, `NewShapesLevel`). Copy the closest one.
+Hand-made levels are methods in `LevelCatalog.cs`: the tutorial lessons (`Tutorial1` to `Tutorial10`, served by `LevelCatalog.Lesson`) and Story level 11 (`NewShapesLevel`). Copy the closest one.
 
 - **Pile:** `StartRows` is rows of letters from top to bottom: `C` cyan, `R` coral, `Y` yellow, `P` purple, `L` lime, `.` empty. The bottom row of the text is the floor. Keep the top of the visible board clear.
 - **Script:** `"Pair:RC"` means a Pair with coral and cyan cells. The script plays before random pieces.
 - **Coaching:** a list of `TutorialStep`s. Use `Tap` for a message, `Do` for something the player must do (give it the `GameEvent` that completes it; add `HintColumn` to point at a column), `Watch` for something that happens on its own.
 - **If the level must be solver-limited** (like level 10), generate the pile with `BoardSeed` and a profile and let the generator set the limit.
 
-**Test:** `TutorialLevelTests` plays tutorials 1 to 9 through the real engine following their own steps. Add your level to it if it is guided. A tutorial whose steps cannot be completed in the order given fails there.
+**Test:** `TutorialLevelTests` plays lessons 1 to 9 through the real engine following their own steps. The lessons are frozen by `LessonSnapshotData`; change that file by hand only when you change a lesson on purpose. Add your level to it if it is guided. A tutorial whose steps cannot be completed in the order given fails there.
 
 To **add a new `GameEvent`** (so a step can wait for it): add it to the enum in `Models/GameState.cs`, raise it from `GameEngine` at the moment it happens, and forward it in `GameViewModel` (it already forwards every engine event to the tutorial controller).
 
@@ -76,25 +77,23 @@ To **add a new `GameEvent`** (so a step can wait for it): add it to the enum in 
 
 ## 9.5 Add a shop upgrade
 
-1. **`PopBlocks.Engine/Services/Shop.cs`**
-   - Add a value to `Upgrade`. **Its numeric value is the row index into `Costs`**, so keep the enum order and the `Costs` rows in step.
-   - Add the price row to `Costs` (one entry per level; the number of entries is the maximum level).
-   - Add an effects text array (what the player gets at each level; the array has one more entry than there are purchasable levels because level 0 is "nothing yet").
-   - Add an `Items()` entry via `Describe(...)`.
-   - Add a property that turns the level into the number the game uses (like `ExtraMoves => 2 * Level(...)`).
-   - Ownership is saved automatically under `upgrade_<name>`; do not add storage code.
-2. **Make the game read it** at the start of a game: for an engine effect, set it in `GameViewModel.NewGame()` next to `PreviewCount` and `ExtraMoves`; for a visual effect, set it in `GamePage.OnGameStarted`. The shop page needs no change; it lists whatever `Items()` returns.
-3. **Do not make levels depend on upgrades.** Move limits are tuned for a player with none.
-4. **Tests:** add the upgrade to `ProgressAndShopTests` (price, effect, saved across a new service instance on the same settings).
+Upgrades are data. Everything about one is a `ShopItem` in **`Services/ShopCatalog.cs`**.
+
+1. Add an id constant and a `ShopItem` to `ShopCatalog.Items`: title, description, `ItemCategory`, base effect, and one `ShopTier` per purchasable level (price, effect text, and a `Requirement`: `None`, `RegionRestored(n)` or `Achievement(id)`). Prices must rise with each tier.
+2. Add a save key constant to `SaveKeys` (**a new key; never reuse one**), put it in `SaveKeys.All`, and use it as the item's `SaveKey`. Then add it to the frozen list in `P7Tests.FrozenKeys` and decide whether the save code carries it (`SaveCode` picks up every catalogue item automatically).
+3. Add a property to `ShopService` that turns the level into the number the game uses (like `LensLevel` or `PrismFreeCharges`).
+4. **Make the game read it** at the start of a game: for an engine effect, set it in `GameViewModel.NewGame()` next to `PreviewCount` and `ExtraMoves`; for a visual effect, set it in `GamePage.OnGameStarted`. `ShopPage` and `DevTools.MaxShop` list whatever the catalogue contains.
+5. **Do not make levels depend on it.** Move limits are tuned for a player with nothing.
+6. **Tests:** price, effect and persistence in `P4ShopTests`; `P7Tests` checks the new tiers are affordable from the campaign's own income. Update the economy table in `docs/story/economy.md`.
 
 ---
 
 ## 9.6 Add a persisted setting or value
 
-1. Add a `const string ...Key` and a property to the right service (`GameSettings` for options, `PlayerProgress` for progress, `HighScoreService` for scores) in `PopBlocks.Engine/Services/`. Read the value in the constructor with a default, write it in the setter.
+1. Add the key to **`Services/SaveKeys.cs`** (and to `SaveKeys.All`), then a property to the right service (`GameSettings` for options, `PlayerProgress` for progress, `HighScoreService` for scores) in `PopBlocks.Engine/Services/`. Read the value in the constructor with a default, write it in the setter.
 2. Keep keys lowercase with underscores, and **never rename or reuse an existing key**: an existing install would silently lose or misread the value.
 3. A UI switch or button goes in the page and binds to the service; the service owns the saving.
-4. Add the key to the table in [Architecture](02-architecture.md#26-persistence) and a round-trip test with `InMemorySettings` (construct a second service on the same settings object and read the value back).
+4. Add the key to the table in [Architecture](02-architecture.md#26-persistence), to `P7Tests.FrozenKeys`, and decide whether the save code should carry it (`SaveCode.Keys`; `SaveCodeTests` fails until you have decided). Add a round-trip test with `InMemorySettings` (construct a second service on the same settings object and read the value back).
 
 ---
 
@@ -134,7 +133,31 @@ The layout and the touch thresholds are in cell sizes, so they adapt. Re-run all
 
 ---
 
-## 9.10 Documentation checklist
+## 9.10 Change how a region plays
+
+Each region has a `RegionRule` in **`Story/RegionRules.cs`**: goal-kind weights, the chance of two or three goals, how tight the move limit is, taller or more scattered piles, a repeating layout variant, and the card shown on its first level. `LevelCatalog.Generated` reads the rule for the level's region, so changing a rule never means touching the generator.
+
+1. Edit the rule. Levels 1 to 11 never change (a test freezes them).
+2. Run the tests. `LevelSnapshotTests.Levels_match_the_approved_snapshot` fails and names the first level that changed. A change here is deliberate, so review it, then regenerate the snapshot: run the tests once with `POPBLOCKS_WRITE_SNAPSHOT` set to the full path of `tests/PopBlocks.Tests/LevelSnapshotData.cs`, read the diff in git, and commit it.
+3. `RegionRulesTests` checks that a region's favoured goal kind is clearly more common there than elsewhere, that finales are clean, and that nothing appears before its introduction.
+4. Flipped boards and pop penalties are listed by level number in `RegionRules` (`FlipLevelsInRegion6`, `PenaltyLevelsInRegion6`) and follow a pattern from the Citadel on. Each one needs a card in `IntroCards`.
+
+**Finales** are the last level of a region (`RegionRules.IsFinale`). They ask for a little more, leave a little less spare, never flip or penalise, and carry `AllowAbilities = false` so shop helpers and consumables stay off on them. Level 200 is built specially from the chain-set goal.
+
+---
+
+## 9.11 Add or change an optional memory objective
+
+A few levels (`BonusPlanner.Offsets` into each region) carry an optional objective that uncovers one of the region's memories. It never blocks progress.
+
+- `BonusPlanner.Choose` tries the objective kinds in turn and keeps the first that is **possible**: the bot finds a plan with the objective included, then the real `GameEngine` plays that plan and the objective must actually be earned. The check has to use the real engine because a level ends the moment its main goals are met; an objective that could only be met afterwards is impossible.
+- To add a kind, add it to `BonusKind`, give it a description, an `IsEarned` rule (from `RunStats`), an `Evaluate` for the on-screen row, a `ProgressFraction` for the solver, and a candidate in `BonusPlanner`.
+- A memory is granted by `CampaignService.OnBonusEarned`, on a first clear or a replay, and pays no gold.
+- Tests: `BonusObjectiveTests` replays every shipped objective through the real engine.
+
+---
+
+## 9.12 Documentation checklist
 
 When you change behaviour, update the doc that owns it:
 
@@ -148,5 +171,26 @@ When you change behaviour, update the doc that owns it:
 | Drawing, effects, palette | [Graphics](06-graphics.md) |
 | Tests or test helpers | [Testing](07-testing.md) |
 | Build steps, versions, tooling | [Build and release](08-build-and-release.md) |
+| Regions, story text, scenes, rewards, the ending, looks | [Campaign and content](10-campaign-and-content.md), and `docs/story/economy.md` for any price |
 
 Write what the thing *does* and *why it is where it is*, not the story of how it got there.
+
+---
+
+## 9.13 Add a cosmetic (skin, burst, board, frame, Pip accessory)
+
+1. Add a `Cosmetic` to `CosmeticCatalog` (id, name, slot, description, how it is discovered, price; price 0 makes it a reward that is owned the moment its requirement is met). Skins and boards carry a `SkinSpec` or `BoardSpec`; bursts, frames and accessories name an existing style enum value. A new *style* (a new way to draw) is a case in the matching drawing code (`CellRenderer`, `BlastEffects.DrawSpark`, `GameDrawable.DrawFrame`, `PipDrawable.DrawAccessory`).
+2. A look is **discovered** through the story (`RegionRestored`) or an achievement, then bought. Never gate the story or accessibility behind gold, and never show a price on a locked look.
+3. `CosmeticTests` then checks it for you: colours defined as hex, hue near classic, the five colours far enough apart, symbols readable, and every skin legible on every board. Fix the data, not the test.
+4. Ownership is the unlock id `cosmetic_<id>`; equipping uses the existing `cos_*` keys, so no new key is needed.
+5. If the look draws something new, run it on a device at Pop Flair 3 during a long chain (see `docs/story/p5-playtest.md`).
+
+## 9.14 Add or change a helper
+
+Helpers are the only used-up items. Read `docs/story/helpers.md` first.
+
+1. The rule belongs in `GameEngine` (like `UseSecondChance` and `ShiftNextPiece`), gated by `HelpersAllowed` and a per-level charge copied in at game start. It must refuse in `Paused`, `ResolvingBursts` and after the level ends, raise only its own `GameEvent`, and leave the generator's sequence alone.
+2. Anything it changes that `RunStats` watches must roll back with an undo (`RunStats.Checkpoint`).
+3. Stock, price and requirement are a row in `ConsumableCatalog`; the stock key is a new `SaveKeys` entry (frozen list, save code).
+4. Never make a level need it. `LevelSolver` plays without helpers and the fairness tests keep it that way. If the helper changes what the solver models, change `LevelSolver` too.
+5. UI: a button in `GamePage.xaml` bound to a `GameViewModel` command, shown only when allowed and held, disabled with a reason, with a spoken description.
