@@ -6,7 +6,7 @@ Code: `src/PopBlocks/`. Target: `net10.0-android`, minimum Android 7.0 (API 24),
 App.xaml / App.xaml.cs       resources (palette, brushes, styles) and window creation
 MauiProgram.cs               dependency injection registrations
 Diagnostics.cs               logcat breadcrumbs and unhandled-exception logging
-Views/                       MainPage, LevelSelectPage, WorkshopPage (and its panels), AboutPage, GamePage
+Views/                       MainPage, LevelSelectPage, WorkshopPage (and its panels), SettingsPage, AboutPage, GamePage
 ViewModels/                  GameViewModel, ObservableObject
 Graphics/                    drawing code (see doc 6)
 Services/                    LocalSettingsService (MAUI Preferences)
@@ -17,7 +17,7 @@ Resources/                   app icon and splash (SVG)
 ## 5.1 Start-up sequence
 
 1. `MainApplication.OnCreate` installs `Diagnostics` (unhandled-exception logging).
-2. `MauiProgram.CreateMauiApp` registers services (see [Architecture](02-architecture.md#23-dependency-injection-and-start-up)).
+2. `MauiProgram.CreateMauiApp` registers services (see [Architecture](02-architecture.md#23-dependency-injection-and-start-up)), builds the container, then runs `PersistentSettings.RestoreIfFresh()` (a reinstall picks its progress up from the save file), `SaveMigrator`, and `CampaignService.Reconcile`, and finally asks for the save file to be brought up to date.
 3. `App` constructor loads `App.xaml` (colours, brushes, styles) and forces the dark theme.
 4. `App.CreateWindow` resolves `MainPage` and wraps it in a `NavigationPage`.
 5. `MainActivity.OnCreate` keeps the screen awake while the app is in front.
@@ -43,7 +43,7 @@ Design decisions:
 ### `MainPage` (menu, singleton)
 The page opens on a start screen with only **PLAY** (straight into the player's next Story level, which is level 1 for a new player) and **MORE**. MORE swaps in the full menu below, and BACK (or the Android Back button) swaps it out again. Which of the two is showing is kept in the page, so coming back from a game started with PLAY lands on the start screen and coming back from one started in the full menu lands on the full menu. The full menu also has a **TUTORIAL** button, which opens `GamePage` on lesson 1.
 
-The full menu is: gold chip, logo, the **Story card** (shows "Start" with level 1, or "Continue" with the next level and a count of cleared levels), buttons for Levels, Classic, Shop and About, three switches (pop effects, landing guide, sound effects) bound to `GameSettings`, and a how-to-play note. It refreshes in `OnAppearing`, so gold and progress are current after returning from a game or the shop. Starting a game resolves a fresh `GamePage` from the container, calls `Configure(setup)`, and pushes it.
+The full menu is: gold chip, logo, the **Story card** (shows "Start" with level 1, or "Continue" with the next level and a count of cleared levels), buttons for Levels, Classic, Shop, **Settings** and About, and a how-to-play note. The settings switches used to live here; they are on the Settings page now. On appearing it also tells the player once if a reinstall restored its progress from the save file (or found one it could not use). The first-launch name prompt has an "I HAVE A SAVE FILE" button that lets the player choose a save file by hand. It refreshes in `OnAppearing`, so gold and progress are current after returning from a game or the shop. Starting a game resolves a fresh `GamePage` from the container, calls `Configure(setup)`, and pushes it.
 
 ### `LevelSelectPage`
 Sections per tier, each a wrapped grid of numbered tiles. Cleared levels are marked, the next level is highlighted, locked levels are dimmed and not tappable. Only the first batch of levels is built; "SHOW MORE LEVELS" appends more (the list is endless in principle, so it is never built whole). Tiles are built in code because they are numerous and uniform.
@@ -66,8 +66,17 @@ The story the player has unlocked (scenes, characters, fragments, memories, with
 ### `DevMenuPage`
 Testing shortcuts from `DevTools`. Shown only when `DevMenu.Enabled` is true (Debug builds, or any build made with `-p:DevMenu=true`). In a normal Release build its button and shortcuts never show.
 
+### `SettingsPage`
+Opened by SETTINGS on the full menu. Three cards:
+
+- **Game**: pop effects, landing guide (off, outline, bold), reduced motion, sound effects, and board style (only once a style has been earned). All of them write straight to `GameSettings` / `CosmeticLoadout`.
+- **Your name**: shows and renames the in-game name (renaming never changes a level).
+- **Save data**: the state of the save file in words (`PersistentSettings.Status`), BACK UP NOW (writes now, and turns the file back on after it was deleted), FIND MY SAVE FILE (system file picker), the save code controls (COPY MY SAVE CODE, a box with PASTE and RESTORE), and DELETE SAVE DATA. Delete offers two choices, each with its own confirmation: the save file only (progress stays in the game but no longer survives an uninstall), or the file plus all progress. Restoring and erasing both end with a banner telling the player to close and reopen the game, and the page switches itself off, because `PersistentSettings` is then frozen.
+
+Restoring from a file or a pasted code goes through `SaveRestoreFlow`, which checks the code without changing anything, shows what it holds, asks, and only then writes.
+
 ### `AboutPage`
-Reads the version and build number from the installed package (`AppInfo`), so the text always matches the build. Contains the dedication and the product promises (see [Game design](01-game-design.md#18-product-promises)). Edit the wording in `AboutPage.xaml`. It also holds the **save code** controls: COPY MY SAVE CODE, a box with PASTE, and RESTORE, which shows what the code contains and asks before replacing anything, then asks the player to close and reopen the game (see [Architecture](02-architecture.md#26-persistence)).
+Reads the version and build number from the installed package (`AppInfo`), so the text always matches the build. Contains the dedication and the product promises (see [Game design](01-game-design.md#18-product-promises)). Edit the wording in `AboutPage.xaml`. The name and save code controls moved to Settings.
 
 ### `GamePage`
 The play screen. Layout (top to bottom): a glass HUD (pause button, level title, score, gold or best, the NEXT pieces), the **goal bar** (one row per goal with a progress bar, built with a `BindableLayout` over `Goals`), the board (`GraphicsView`), the collapsible controls drawer, and overlays. Overlays are a **coach card** (tutorial steps), a transient **toast** label (for example "No pop! -15"), and the pause / level complete / level failed / game over card with the gold reward line.
@@ -137,11 +146,11 @@ The row of five buttons can be folded away with a handle ("HIDE CONTROLS" / "SHO
 
 ## 5.8 Persistence in the app
 
-`LocalSettingsService` implements `ILocalSettings` over `Preferences.Default`. That is the only place the platform storage API is touched. The one other platform call that handles progress is the clipboard, used by the About page for the save code. The services that use it are in the engine project (see [Architecture](02-architecture.md#26-persistence)).
+`LocalSettingsService` implements `ILocalSettings` (and `IClearableSettings`) over `Preferences.Default`. `PersistentSettings` wraps it, and is what the services receive as `ILocalSettings`; it mirrors every change to the save file through `AndroidSaveFileStore` (MediaStore, `Documents/PopBlocks/`). Those two classes are where the platform storage API is touched. The other platform calls that handle progress are the clipboard and the file picker, used by the Settings page for the save code and "find my save file". The services that use it are in the engine project (see [Architecture](02-architecture.md#26-persistence)).
 
 ## 5.9 Android project notes
 
 - `ApplicationId` `com.popblocks.game`. `ApplicationDisplayVersion` (user-visible version, shown on the About page) and `ApplicationVersion` (integer build number) are in `PopBlocks.csproj`. **Increase `ApplicationVersion` for every build you install over an older one**, or Android may refuse the update.
-- `AndroidManifest.xml` declares **no permissions** and `allowBackup="false"`. Debug builds get `INTERNET` added automatically by the tooling so the debugger can attach; Release builds must not. Verify with `scripts/Check-Permissions.ps1`.
+- `AndroidManifest.xml` declares **no permissions** and `allowBackup="false"` (the save file in Documents is written through MediaStore, which needs neither). Debug builds get `INTERNET` added automatically by the tooling so the debugger can attach; Release builds must not. Verify with `scripts/Check-Permissions.ps1`.
 - Release builds are configured to produce an `.apk` (the default is `.aab` for the Play Store), so the file can be installed directly.
 - App icon and splash are small SVGs. **No gameplay graphics are image files**; blocks, symbols, effects and the logo are all drawn in code. That keeps the app tiny and resolution-independent.

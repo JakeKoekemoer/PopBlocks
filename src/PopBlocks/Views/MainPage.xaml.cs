@@ -11,25 +11,22 @@ public partial class MainPage : ContentPage
 {
     private readonly IServiceProvider _services;
     private readonly HighScoreService _highScores;
-    private readonly GameSettings _settings;
     private readonly PlayerProgress _progress;
-    private readonly CosmeticLoadout _loadout;
     private readonly PlayerIdentity _identity;
-    private bool _loadingSettings;
+    private readonly PersistentSettings _save;
     private bool _showingFullMenu;   // false: just PLAY and MORE. MORE shows the full menu.
 
-    public MainPage(IServiceProvider services, HighScoreService highScores, GameSettings settings, PlayerProgress progress,
-        CosmeticLoadout loadout, PlayerIdentity identity)
+    public MainPage(IServiceProvider services, HighScoreService highScores, PlayerProgress progress,
+        PlayerIdentity identity, PersistentSettings save)
     {
         Diagnostics.Crumb("MainPage ctor: start");
         InitializeComponent();
         Diagnostics.Crumb("MainPage ctor: xaml loaded");
         _services = services;
         _highScores = highScores;
-        _settings = settings;
         _progress = progress;
-        _loadout = loadout;
         _identity = identity;
+        _save = save;
 
         LogoView.Drawable = new LogoDrawable();
         StartLogoView.Drawable = new LogoDrawable();
@@ -43,19 +40,59 @@ public partial class MainPage : ContentPage
         base.OnAppearing();
         Diagnostics.Crumb("MainPage.OnAppearing");
 
-        _loadingSettings = true;
-        EffectsSwitch.IsToggled = _settings.BlastEffects;
-        ShowGuideStyle();
-        MotionSwitch.IsToggled = _settings.ReducedMotion;
-        SoundSwitch.IsToggled = _settings.SoundEffects;
-        _loadingSettings = false;
-
         ShowMenu();
         Refresh();
 
         // Asked once, before the tutorial offer (which comes when level 1 starts): a new player on their first launch, and
         // a player from before names existed on their first launch after the update. Skipping is allowed.
-        NamePrompt.IsVisible = _identity.NeedsPrompt;
+        NamePrompt.IsVisible = _identity.NeedsPrompt && !_save.IsFrozen;
+
+        ShowRestoreNotice();
+    }
+
+    /// <summary>
+    /// A reinstall that found its save file says so once. A save file that was found but could not be used is reported too,
+    /// so the player knows nothing has been written over it and where to look.
+    /// </summary>
+    private async void ShowRestoreNotice()
+    {
+        try
+        {
+            var notice = _save.TakeRestoreNotice();
+            if (notice.Kind == RestoreKind.Restored)
+            {
+                var s = notice.Summary!;
+                await DisplayAlert($"Welcome back, {_identity.Name}",
+                    $"Your progress was restored from your save file: {s.HighestCleared} levels cleared and {s.Gold:N0} gold.",
+                    "OK");
+            }
+            else if (notice.Kind == RestoreKind.Unreadable)
+            {
+                await DisplayAlert("Save file found",
+                    $"PopBlocks found a save file in {_save.Location} but couldn't use it ({notice.Error}). It hasn't been changed, and nothing will be saved over it until you choose BACK UP NOW in Settings. You can also choose a file by hand there.",
+                    "OK");
+            }
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("MainPage.ShowRestoreNotice", e);
+        }
+    }
+
+    private async void OnNameFindSaveClicked(object? sender, EventArgs e)
+    {
+        var result = await SaveRestoreFlow.FindFileAsync(this, _save);
+        if (result.Done)
+        {
+            NamePrompt.IsVisible = false;
+            RestoredText.Text = result.Message;
+            RestoredOverlay.IsVisible = true;
+            SemanticScreenReader.Announce(result.Message);
+        }
+        else if (result.Message.Length > 0)
+        {
+            await DisplayAlert("Save file", result.Message, "OK");
+        }
     }
 
     private void OnNameContinueClicked(object? sender, EventArgs e) => AnswerNamePrompt(NameEntry.Text);
@@ -109,10 +146,6 @@ public partial class MainPage : ContentPage
             ? "Start here."
             : $"{place} · {StoryConfig.Name(tier)} · {_progress.HighestCleared} cleared";
         PlayButton.Text = _progress.HighestCleared == 0 ? "START" : "CONTINUE";
-
-        // Board style is only offered once a style has been earned.
-        BoardStyleRow.IsVisible = CosmeticLoadout.Themes.Any(t => _loadout.IsAvailable(t.Id));
-        BoardStyleButton.Text = BoardName(_loadout.SelectedBoard).ToUpperInvariant();
 
         int best = _highScores.GetBest(GameSetup.Classic.BestScoreKey);
         BestLabel.Text = best > 0 ? $"Classic best  {best:N0}" : string.Empty;
@@ -188,48 +221,6 @@ public partial class MainPage : ContentPage
     private async void OnAboutClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(_services.GetRequiredService<AboutPage>());
 
-    // ------------------------------------------------------------------ settings
-
-    private static string BoardName(string id) =>
-        CosmeticLoadout.Themes.FirstOrDefault(t => t.Id == id)?.Name ?? "Classic";
-
-    /// <summary>Cycles through the board styles the player owns: Classic, then each earned style.</summary>
-    private void OnBoardStyleClicked(object? sender, EventArgs e)
-    {
-        var owned = new List<string> { CosmeticLoadout.DefaultId };
-        owned.AddRange(CosmeticLoadout.Themes.Where(t => _loadout.IsAvailable(t.Id)).Select(t => t.Id));
-
-        int at = owned.IndexOf(_loadout.SelectedBoard);
-        _loadout.Select(owned[(at + 1) % owned.Count]);
-        BoardStyleButton.Text = BoardName(_loadout.SelectedBoard).ToUpperInvariant();
-    }
-
-    private void OnEffectsToggled(object? sender, ToggledEventArgs e)
-    {
-        if (!_loadingSettings) _settings.BlastEffects = e.Value;
-    }
-
-    private static string GuideName(int style) => style switch { 0 => "OFF", 2 => "BOLD", _ => "OUTLINE" };
-
-    private void ShowGuideStyle()
-    {
-        GuideButton.Text = GuideName(_settings.LandingGuideStyle);
-        SemanticProperties.SetDescription(GuideButton, $"Landing guide: {GuideName(_settings.LandingGuideStyle).ToLowerInvariant()}. Tap to change.");
-    }
-
-    private void OnGuideClicked(object? sender, EventArgs e)
-    {
-        _settings.LandingGuideStyle = (_settings.LandingGuideStyle + 1) % 3;
-        ShowGuideStyle();
-    }
-
-    private void OnMotionToggled(object? sender, ToggledEventArgs e)
-    {
-        if (!_loadingSettings) _settings.ReducedMotion = e.Value;
-    }
-
-    private void OnSoundToggled(object? sender, ToggledEventArgs e)
-    {
-        if (!_loadingSettings) _settings.SoundEffects = e.Value;
-    }
+    private async void OnSettingsClicked(object? sender, EventArgs e) =>
+        await Navigation.PushAsync(_services.GetRequiredService<SettingsPage>());
 }

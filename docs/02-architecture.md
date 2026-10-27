@@ -53,7 +53,7 @@ Graphics (GameDrawable, ...)       draws engine state; never changes it
 - **GameViewModel** is the only thing that drives the engine. It turns engine changes into bindable properties, owns the dispatcher timer that calls `Tick()`, runs the tutorial controller, and pays gold when a level is completed.
 - **Graphics** only reads the engine. Drawing code never decides a rule. If drawing needs to know something (for example "which cells are about to pop") the engine exposes it as state (`PendingGroups`).
 
-Menu pages (`MainPage`, `LevelSelectPage`, `WorkshopPage`, `AboutPage`) are thin. They read services (`PlayerProgress`, `ShopService`, `GameSettings`) directly and navigate. They have no view model because they have almost no logic worth testing; the testable logic lives in the services in the engine project.
+Menu pages (`MainPage`, `LevelSelectPage`, `WorkshopPage`, `SettingsPage`, `AboutPage`) are thin. They read services (`PlayerProgress`, `ShopService`, `GameSettings`) directly and navigate. They have no view model because they have almost no logic worth testing; the testable logic lives in the services in the engine project.
 
 ## 2.3 Dependency injection and start-up
 
@@ -61,7 +61,7 @@ Menu pages (`MainPage`, `LevelSelectPage`, `WorkshopPage`, `AboutPage`) are thin
 
 | Lifetime | Types | Reason |
 |---|---|---|
-| Singleton | `ILocalSettings`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
+| Singleton | `ILocalSettings` (the `PersistentSettings` wrapper over `LocalSettingsService`), `ISaveFileStore`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
 | Transient | `GamePage`, `GameViewModel`, `LevelSelectPage`, `WorkshopPage`, `ShopPanel`, `WardrobePanel`, `TrophiesPanel`, `AchievementsPanel`, `JournalPanel`, `ArchivePage`, `DevMenuPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
 
 Rules to keep:
@@ -109,7 +109,7 @@ A separate ~60 fps **animation timer** in `GamePage` repaints the board only whi
 
 ## 2.6 Persistence
 
-The engine defines `ILocalSettings` (int, bool, string get/set). The app implements it with MAUI `Preferences` (Android SharedPreferences) in `Services/LocalSettingsService.cs`; the tests implement it in memory. Services in the engine depend only on the interface.
+The engine defines `ILocalSettings` (int, bool, string get/set). The app implements it with MAUI `Preferences` (Android SharedPreferences) in `Services/LocalSettingsService.cs`; the tests implement it in memory. Services in the engine depend only on the interface. What the services are actually given is `PersistentSettings`, a wrapper around that store that also keeps the durable save file (see below).
 
 Why: save logic (gold, unlocks, purchases) is some of the most important code in the game, because a bug there loses a player's progress. Putting it behind an interface keeps it fully testable.
 
@@ -138,6 +138,22 @@ Story state is **derived, not stored twice**: a region's state comes from `Playe
 ### Save code
 
 `Services/SaveCode.cs` turns the keys above (except the format version) into one line of text, `PB1.` plus checksummed, compressed, URL-safe base64, for moving progress to a new phone or past a reinstall. It needs no file access, permission or network. Reading a code never trusts it: the checksum is checked before unpacking, the unpacked size is capped, only known keys are accepted, values are range-checked and clamped, ids are character-checked, and nothing is written unless the whole code is valid. The app must be restarted after a restore, because services read their data once at start. `SaveCodeTests` covers the round trip, tampering, truncation, a forged compression bomb and out-of-range values; a test also fails when a new key is added without deciding whether the code should carry it.
+
+### Persistent save file
+
+Preferences are deleted when the app is uninstalled, so `Services/PersistentSettings.cs` wraps the real store and keeps a durable copy. It passes every get and set straight through, and a moment after a change (1.5 s, collapsed into one write; also flushed from `MainActivity.OnPause`) it writes `SaveCode.Export` of the whole save through an `ISaveFileStore`. The Android store (`Platforms/Android/AndroidSaveFileStore.cs`) uses MediaStore to keep `Documents/PopBlocks/popblocks-save.txt`, which Android does not remove with the app and which needs no permission on Android 10 and newer. Below Android 10 the store reports itself unavailable and the game relies on the save code alone (a storage permission would break the "no permissions" promise).
+
+The file holds exactly one save code, so everything `SaveCode` guarantees applies to it, and a player can paste its text into RESTORE.
+
+How it stays safe:
+
+- **Restore happens once, on a fresh install only.** `MauiProgram` calls `RestoreIfFresh()` after the container is built and before `SaveMigrator`/any service reads data. "Fresh" means no `save_version`, no `progress_highest`, no `gold` and no `best_score`. An install that already has progress is never overwritten from the file. The result is kept for `MainPage` to tell the player once (`TakeRestoreNotice`).
+- **A file that exists but cannot be used is never replaced automatically.** If the file cannot be opened or is not a valid save, `PersistentSettings` stops writing (status `Blocked`) and leaves it untouched until the player chooses BACK UP NOW.
+- **Deleting is the player's choice.** `DeleteFile()` removes the file and turns the mirror off (`save_file_enabled` = false; BACK UP NOW turns it on again). `EraseEverything()` also clears the real store (`IClearableSettings`).
+- **Freezing.** After a restore from a file or code, or an erase, `Freeze()` makes every later write a no-op. The running services still hold the old values in memory, and without this they would write them back over the restore. The app has to be closed and opened again, as it always had to after a restore.
+- `save_file_enabled` is a property of the phone, not of progress, so it is deliberately not in `SaveKeys` or a save code.
+
+If a reinstall cannot see the old file (Android decides which files an install may read), the player can choose it by hand: Settings → FIND MY SAVE FILE, or "I HAVE A SAVE FILE" on the first-launch name prompt. Both use the system file picker (no permission) and the same check-confirm-restore flow as pasting a code (`Views/SaveRestoreFlow.cs`). `PersistentSettingsTests` covers all of the above with an in-memory store.
 
 Changing a key name loses existing players' data. Add new keys; do not rename old ones.
 

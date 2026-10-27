@@ -107,6 +107,9 @@ public static class SaveKeys
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
     };
 
+    // Not listed here on purpose: PersistentSettings.EnabledKey ("save_file_enabled"). It records whether this phone keeps a
+    // save file outside the app. That is a choice about the phone, not progress, so it is never carried in a save code.
+
     /// <summary>Every key, for tests and documentation.</summary>
     public static IReadOnlyList<string> All { get; } = new[]
     {

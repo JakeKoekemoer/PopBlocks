@@ -24,7 +24,7 @@ MADE FOR EVERYONE
 - Every colour also has its own symbol on the block, so colour is never the only clue
 - Play with simple gestures (tap to rotate, drag to move, flick down to drop) or with the on-screen buttons, which you can hide
 - The game pauses by itself if you get a call or switch apps
-- Pop effects and sound effects can be switched off
+- Pop effects and sound effects can be switched off in Settings
 
 PRIVATE BY DESIGN
-PopBlocks never connects to the internet. There are no ads, no accounts, no tracking and no in-app purchases. Your progress, and the in-game name you choose, stay on your phone, and you can move it to another phone with the save code on the About page.
+PopBlocks never connects to the internet. There are no ads, no accounts, no tracking and no in-app purchases. Your progress, and the in-game name you choose, stay on your phone. A small text file in your Documents folder keeps your progress safe through a reinstall, you can delete it in Settings, and you can move your progress to another phone with the save code in Settings.

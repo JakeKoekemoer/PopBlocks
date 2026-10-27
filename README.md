@@ -10,14 +10,14 @@ Connect four or more cells of one colour (sideways or up/down, not diagonally) a
 PopBlocks.sln
 src/
   PopBlocks.Engine/     Pure C# rules: board, pieces, collision, matching, gravity, scoring, game state, undo, board generation, Story levels and the
-                        level solver; the campaign (regions, scenes, rewards, ending); the shop, helpers, cosmetics, achievements and the save code.
+                        level solver; the campaign (regions, scenes, rewards, ending); the shop, helpers, cosmetics, achievements, the save code and the save file mirror (`PersistentSettings`).
                         No MAUI references, so it is unit-testable without Android.
   PopBlocks/            The .NET MAUI app (net10.0-android): drawing, view model, pages, platform code.
     Graphics/           VisualDesign (palette, skins), CellRenderer, GameDrawable (board, neon pops, flip, boards, frames), BlastEffects (burst styles, flair), Pip and the story pictures
     ViewModels/         GameViewModel (observable state, commands, game timer, tutorial coaching)
     Views/              MainPage (menu), LevelSelectPage, GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage (the four workshop tabs: ShopPanel for
-                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage, AboutPage (with the save
-                        code), DevMenuPage (development builds)
+                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage, SettingsPage (settings, name, saved data), AboutPage,
+                        DevMenuPage (development builds)
     Services/           LocalSettingsService (MAUI Preferences)
 tests/
   PopBlocks.Tests/      xUnit tests for the engine
@@ -69,11 +69,11 @@ Every generated level is **proven winnable**: a bot plays it first, and the move
 
 A locked item tells you how to find it and never shows a price. Prices, rewards and requirements are data (`Services/ShopCatalog.cs`, `ConsumableInventory.cs`, `CosmeticCatalog.cs`); the reasoning is in `docs/story/economy.md`. There is nothing to buy with real money.
 
-**Save code.** The About page can copy your progress as one line of text and restore it on another phone (the app keeps no cloud backup, by design).
+**Saved data.** Progress is also kept in a small text file, `Documents/PopBlocks/popblocks-save.txt`, so uninstalling and reinstalling PopBlocks does not lose it (Android 10 or newer; no permission is needed, and nothing is uploaded). Settings shows its state, can back it up on demand, find it by hand if a reinstall did not pick it up, and delete it or erase all progress. The same Settings section can copy progress as one line of text (the **save code**) and restore it on another phone. The app keeps no cloud backup, by design.
 
 **Classic** starts from an empty board and speeds up with your score. It keeps a personal best and **earns gold** for every block popped (paid when the run ends, when you leave, or when the app goes to the background). An optional **seed** (the SEED link in the menu) gives the same pieces again; a run on a typed seed pays gold but never sets the best score.
 
-**Pops.** A match first lights up in its own colour, turns solid neon, and then bursts. Pop effects can be switched off on the menu (pops are then instant).
+**Pops.** A match first lights up in its own colour, turns solid neon, and then bursts. Pop effects can be switched off in Settings (pops are then instant).
 
 ## Controls
 
