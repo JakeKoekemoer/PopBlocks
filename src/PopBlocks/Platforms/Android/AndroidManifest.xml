@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<!-- PopBlocks is fully offline: deliberately NO <uses-permission> entries (no INTERNET, no ACCESS_NETWORK_STATE).
+	     Note: Debug builds are given INTERNET automatically by the Android tooling for the debugger.
+	     Release builds must not contain it - verify with scripts/Check-Permissions.ps1. -->
+	<application android:allowBackup="false"
+	             android:icon="@mipmap/appicon"
+	             android:roundIcon="@mipmap/appicon_round"
+	             android:supportsRtl="true"></application>
+</manifest>

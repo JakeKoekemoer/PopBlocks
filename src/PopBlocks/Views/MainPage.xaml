@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PopBlocks.Views.MainPage"
+             NavigationPage.HasNavigationBar="False"
+             Background="{StaticResource PageGradient}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24,20,24,28" Spacing="16">
+
+            <!-- Gold -->
+            <Border Style="{StaticResource Glass}"
+                    HorizontalOptions="End"
+                    Padding="12,6">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="20" />
+                </Border.StrokeShape>
+                <HorizontalStackLayout Spacing="8">
+                    <GraphicsView x:Name="CoinView" WidthRequest="22" HeightRequest="22" VerticalOptions="Center" />
+                    <Label x:Name="GoldLabel"
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Border>
+
+            <GraphicsView x:Name="LogoView"
+                          HeightRequest="64"
+                          WidthRequest="320"
+                          HorizontalOptions="Center"
+                          Margin="0,4,0,0" />
+
+            <Label Text="PopBlocks"
+                   FontSize="44"
+                   FontAttributes="Bold"
+                   CharacterSpacing="1"
+                   TextColor="{StaticResource TextPrimary}"
+                   HorizontalOptions="Center" />
+
+            <Label Text="Connect four or more of a colour to pop them."
+                   Style="{StaticResource BodyLabel}"
+                   HorizontalTextAlignment="Center"
+                   HorizontalOptions="Center" />
+
+            <!-- Story: continue where you left off -->
+            <Border Style="{StaticResource Glass}" Padding="22,20" Margin="0,8,0,0">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="STORY" Style="{StaticResource CaptionLabel}" TextColor="{StaticResource Accent}" />
+                    <Label x:Name="NextLevelLabel"
+                           FontSize="34"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}" />
+                    <Label x:Name="NextLevelDetail" Style="{StaticResource BodyLabel}" />
+                    <Button x:Name="PlayButton"
+                            Text="PLAY"
+                            Style="{StaticResource PrimaryButton}"
+                            Margin="0,12,0,0"
+                            Clicked="OnPlayClicked" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="12">
+                <Button Grid.Row="0" Grid.Column="0" Text="LEVELS" Style="{StaticResource SecondaryButton}"
+                        MinimumWidthRequest="0" Clicked="OnLevelsClicked" />
+                <Button Grid.Row="0" Grid.Column="1" Text="CLASSIC" Style="{StaticResource SecondaryButton}"
+                        MinimumWidthRequest="0" Clicked="OnClassicClicked" />
+                <Button Grid.Row="1" Grid.Column="0" Text="SHOP" Style="{StaticResource SecondaryButton}"
+                        MinimumWidthRequest="0" Clicked="OnShopClicked" />
+                <Button Grid.Row="1" Grid.Column="1" Text="ABOUT" Style="{StaticResource SecondaryButton}"
+                        MinimumWidthRequest="0" Clicked="OnAboutClicked" />
+            </Grid>
+
+            <Label x:Name="BestLabel"
+                   FontSize="14"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource TextSecondary}"
+                   HorizontalOptions="Center" />
+
+            <!-- Settings -->
+            <Border Style="{StaticResource Glass}" Padding="18,8" Margin="0,4,0,0">
+                <VerticalStackLayout Spacing="2">
+                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                        <VerticalStackLayout VerticalOptions="Center">
+                            <Label Text="Pop effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                            <Label Text="Neon glow and burst when blocks pop" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                        </VerticalStackLayout>
+                        <Switch x:Name="EffectsSwitch"
+                                Grid.Column="1"
+                                OnColor="{StaticResource Accent}"
+                                Toggled="OnEffectsToggled" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                        <VerticalStackLayout VerticalOptions="Center">
+                            <Label Text="Landing guide" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                            <Label Text="Outline where the piece will land" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                        </VerticalStackLayout>
+                        <Switch x:Name="GhostSwitch"
+                                Grid.Column="1"
+                                OnColor="{StaticResource Accent}"
+                                Toggled="OnGhostToggled" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <VerticalStackLayout Spacing="4" HorizontalOptions="Center" Margin="0,8,0,0">
+                <Label Text="HOW TO PLAY" Style="{StaticResource CaptionLabel}" HorizontalOptions="Center" />
+                <Label Style="{StaticResource BodyLabel}"
+                       FontSize="13"
+                       HorizontalTextAlignment="Center"
+                       Text="Tap the board to rotate. Drag sideways to move. Drag down to soften the fall, or flick down to drop. The buttons below the board do the same, and can be folded away." />
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

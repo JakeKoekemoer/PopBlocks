@@ -1,0 +1,142 @@
+using System.Text;
+
+namespace PopBlocks.Engine.Models;
+
+/// <summary>
+/// Grid of locked cells. Origin is top-left, X grows right, Y grows down.
+/// Rows 0..HiddenRows-1 are the hidden spawn area.
+/// </summary>
+public sealed class Board
+{
+    private readonly CellColour[] _cells;
+
+    public int Width { get; }
+    public int Height { get; }
+
+    public Board(int width = GameConfig.Columns, int height = GameConfig.TotalRows)
+    {
+        if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+        if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
+        Width = width;
+        Height = height;
+        _cells = new CellColour[width * height];
+    }
+
+    public CellColour this[int x, int y]
+    {
+        get
+        {
+            if (!IsInside(x, y)) throw new ArgumentOutOfRangeException($"({x},{y}) is outside the board.");
+            return _cells[y * Width + x];
+        }
+        set
+        {
+            if (!IsInside(x, y)) throw new ArgumentOutOfRangeException($"({x},{y}) is outside the board.");
+            _cells[y * Width + x] = value;
+        }
+    }
+
+    public bool IsInside(int x, int y) => (uint)x < (uint)Width && (uint)y < (uint)Height;
+
+    public bool IsEmpty(int x, int y) => this[x, y] == CellColour.Empty;
+
+    public void Clear() => Array.Clear(_cells);
+
+    /// <summary>Overwrites this board's cells with another board's. Both must be the same size.</summary>
+    public void CopyFrom(Board other)
+    {
+        if (other.Width != Width || other.Height != Height)
+            throw new ArgumentException("Boards must be the same size.", nameof(other));
+        Array.Copy(other._cells, _cells, _cells.Length);
+    }
+
+    public Board Clone()
+    {
+        var copy = new Board(Width, Height);
+        Array.Copy(_cells, copy._cells, _cells.Length);
+        return copy;
+    }
+
+    /// <summary>True if any cell in rows [startRow, endRow) is occupied.</summary>
+    public bool AnyInRows(int startRow, int endRow)
+    {
+        for (int y = Math.Max(0, startRow); y < Math.Min(Height, endRow); y++)
+            for (int x = 0; x < Width; x++)
+                if (_cells[y * Width + x] != CellColour.Empty)
+                    return true;
+        return false;
+    }
+
+    public int CountOccupied()
+    {
+        int n = 0;
+        foreach (var c in _cells) if (c != CellColour.Empty) n++;
+        return n;
+    }
+
+    // ---- Text helpers (used heavily by tests) ----
+    // '.' empty, C cyan, R coral, Y yellow, P purple, L lime.
+
+    /// <summary>
+    /// Builds a board from text rows. Rows are bottom-aligned (the last row is the bottom of the board),
+    /// and short rows are padded with empty cells on the right.
+    /// </summary>
+    public static Board FromRows(IReadOnlyList<string> rows, int width = GameConfig.Columns, int height = GameConfig.TotalRows)
+    {
+        if (rows.Count > height) throw new ArgumentException("More rows than the board is tall.", nameof(rows));
+        var board = new Board(width, height);
+        int top = height - rows.Count;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            string row = rows[i];
+            if (row.Length > width) throw new ArgumentException($"Row {i} is wider than the board.", nameof(rows));
+            for (int x = 0; x < row.Length; x++)
+                board[x, top + i] = FromChar(row[x]);
+        }
+        return board;
+    }
+
+    public string[] ToRows()
+    {
+        var rows = new string[Height];
+        var sb = new StringBuilder(Width);
+        for (int y = 0; y < Height; y++)
+        {
+            sb.Clear();
+            for (int x = 0; x < Width; x++) sb.Append(ToChar(_cells[y * Width + x]));
+            rows[y] = sb.ToString();
+        }
+        return rows;
+    }
+
+    /// <summary>The bottom <paramref name="count"/> rows joined with newlines.</summary>
+    public string BottomRows(int count)
+    {
+        var rows = ToRows();
+        return string.Join("\n", rows.Skip(Math.Max(0, rows.Length - count)));
+    }
+
+    public override string ToString() => string.Join("\n", ToRows());
+
+    public static char ToChar(CellColour c) => c switch
+    {
+        CellColour.Empty => '.',
+        CellColour.Cyan => 'C',
+        CellColour.Coral => 'R',
+        CellColour.Yellow => 'Y',
+        CellColour.Purple => 'P',
+        CellColour.Lime => 'L',
+        _ => '?',
+    };
+
+    public static CellColour FromChar(char ch) => char.ToUpperInvariant(ch) switch
+    {
+        '.' or ' ' => CellColour.Empty,
+        'C' => CellColour.Cyan,
+        'R' => CellColour.Coral,
+        'Y' => CellColour.Yellow,
+        'P' => CellColour.Purple,
+        'L' => CellColour.Lime,
+        _ => throw new ArgumentException($"Unknown board character '{ch}'."),
+    };
+}

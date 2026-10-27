@@ -1,0 +1,79 @@
+## ---------------------------------------------------------------------------
+## PopBlocks .gitignore  (.NET MAUI, Android only, Visual Studio)
+## Commit source, project files and docs. Do not commit anything that a build, an IDE,
+## a test run or a signing step can regenerate, and never commit secrets.
+## ---------------------------------------------------------------------------
+
+## ---- Build output --------------------------------------------------------
+bin/
+obj/
+publish/
+artifacts/
+
+## ---- Visual Studio and other IDEs ----------------------------------------
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.DotSettings.user
+_ReSharper*/
+*.resharper.user
+*.log
+
+## ---- Tests and coverage --------------------------------------------------
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+
+## ---- NuGet ---------------------------------------------------------------
+*.nupkg
+*.snupkg
+
+## ---- Android -------------------------------------------------------------
+## Built packages: share them through a release page, not through git.
+*.apk
+*.aab
+*.apks
+## Signing material: NEVER commit. A leaked keystore lets someone publish updates as you.
+*.keystore
+*.jks
+*.pfx
+*.p12
+*.snk
+keystore.properties
+signing.properties
+## Machine-specific paths written by the Android tooling.
+local.properties
+## Crash and memory dumps from device tooling.
+*.hprof
+*.dmp
+
+## ---- Secrets and local configuration --------------------------------------
+## The game is offline and has no API keys, but this keeps one from slipping in later.
+.env
+.env.*
+secrets.json
+*.secrets.json
+
+## ---- Operating system ----------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+*~
+*.swp
+
+## ---- Project specific ----------------------------------------------------
+## Files parked for deletion; they are outside the solution and not part of the game.
+_to_delete/
+## Local scratch space.
+scratch/

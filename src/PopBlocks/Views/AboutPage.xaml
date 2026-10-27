@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PopBlocks.Views.AboutPage"
+             NavigationPage.HasNavigationBar="False"
+             Background="{StaticResource PageGradient}">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" RowSpacing="8">
+        <Button Grid.Row="0"
+                Text="←"
+                Style="{StaticResource RoundButton}"
+                FontSize="18"
+                HorizontalOptions="Start"
+                Clicked="OnBackClicked" />
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="18" Padding="4,8,4,32">
+
+                <GraphicsView x:Name="LogoView"
+                              HeightRequest="56"
+                              WidthRequest="280"
+                              HorizontalOptions="Center" />
+
+                <VerticalStackLayout Spacing="2">
+                    <Label Text="PopBlocks"
+                           FontSize="34"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}"
+                           HorizontalOptions="Center" />
+                    <Label x:Name="VersionLabel"
+                           Style="{StaticResource CaptionLabel}"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+
+                <!-- The dedication -->
+                <Border Style="{StaticResource Glass}" Padding="24,24">
+                    <VerticalStackLayout Spacing="14">
+                        <Label Text="A DEDICATION" Style="{StaticResource CaptionLabel}" TextColor="{StaticResource GoldColor}" />
+                        <Label Text="For my wife."
+                               FontSize="26"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource TextPrimary}" />
+                        <Label Style="{StaticResource BodyLabel}"
+                               FontSize="15"
+                               Text="So many of the games she loves are built to interrupt her: ads that ambush the screen, timers that nag, little tricks to part her from her money." />
+                        <Label Style="{StaticResource BodyLabel}"
+                               FontSize="15"
+                               Text="She deserves a game that simply respects her time. PopBlocks is that game. It is made with love, and dedicated to her." />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Promises -->
+                <Border Style="{StaticResource Glass}" Padding="24,20">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="OUR PROMISES" Style="{StaticResource CaptionLabel}" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="No ads. Not now, not ever." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="No tracking and no accounts. Your progress stays on your phone." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="No internet needed. It works anywhere, even on a plane." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="Gold is earned by playing. It can't be bought." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="Thanks for playing."
+                       Style="{StaticResource BodyLabel}"
+                       HorizontalOptions="Center" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:PopBlocks.ViewModels"
+             xmlns:levels="clr-namespace:PopBlocks.Engine.Levels;assembly=PopBlocks.Engine"
+             x:Class="PopBlocks.Views.GamePage"
+             x:DataType="vm:GameViewModel"
+             NavigationPage.HasNavigationBar="False"
+             Background="{StaticResource PageGradient}">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto"
+          Padding="12,6,12,10"
+          RowSpacing="8">
+
+        <!-- HUD: pause, level and score, moves left, upcoming pieces -->
+        <Border Grid.Row="0" Style="{StaticResource Glass}" Padding="12,10">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="II"
+                        Style="{StaticResource RoundButton}"
+                        Command="{Binding PauseCommand}"
+                        VerticalOptions="Center" />
+
+                <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                    <Label Text="{Binding TitleText}" Style="{StaticResource CaptionLabel}" />
+                    <Label Text="{Binding ScoreText}"
+                           FontSize="28"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}" />
+                    <Label Text="{Binding SubText}"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="2"
+                                     IsVisible="{Binding HasMoves}"
+                                     Spacing="0"
+                                     VerticalOptions="Center"
+                                     MinimumWidthRequest="58">
+                    <Label Text="MOVES" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding MovesText}"
+                           FontSize="30"
+                           FontAttributes="Bold"
+                           TextColor="{Binding MovesColour}"
+                           HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="3" Spacing="0" VerticalOptions="Center">
+                    <Label Text="NEXT" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
+                    <GraphicsView x:Name="NextView" WidthRequest="64" HeightRequest="50" />
+                </VerticalStackLayout>
+            </Grid>
+        </Border>
+
+        <!-- Goals -->
+        <Border Grid.Row="1" Style="{StaticResource Glass}" Padding="14,10" IsVisible="{Binding HasGoals}">
+            <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Goals}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="levels:GoalState">
+                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                            <Label Grid.Column="0"
+                                   Text="{Binding Text}"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{StaticResource TextPrimary}" />
+                            <Label Grid.Column="1"
+                                   Text="{Binding ProgressText}"
+                                   FontSize="13"
+                                   TextColor="{StaticResource TextSecondary}" />
+                            <Label Grid.Column="2"
+                                   Text="✓"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="#39FF14"
+                                   IsVisible="{Binding IsComplete}" />
+                            <ProgressBar Grid.Row="1"
+                                         Grid.ColumnSpan="3"
+                                         Progress="{Binding Fraction}"
+                                         ProgressColor="{StaticResource Accent}"
+                                         BackgroundColor="#22FFFFFF"
+                                         HeightRequest="6" />
+                        </Grid>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- Board, with the tutorial card and little messages floating over it -->
+        <Grid Grid.Row="2">
+            <GraphicsView x:Name="BoardView" />
+
+            <Label Text="{Binding ChainText}"
+                   IsVisible="{Binding HasChain}"
+                   FontSize="16"
+                   FontAttributes="Bold"
+                   TextColor="#FBBF24"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Start"
+                   Margin="0,6,0,0" />
+
+            <Label x:Name="ToastLabel"
+                   IsVisible="False"
+                   Opacity="0"
+                   FontSize="22"
+                   FontAttributes="Bold"
+                   TextColor="#FB7185"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"
+                   InputTransparent="True" />
+
+            <Border x:Name="CoachCard"
+                    Style="{StaticResource Glass}"
+                    BackgroundColor="#EE141B38"
+                    IsVisible="{Binding CoachVisible}"
+                    VerticalOptions="Center"
+                    Margin="14,0"
+                    Padding="18,16">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{Binding CoachTitle}"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}" />
+                    <Label Text="{Binding CoachText}"
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="15" />
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
+                        <Button Grid.Column="0"
+                                Text="SKIP"
+                                Style="{StaticResource GhostButton}"
+                                IsVisible="{Binding CoachCanSkip}"
+                                Command="{Binding SkipCoachCommand}"
+                                Padding="0,0,12,0"
+                                HorizontalOptions="Start" />
+                        <Label Grid.Column="1"
+                               Text="{Binding CoachFooter}"
+                               IsVisible="{Binding CoachHasFooter}"
+                               Style="{StaticResource CaptionLabel}"
+                               TextColor="{StaticResource Accent}"
+                               HorizontalOptions="End"
+                               VerticalOptions="Center" />
+                        <Button Grid.Column="2"
+                                Text="GOT IT"
+                                Style="{StaticResource PrimaryButton}"
+                                HeightRequest="44"
+                                MinimumWidthRequest="110"
+                                CornerRadius="22"
+                                FontSize="14"
+                                IsVisible="{Binding CoachNeedsTap}"
+                                Command="{Binding DismissCoachCommand}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Controls: fold away with the handle; the gestures on the board always work -->
+        <VerticalStackLayout Grid.Row="3" Spacing="2">
+            <Button x:Name="DrawerToggle"
+                    Text="HIDE CONTROLS  ▼"
+                    Style="{StaticResource GhostButton}"
+                    HorizontalOptions="Center"
+                    Clicked="OnToggleControls" />
+
+            <Grid x:Name="ControlsGrid" ColumnDefinitions="*,*,1.3*,*,*" ColumnSpacing="8">
+                <Button x:Name="LeftButton" Grid.Column="0" Text="LEFT" Style="{StaticResource ControlButton}" />
+                <Button x:Name="RightButton" Grid.Column="1" Text="RIGHT" Style="{StaticResource ControlButton}" />
+                <Button x:Name="RotateButton" Grid.Column="2" Text="ROTATE" Style="{StaticResource AccentControlButton}" />
+                <Button x:Name="DownButton" Grid.Column="3" Text="DOWN" Style="{StaticResource ControlButton}" />
+                <Button x:Name="DropButton" Grid.Column="4" Text="DROP" Style="{StaticResource ControlButton}" />
+            </Grid>
+        </VerticalStackLayout>
+
+        <!-- Pause / level complete / level failed / game over -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding IsOverlayVisible}"
+              BackgroundColor="{StaticResource Overlay}"
+              Margin="-12,-6,-12,-10">
+            <Border Style="{StaticResource Glass}"
+                    BackgroundColor="#F2141B38"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Center"
+                    WidthRequest="320"
+                    Padding="24,28">
+                <VerticalStackLayout Spacing="14" HorizontalOptions="Fill">
+                    <Label Text="{Binding OverlayTitle}"
+                           FontSize="30"
+                           FontAttributes="Bold"
+                           CharacterSpacing="1"
+                           TextColor="{StaticResource TextPrimary}"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding OverlayDetail}"
+                           FontSize="17"
+                           TextColor="{StaticResource TextSecondary}"
+                           HorizontalTextAlignment="Center" />
+
+                    <HorizontalStackLayout IsVisible="{Binding HasGoldReward}"
+                                           HorizontalOptions="Center"
+                                           Spacing="10">
+                        <GraphicsView x:Name="CoinView" WidthRequest="30" HeightRequest="30" VerticalOptions="Center" />
+                        <Label Text="{Binding GoldRewardText}"
+                               FontSize="26"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource GoldColor}"
+                               VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <Label Text="{Binding GoldNote}"
+                           IsVisible="{Binding HasGoldNote}"
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="12"
+                           HorizontalTextAlignment="Center" />
+
+                    <Button Text="NEXT LEVEL"
+                            Style="{StaticResource PrimaryButton}"
+                            IsVisible="{Binding IsComplete}"
+                            Command="{Binding NextLevelCommand}" />
+                    <Button Text="{Binding RetryText}"
+                            Style="{StaticResource PrimaryButton}"
+                            IsVisible="{Binding CanRetry}"
+                            Command="{Binding RestartCommand}" />
+                    <Button Text="RESUME"
+                            Style="{StaticResource PrimaryButton}"
+                            IsVisible="{Binding IsPaused}"
+                            Command="{Binding ResumeCommand}" />
+                    <Button Text="REPLAY"
+                            Style="{StaticResource SecondaryButton}"
+                            IsVisible="{Binding IsComplete}"
+                            Command="{Binding RestartCommand}" />
+                    <Button Text="RESTART"
+                            Style="{StaticResource SecondaryButton}"
+                            IsVisible="{Binding IsPaused}"
+                            Command="{Binding RestartCommand}" />
+                    <Button Text="MENU"
+                            Style="{StaticResource SecondaryButton}"
+                            Clicked="OnMenuClicked" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+    </Grid>
+</ContentPage>
