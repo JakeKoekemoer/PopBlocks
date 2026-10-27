@@ -53,7 +53,7 @@ Graphics (GameDrawable, ...)       draws engine state; never changes it
 - **GameViewModel** is the only thing that drives the engine. It turns engine changes into bindable properties, owns the dispatcher timer that calls `Tick()`, runs the tutorial controller, and pays gold when a level is completed.
 - **Graphics** only reads the engine. Drawing code never decides a rule. If drawing needs to know something (for example "which cells are about to pop") the engine exposes it as state (`PendingGroups`).
 
-Menu pages (`MainPage`, `LevelSelectPage`, `WorkshopPage`, `SettingsPage`, `AboutPage`) are thin. They read services (`PlayerProgress`, `ShopService`, `GameSettings`) directly and navigate. They have no view model because they have almost no logic worth testing; the testable logic lives in the services in the engine project.
+Menu pages (`MainPage`, `WorldMapPage`, `WorkshopPage`, `SettingsPage`, `AboutPage`) are thin. They read services (`PlayerProgress`, `ShopService`, `GameSettings`) directly and navigate. They have no view model because they have almost no logic worth testing; the testable logic lives in the services in the engine project.
 
 ## 2.3 Dependency injection and start-up
 
@@ -62,7 +62,7 @@ Menu pages (`MainPage`, `LevelSelectPage`, `WorkshopPage`, `SettingsPage`, `Abou
 | Lifetime | Types | Reason |
 |---|---|---|
 | Singleton | `ILocalSettings` (the `PersistentSettings` wrapper over `LocalSettingsService`), `ISaveFileStore`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
-| Transient | `GamePage`, `GameViewModel`, `LevelSelectPage`, `WorkshopPage`, `ShopPanel`, `WardrobePanel`, `TrophiesPanel`, `AchievementsPanel`, `JournalPanel`, `ArchivePage`, `DevMenuPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
+| Transient | `GamePage`, `GameViewModel`, `WorldMapPage`, `WorkshopPage`, `ShopPanel`, `WardrobePanel`, `TrophiesPanel`, `AchievementsPanel`, `JournalPanel`, `ArchivePage`, `DevMenuPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
 
 Rules to keep:
 

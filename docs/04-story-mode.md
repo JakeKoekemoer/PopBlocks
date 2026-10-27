@@ -185,7 +185,7 @@ If nothing fits, the verified candidate closest to the band is used. An unverifi
 
 ### The screens
 
-The name prompt (main menu, once, before the tutorial offer), the REROLL button and "?" hint on the failed and pause panels (words only: the price, "Free in N more tries", "Fresh level, free"), the loading card, the seed on the levels page (tap a level to see its details; tap the seed to copy it), the Rename card on the About page, the Classic SEED link, and the dev menu (play a level with a typed seed, set failures, time the gate on the phone).
+The name prompt (main menu, once, before the tutorial offer), the REROLL button and "?" hint on the failed and pause panels (words only: the price, "Free in N more tries", "Fresh level, free"), the loading card, the seed on the Map page (tap a level to see its details and its region; tap the seed to copy it), the Rename card in Settings, the Classic SEED link, and the dev menu (play a level with a typed seed, set failures, time the gate on the phone).
 
 ### Classic gold
 

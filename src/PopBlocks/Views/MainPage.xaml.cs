@@ -212,9 +212,6 @@ public partial class MainPage : ContentPage
     private async void OnArchiveClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(_services.GetRequiredService<ArchivePage>());
 
-    private async void OnLevelsClicked(object? sender, EventArgs e) =>
-        await Navigation.PushAsync(_services.GetRequiredService<LevelSelectPage>());
-
     private async void OnShopClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(_services.GetRequiredService<WorkshopPage>());
 

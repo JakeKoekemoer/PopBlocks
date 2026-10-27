@@ -54,7 +54,6 @@ public static class MauiProgram
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddTransient<GamePage>();
         builder.Services.AddTransient<GameViewModel>();
-        builder.Services.AddTransient<LevelSelectPage>();
         builder.Services.AddTransient<WorkshopPage>();
         builder.Services.AddTransient<ShopPanel>();
         builder.Services.AddTransient<WardrobePanel>();
@@ -64,7 +63,6 @@ public static class MauiProgram
         builder.Services.AddTransient<AboutPage>();
         builder.Services.AddTransient<SettingsPage>();
         builder.Services.AddTransient<WorldMapPage>();
-        builder.Services.AddTransient<RegionPage>();
         builder.Services.AddTransient<ArchivePage>();
         builder.Services.AddTransient<DevMenuPage>();
 

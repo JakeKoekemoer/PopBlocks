@@ -6,7 +6,7 @@ Code: `src/PopBlocks/`. Target: `net10.0-android`, minimum Android 7.0 (API 24),
 App.xaml / App.xaml.cs       resources (palette, brushes, styles) and window creation
 MauiProgram.cs               dependency injection registrations
 Diagnostics.cs               logcat breadcrumbs and unhandled-exception logging
-Views/                       MainPage, LevelSelectPage, WorkshopPage (and its panels), SettingsPage, AboutPage, GamePage
+Views/                       MainPage, WorldMapPage, WorkshopPage (and its panels), SettingsPage, AboutPage, GamePage
 ViewModels/                  GameViewModel, ObservableObject
 Graphics/                    drawing code (see doc 6)
 Services/                    LocalSettingsService (MAUI Preferences)
@@ -43,10 +43,16 @@ Design decisions:
 ### `MainPage` (menu, singleton)
 The page opens on a start screen with only **PLAY** (straight into the player's next Story level, which is level 1 for a new player) and **MORE**. MORE swaps in the full menu below, and BACK (or the Android Back button) swaps it out again. Which of the two is showing is kept in the page, so coming back from a game started with PLAY lands on the start screen and coming back from one started in the full menu lands on the full menu. The full menu also has a **TUTORIAL** button, which opens `GamePage` on lesson 1.
 
-The full menu is: gold chip, logo, the **Story card** (shows "Start" with level 1, or "Continue" with the next level and a count of cleared levels), buttons for Levels, Classic, Shop, **Settings** and About, and a how-to-play note. The settings switches used to live here; they are on the Settings page now. On appearing it also tells the player once if a reinstall restored its progress from the save file (or found one it could not use). The first-launch name prompt has an "I HAVE A SAVE FILE" button that lets the player choose a save file by hand. It refreshes in `OnAppearing`, so gold and progress are current after returning from a game or the shop. Starting a game resolves a fresh `GamePage` from the container, calls `Configure(setup)`, and pushes it.
+The full menu is: gold chip, logo, the **Story card** (shows "Start" with level 1, or "Continue" with the next level and a count of cleared levels), buttons for Map, Classic, Shop, Archive, Tutorial, **Settings** and About, and a how-to-play note. The settings switches used to live here; they are on the Settings page now. On appearing it also tells the player once if a reinstall restored its progress from the save file (or found one it could not use). The first-launch name prompt has an "I HAVE A SAVE FILE" button that lets the player choose a save file by hand. It refreshes in `OnAppearing`, so gold and progress are current after returning from a game or the shop. Starting a game resolves a fresh `GamePage` from the container, calls `Configure(setup)`, and pushes it.
 
-### `LevelSelectPage`
-Sections per tier, each a wrapped grid of numbered tiles. Cleared levels are marked, the next level is highlighted, locked levels are dimmed and not tappable. Only the first batch of levels is built; "SHOW MORE LEVELS" appends more (the list is endless in principle, so it is never built whole). Tiles are built in code because they are numerous and uniform.
+### `WorldMapPage` (the Map: regions and levels together)
+The one page for finding a level. It lists the eight regions as cards (picture, title, how restored it is, progress), then "Beyond the Spectrum", and each card opens to show **the levels that belong to it**: what has been found there (Prism fragment, journals), and a wrapped grid of numbered tiles. Region 1 is levels 1-25, region 2 is 26-50, and so on, so a level's area is always visible. Tiles are coloured by difficulty tier (the tiers happen to end on region boundaries: regions 1-2 Easy, 3-4 Medium, 5-6 Hard, 7-8 Extreme); cleared levels are marked, the next level is outlined, locked levels are dimmed.
+
+- **One region is open at a time**, starting with the region the next level is in (the page scrolls to it); tapping another region's header opens it instead. A region's levels are built the first time it opens.
+- **The detail bar** at the top shows the level last tapped: its number and tier, the region it belongs to, its seed (tap to copy; for information and bug reports) and PLAY / REPLAY / LOCKED. The next level starts selected. Tapping a tile selects it (only that tile is restyled, nothing is rebuilt), and tapping the selected tile again plays it.
+- A locked region shows "Reach level N to open this region" and cannot be opened. "Beyond the Spectrum" (level 201 on) lists tiles in the same way, with SHOW MORE LEVELS to extend the list (it is endless, so it is never built whole).
+- After the ending the card for the finished Spectrum is shown first.
+- This replaces the earlier separate Levels page, World Map page and per-region page.
 
 ### `WorkshopPage`
 Bram's hub, one screen with four tabs: UPGRADES, LOOKS, SUPPLIES and TROPHIES. The page owns the header (back, lamp summary, gold chip), the tab bar and a line that spells out the selected lamp ("LAMP LIT ✓" or "LAMP DARK · Restore ... to light it"). Each tab shows one panel, built the first time it is opened and kept. A panel implements `IWorkshopPanel`: `Refresh()` redraws it and `Changed` tells the page that gold may have moved, so the gold chip stays current. Every tab is open from the start; lighting a lamp is the only thing region progress changes. The Archive is not here: it opens from the main menu.

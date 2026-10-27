@@ -69,7 +69,7 @@ You win the moment all goals are met. You lose by running out of pieces, or by o
 
 **Failing and rerolling.** A *failure* is a loss, or a manual restart after at least one piece was placed, on the player's current level only (leaving to the menu does not count, and replays never do). After the first failure the player can **reroll** the level: swap it for a new seed. A reroll costs the level's first-clear gold × (10 − failures) / 10, rounded up, so it gets cheaper with each failure and is **free from the tenth** (and always free on the opening levels and on replays of cleared levels). The failure count survives an app kill, is not reset by a reroll, and is reset when the level is cleared. Retrying the same seed is always free.
 
-**Seeds and replays.** The seed a level is first cleared with is recorded once and shown on the levels page (tap to copy; a level cleared before this shows "Original"). Replays use it; any other seed, including one rolled on a replay, is thrown away.
+**Seeds and replays.** The seed a level is first cleared with is recorded once and shown on the Map page (tap to copy; a level cleared before this shows "Original"). Replays use it; any other seed, including one rolled on a replay, is thrown away.
 
 Goal types (`Levels/Goal.cs`):
 

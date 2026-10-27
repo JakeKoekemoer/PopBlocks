@@ -15,7 +15,7 @@ src/
   PopBlocks/            The .NET MAUI app (net10.0-android): drawing, view model, pages, platform code.
     Graphics/           VisualDesign (palette, skins), CellRenderer, GameDrawable (board, neon pops, flip, boards, frames), BlastEffects (burst styles, flair), Pip and the story pictures
     ViewModels/         GameViewModel (observable state, commands, game timer, tutorial coaching)
-    Views/              MainPage (menu), LevelSelectPage, GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage (the four workshop tabs: ShopPanel for
+    Views/              MainPage (menu), WorldMapPage (the Story map: each region with its levels), GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage (the four workshop tabs: ShopPanel for
                         upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage, SettingsPage (settings, name, saved data), AboutPage,
                         DevMenuPage (development builds)
     Services/           LocalSettingsService (MAUI Preferences)
@@ -54,7 +54,7 @@ Every generated level is **proven winnable**: a bot plays it first, and the move
 
 **The tutorial** is separate from the Story. It is ten hand-made, coached lessons (moving, rotating, dropping, speed, mixed colours, chains, moves, goals) with their own progress and no gold. A new player is asked once, on Story level 1, whether they want it; it can also be played any time from **More → TUTORIAL**. Lessons never move Story progress, play story scenes or count towards achievements and lifetime bests (`LevelCatalog.Lesson`, `GameSetup.Lesson`, `TutorialProgress`).
 
-**The menu** opens on just **PLAY** (continue the Story; level 1 for a new player) and **MORE**, which shows the full menu: Story card, map, Classic, workshop, archive, levels, tutorial, settings and about.
+**The menu** opens on just **PLAY** (continue the Story; level 1 for a new player) and **MORE**, which shows the full menu: Story card, map (regions and their levels together), Classic, workshop, archive, tutorial, settings and about.
 
 **Gold and Bram's workshop.** Clearing a non-tutorial level for the **first time** pays gold; harder tiers pay more, restoring a region pays a one-off reward, and achievements pay small amounts. Replaying a level pays nothing. The workshop is one screen with four tabs, and each tab has a lamp that lights as you restore regions (Upgrades from the start, Looks at region 3, Supplies at region 5, Trophies at region 6). Every tab is open from the start; the lamps only show the workshop growing. The Archive is not in the workshop: it opens from the menu.
 

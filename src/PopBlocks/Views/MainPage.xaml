@@ -119,9 +119,7 @@
                         MinimumWidthRequest="0" Clicked="OnShopClicked" />
                 <Button Grid.Row="1" Grid.Column="1" Text="ARCHIVE" Style="{StaticResource SecondaryButton}"
                         MinimumWidthRequest="0" Clicked="OnArchiveClicked" />
-                <Button Grid.Row="2" Grid.Column="0" Text="LEVELS" Style="{StaticResource GhostButton}"
-                        HorizontalOptions="Center" Clicked="OnLevelsClicked" />
-                <Button Grid.Row="2" Grid.Column="1" Text="TUTORIAL" Style="{StaticResource GhostButton}"
+                <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="TUTORIAL" Style="{StaticResource GhostButton}"
                         HorizontalOptions="Center" Clicked="OnTutorialClicked" />
             </Grid>
 
