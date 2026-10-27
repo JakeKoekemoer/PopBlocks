@@ -122,15 +122,15 @@ Gold comes only from playing and is spent only on things that make the game easi
 
 | Where | Item | Effect |
 |---|---|---|
-| Workbench, HELPERS | Lookout (4 levels) | See the next 2 to 5 pieces. |
+| Workshop, UPGRADES | Lookout (4 levels) | See the next 2 to 5 pieces. |
 | | Pop Flair (3) | Richer pop effects. |
 | | Spare Moves (3) | +2, +4, +6 pieces on every non-tutorial Story level. |
 | | Colour Lens (2) | Outlines groups that are one or two blocks short of a burst. |
 | | Chain Sense (1) | The landing outline glows when dropping there would start a chain. |
 | | Prism Reserve (2) | Free Prism Shifts on every level that allows helpers. |
-| Workbench, SUPPLIES | Second Chance | Take back the last placement. Used up. |
+| Workshop, SUPPLIES | Second Chance | Take back the last placement. Used up. |
 | | Prism Shift | Rearrange the colours of the NEXT piece. Used up. |
-| Paint shelf | Skins, burst styles, boards | How blocks, pops and the board look. Never change a rule. |
+| Workshop, LOOKS | Skins, burst styles, boards | How blocks, pops and the board look. Never change a rule. |
 | Failed or pause panel | **Reroll** | A new level when stuck. Costs less after each failure; free from the tenth. Never needed to progress. |
 
 Some items open only after a region is restored or an achievement is earned. A locked item shows **how to find it, never its price.** Looks that are rewards (the Garden board, piece frames, Pip's accessories, the post-ending boards) cost nothing at all.

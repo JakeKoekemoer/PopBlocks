@@ -15,8 +15,9 @@ src/
   PopBlocks/            The .NET MAUI app (net10.0-android): drawing, view model, pages, platform code.
     Graphics/           VisualDesign (palette, skins), CellRenderer, GameDrawable (board, neon pops, flip, boards, frames), BlastEffects (burst styles, flair), Pip and the story pictures
     ViewModels/         GameViewModel (observable state, commands, game timer, tutorial coaching)
-    Views/              MainPage (menu), LevelSelectPage, GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage, ShopPage,
-                        WardrobePage, ArchivePage, JournalPage, AchievementsPage, AboutPage (with the save code), DevMenuPage (development builds)
+    Views/              MainPage (menu), LevelSelectPage, GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage (the four workshop tabs: ShopPanel for
+                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage, AboutPage (with the save
+                        code), DevMenuPage (development builds)
     Services/           LocalSettingsService (MAUI Preferences)
 tests/
   PopBlocks.Tests/      xUnit tests for the engine
@@ -55,15 +56,16 @@ Every generated level is **proven winnable**: a bot plays it first, and the move
 
 **The menu** opens on just **PLAY** (continue the Story; level 1 for a new player) and **MORE**, which shows the full menu: Story card, map, Classic, workshop, archive, levels, tutorial, settings and about.
 
-**Gold and Bram's workshop.** Clearing a non-tutorial level for the **first time** pays gold; harder tiers pay more, restoring a region pays a one-off reward, and achievements pay small amounts. Replaying a level pays nothing. The workshop grows a lamp for every region you restore:
+**Gold and Bram's workshop.** Clearing a non-tutorial level for the **first time** pays gold; harder tiers pay more, restoring a region pays a one-off reward, and achievements pay small amounts. Replaying a level pays nothing. The workshop is one screen with four tabs, and each tab has a lamp that lights as you restore regions (Upgrades from the start, Looks at region 3, Supplies at region 5, Trophies at region 6). Every tab is open from the start; the lamps only show the workshop growing. The Archive is not in the workshop: it opens from the menu.
 
-| Where | What | Effect |
+| Tab | What | Effect |
 |---|---|---|
-| Workbench | Lookout, Pop Flair, Spare Moves | See up to 5 pieces ahead; richer pops; +2/+4/+6 moves per level |
+| Upgrades | Lookout, Pop Flair, Spare Moves | See up to 5 pieces ahead; richer pops; +2/+4/+6 moves per level |
 | | Colour Lens, Chain Sense | Outline groups a block or two short of a burst; glow when a drop would start a chain |
 | | Prism Reserve | Free Prism Shifts per level |
-| | Second Chance, Prism Shift (supplies, up to 3 each) | Take back your last block; rearrange the colours of the next piece. Once per level, off on finales |
-| Paint shelf | Skins, burst styles, boards, piece frames, Pip's accessories | How the game looks. Found through the story or an achievement, then bought; some are free rewards |
+| Supplies | Second Chance, Prism Shift (up to 3 each) | Take back your last block; rearrange the colours of the next piece. Once per level, off on finales |
+| Looks | Skins, burst styles, boards, piece frames, Pip's accessories | How the game looks. Found through the story or an achievement, then bought; some are free rewards |
+| Trophies | Achievements, Journal | What you have earned and your bests. Nothing to buy |
 
 A locked item tells you how to find it and never shows a price. Prices, rewards and requirements are data (`Services/ShopCatalog.cs`, `ConsumableInventory.cs`, `CosmeticCatalog.cs`); the reasoning is in `docs/story/economy.md`. There is nothing to buy with real money.
 

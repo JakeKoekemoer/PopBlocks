@@ -82,7 +82,7 @@ Upgrades are data. Everything about one is a `ShopItem` in **`Services/ShopCatal
 1. Add an id constant and a `ShopItem` to `ShopCatalog.Items`: title, description, `ItemCategory`, base effect, and one `ShopTier` per purchasable level (price, effect text, and a `Requirement`: `None`, `RegionRestored(n)` or `Achievement(id)`). Prices must rise with each tier.
 2. Add a save key constant to `SaveKeys` (**a new key; never reuse one**), put it in `SaveKeys.All`, and use it as the item's `SaveKey`. Then add it to the frozen list in `P7Tests.FrozenKeys` and decide whether the save code carries it (`SaveCode` picks up every catalogue item automatically).
 3. Add a property to `ShopService` that turns the level into the number the game uses (like `LensLevel` or `PrismFreeCharges`).
-4. **Make the game read it** at the start of a game: for an engine effect, set it in `GameViewModel.NewGame()` next to `PreviewCount` and `ExtraMoves`; for a visual effect, set it in `GamePage.OnGameStarted`. `ShopPage` and `DevTools.MaxShop` list whatever the catalogue contains.
+4. **Make the game read it** at the start of a game: for an engine effect, set it in `GameViewModel.NewGame()` next to `PreviewCount` and `ExtraMoves`; for a visual effect, set it in `GamePage.OnGameStarted`. `ShopPanel` (the workshop's UPGRADES tab) and `DevTools.MaxShop` list whatever the catalogue contains.
 5. **Do not make levels depend on it.** Move limits are tuned for a player with nothing.
 6. **Tests:** price, effect and persistence in `P4ShopTests`; `P7Tests` checks the new tiers are affordable from the campaign's own income. Update the economy table in `docs/story/economy.md`.
 

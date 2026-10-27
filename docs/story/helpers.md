@@ -32,7 +32,7 @@ nothing and buying mid-level changes nothing.
 ## Interface
 Two buttons above the movement controls, shown only when the level allows helpers and the player holds one:
 `UNDO x1` and `SHIFT x1` (the number is what is left this level). A disabled button says why in the line below it.
-Both buttons carry a spoken description. Buying is on the workbench's SUPPLIES tab; a locked helper shows how to find it,
+Both buttons carry a spoken description. Buying is on the workshop's SUPPLIES tab; a locked helper shows how to find it,
 never a price.
 
 The original plan asked for a tap on the NEXT box to cycle the shift; a button is used instead because the NEXT box is

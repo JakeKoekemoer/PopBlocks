@@ -5,15 +5,19 @@ using PopBlocks.Graphics;
 namespace PopBlocks.Views;
 
 /// <summary>
-/// Bram's Workshop: a hub that grows lamp by lamp as regions are restored. Lighting a corner is the only thing the
-/// restored regions change here. Every door (shop, archive, journal, achievements) is open from the start, so the
-/// workshop never stands between the player and the story or settings. It costs no gold.
+/// Bram's Workshop: one screen with four tabs (UPGRADES, LOOKS, SUPPLIES, TROPHIES), each with a lamp that lights as
+/// regions are restored. Lighting a lamp is the only thing the restored regions change here. Every tab is open from the
+/// start, so the workshop never stands between the player and the story or settings. It costs no gold itself; the tabs
+/// that sell things are <see cref="ShopPanel"/> and <see cref="WardrobePanel"/>. The Archive is not part of the
+/// workshop: it opens from the main menu.
 /// </summary>
 public partial class WorkshopPage : ContentPage
 {
     private readonly WorkshopService _workshop;
     private readonly PlayerProgress _progress;
     private readonly IServiceProvider _services;
+    private readonly Dictionary<WorkshopTab, View> _panels = new();
+    private WorkshopTab _tab = WorkshopTab.Upgrades;
 
     public WorkshopPage(WorkshopService workshop, PlayerProgress progress, IServiceProvider services)
     {
@@ -22,6 +26,16 @@ public partial class WorkshopPage : ContentPage
         _progress = progress;
         _services = services;
         CoinView.Drawable = new GoldCoinDrawable();
+
+        foreach (var _ in WorkshopService.AllStations)
+            TabBar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+    }
+
+    /// <summary>The tab to open on (set before the page is shown).</summary>
+    public WorkshopTab StartTab
+    {
+        get => _tab;
+        set => _tab = value;
     }
 
     protected override void OnAppearing()
@@ -32,72 +46,121 @@ public partial class WorkshopPage : ContentPage
 
     private async void OnBackClicked(object? sender, EventArgs e) => await Navigation.PopAsync();
 
+    private void UpdateGold() => GoldLabel.Text = _progress.Gold.ToString("N0");
+
     private void Rebuild()
     {
-        GoldLabel.Text = _progress.Gold.ToString("N0");
-        SummaryLabel.Text = $"{_workshop.LitCount} OF {WorkshopService.AllStations.Count} LAMPS LIT";
-        Host.Children.Clear();
+        UpdateGold();
+        SummaryLabel.Text = _workshop.FullyRestored
+            ? "EVERY LAMP LIT"
+            : $"{_workshop.LitCount} OF {WorkshopService.AllStations.Count} LAMPS LIT";
 
-        foreach (var station in WorkshopService.AllStations)
-            Host.Children.Add(MakeStation(station));
+        BuildTabs();
+        ShowLamp();
 
-        if (_workshop.NextToLight is { } next)
-            Host.Children.Add(Ui.Body($"Bram is still repairing the next corner. Restore {RegionCatalog.Get(next.RegionNeeded).TitleInSentence} to light it.", 13));
-        else
-            Host.Children.Add(Ui.Body("Every lamp is lit.", 13));
+        var panel = PanelFor(_tab);
+        PanelHost.Content = panel;
+        if (panel is IWorkshopPanel workshopPanel) workshopPanel.Refresh();
     }
 
-    private View MakeStation(WorkshopStation station)
+    private void BuildTabs()
     {
-        bool lit = _workshop.IsLit(station);
-        var stack = new VerticalStackLayout { Spacing = 4 };
-
-        // The state is written as well as drawn, so it never relies on colour alone.
-        stack.Children.Add(Ui.Caption(lit ? "LIT  ✓" : "DARK", lit ? Color.FromArgb("#A3E635") : Color.FromArgb("#9AA6C8")));
-        stack.Children.Add(Ui.Heading(station.Name));
-        stack.Children.Add(Ui.Body(lit ? station.Description : "Not yet lit.", 13));
-
-        var open = OpenAction(station);
-        if (open is not null)
+        TabBar.Children.Clear();
+        var stations = WorkshopService.AllStations;
+        for (int i = 0; i < stations.Count; i++)
         {
-            var button = new Button
+            var station = stations[i];
+            bool lit = _workshop.IsLit(station);
+            bool selected = station.Tab == _tab;
+
+            var tab = new Button
             {
-                Text = "OPEN",
-                FontSize = 13,
+                Text = station.Name.ToUpperInvariant(),
+                FontSize = 11,
                 FontAttributes = FontAttributes.Bold,
-                CharacterSpacing = 1.2,
+                CharacterSpacing = 0.7,
                 CornerRadius = 22,
                 HeightRequest = 44,
-                Margin = new Thickness(0, 8, 0, 0),
-                HorizontalOptions = LayoutOptions.Start,
-                MinimumWidthRequest = 120,
-                BackgroundColor = Color.FromArgb("#22FFFFFF"),
-                TextColor = Ui.Res("TextPrimary", Colors.White),
+                Padding = new Thickness(2, 0),
+                MinimumWidthRequest = 0,
+                BackgroundColor = selected ? Ui.Res("Accent", Colors.Cyan) : Colors.Transparent,
+                TextColor = selected ? Ui.Res("AccentText", Colors.Black) : Ui.Res("TextSecondary", Colors.Gray),
             };
-            SemanticProperties.SetDescription(button, $"Open {station.Name}");
-            button.Clicked += async (_, _) => await open();
-            stack.Children.Add(button);
-        }
+            var chosen = station.Tab;
+            tab.Clicked += (_, _) =>
+            {
+                _tab = chosen;
+                Rebuild();
+            };
+            SemanticProperties.SetDescription(tab, $"{station.Name} tab{(selected ? ", selected" : "")}, lamp {(lit ? "lit" : "dark")}");
 
-        var card = Ui.Card(stack, new Thickness(20, 16));
-        card.Opacity = lit ? 1.0 : 0.72;
-        return card;
+            TabBar.Add(tab, i, 0);
+            TabBar.Add(LampDot(lit, selected), i, 0);
+        }
     }
 
-    private Func<Task>? OpenAction(WorkshopStation station) => station.Target switch
+    /// <summary>A small lamp in the corner of a tab: filled and glowing when lit, an empty ring when dark.</summary>
+    private static View LampDot(bool lit, bool selected)
     {
-        WorkshopTarget.Shop => async () => await PushShop(ItemCategory.Gameplay),
-        WorkshopTarget.Cosmetics => async () => await Navigation.PushAsync(_services.GetRequiredService<WardrobePage>()),
-        WorkshopTarget.Archive => async () => await Navigation.PushAsync(_services.GetRequiredService<ArchivePage>()),
-        WorkshopTarget.Achievements => async () => await Navigation.PushAsync(_services.GetRequiredService<AchievementsPage>()),
-        WorkshopTarget.Journal => async () => await Navigation.PushAsync(_services.GetRequiredService<JournalPage>()),
-        _ => null,
-    };
+        var ink = selected ? Ui.Res("AccentText", Colors.Black) : Ui.Res("TextSecondary", Colors.Gray);
+        var fill = lit ? (selected ? Color.FromArgb("#F59E0B") : Color.FromArgb("#FDE047")) : Colors.Transparent;
+        return new Border
+        {
+            WidthRequest = 9,
+            HeightRequest = 9,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 7, 9, 0),
+            HorizontalOptions = LayoutOptions.End,
+            VerticalOptions = LayoutOptions.Start,
+            InputTransparent = true,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = new CornerRadius(5) },
+            StrokeThickness = lit && !selected ? 0 : 1.5,
+            Stroke = new SolidColorBrush(ink),
+            Background = new SolidColorBrush(fill),
+        };
+    }
 
-    private async Task PushShop(ItemCategory category)
+    /// <summary>The state of the selected lamp, written out as well as drawn so it never relies on colour alone.</summary>
+    private void ShowLamp()
     {
-        var shop = _services.GetRequiredService<ShopPage>();
-        shop.StartCategory = category;
-        await Navigation.PushAsync(shop);
+        var station = WorkshopService.AllStations.First(s => s.Tab == _tab);
+        if (_workshop.IsLit(station))
+        {
+            LampStateLabel.Text = "LAMP LIT  ✓";
+            LampStateLabel.TextColor = Color.FromArgb("#A3E635");
+            LampHintLabel.Text = "";
+        }
+        else
+        {
+            LampStateLabel.Text = "LAMP DARK";
+            LampStateLabel.TextColor = Ui.Res("TextSecondary", Colors.Gray);
+            LampHintLabel.Text = $"·  Restore {RegionCatalog.Get(station.RegionNeeded).TitleInSentence} to light it";
+        }
+    }
+
+    /// <summary>Each tab's panel is built the first time it is opened and kept, so switching back is instant.</summary>
+    private View PanelFor(WorkshopTab tab)
+    {
+        if (_panels.TryGetValue(tab, out var existing)) return existing;
+
+        View panel = tab switch
+        {
+            WorkshopTab.Upgrades => ShopPanelFor(ItemCategory.Gameplay),
+            WorkshopTab.Supplies => ShopPanelFor(ItemCategory.Consumable),
+            WorkshopTab.Looks => _services.GetRequiredService<WardrobePanel>(),
+            _ => _services.GetRequiredService<TrophiesPanel>(),
+        };
+
+        // A purchase changes the gold, and the gold chip lives in this page's header.
+        if (panel is IWorkshopPanel workshopPanel) workshopPanel.Changed += UpdateGold;
+        _panels[tab] = panel;
+        return panel;
+    }
+
+    private ShopPanel ShopPanelFor(ItemCategory category)
+    {
+        var shop = _services.GetRequiredService<ShopPanel>();
+        shop.Category = category;
+        return shop;
     }
 }

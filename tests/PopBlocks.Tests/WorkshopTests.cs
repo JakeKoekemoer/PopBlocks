@@ -15,12 +15,13 @@ public class WorkshopTests
     }
 
     [Fact]
-    public void A_new_player_finds_only_the_workbench_lit()
+    public void A_new_player_finds_only_the_upgrades_lamp_lit()
     {
         var (w, _) = Make(0);
         Assert.Equal(1, w.LitCount);
         Assert.True(w.IsLit(WorkshopService.AllStations[0]));
-        Assert.Equal("cosmetic_shelf", w.NextToLight!.Id);
+        Assert.Equal(WorkshopTab.Upgrades, WorkshopService.AllStations[0].Tab);
+        Assert.Equal("looks", w.NextToLight!.Id);
     }
 
     [Fact]
@@ -50,20 +51,28 @@ public class WorkshopTests
     }
 
     [Fact]
-    public void Station_ids_are_unique_and_every_region_lights_something()
+    public void Station_ids_and_tabs_are_unique_and_there_is_one_station_per_tab()
     {
         Assert.Equal(WorkshopService.AllStations.Count, WorkshopService.AllStations.Select(s => s.Id).Distinct().Count());
-        foreach (var region in new[] { 3, 4, 5, 6, 7, 8 })
-            Assert.Contains(WorkshopService.AllStations, s => s.RegionNeeded == region);
+        Assert.Equal(WorkshopService.AllStations.Count, WorkshopService.AllStations.Select(s => s.Tab).Distinct().Count());
+        foreach (var tab in Enum.GetValues<WorkshopTab>())
+            Assert.Single(WorkshopService.AllStations, s => s.Tab == tab);
     }
 
     [Fact]
     public void The_workshop_never_stands_between_the_player_and_the_story_or_settings()
     {
-        // Nothing in the station list costs gold or has a price: it is derived, display-only state.
+        // Nothing in the station list costs gold or has a price: it is derived, display-only state, and a lamp only
+        // ever depends on a region that exists.
         Assert.All(WorkshopService.AllStations, s => Assert.True(s.RegionNeeded is >= 0 and <= 8));
-        Assert.Contains(WorkshopService.AllStations, s => s.Target == WorkshopTarget.Archive);
-        Assert.Contains(WorkshopService.AllStations, s => s.Target == WorkshopTarget.Achievements);
-        Assert.Contains(WorkshopService.AllStations, s => s.Target == WorkshopTarget.Journal);
+        Assert.Contains(WorkshopService.AllStations, s => s.Tab == WorkshopTab.Trophies);
+    }
+
+    [Fact]
+    public void The_archive_has_one_door_and_it_is_on_the_menu()
+    {
+        // The Archive is opened from the main menu; the workshop has no station that duplicates it.
+        Assert.DoesNotContain(WorkshopService.AllStations, s => s.Id.Contains("archive", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(WorkshopService.AllStations, s => s.Name.Contains("archive", StringComparison.OrdinalIgnoreCase));
     }
 }

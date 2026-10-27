@@ -137,13 +137,13 @@ Every upgrade is a row in **`ShopCatalog`** (`Services/ShopCatalog.cs`): an id, 
 | Chain Sense | 700 (region 3) | `ChainSenseOwned`: the landing outline glows when the drop would start a chain. |
 | Prism Reserve | 600 (region 5), 1,200 (region 7) | `PrismFreeCharges`: free Prism Shifts per level. |
 
-Two helpers are *used up* rather than owned: **Second Chance** (150) and **Prism Shift** (100), handled by `ConsumableInventory`. Looks are on the paint shelf (`CosmeticCatalog`). Prices, requirements and the reasoning for the numbers are in `docs/story/economy.md`; the helper rules are in `docs/story/helpers.md`.
+Two helpers are *used up* rather than owned: **Second Chance** (150) and **Prism Shift** (100), handled by `ConsumableInventory`. Looks are on the workshop's LOOKS tab (`CosmeticCatalog`). Prices, requirements and the reasoning for the numbers are in `docs/story/economy.md`; the helper rules are in `docs/story/helpers.md`.
 
 The values are pushed into the engine and the effects at the **start of each game** (`GameViewModel.NewGame`, `GamePage.OnGameStarted`), so buying something mid-level never changes the level in progress.
 
 The game's difficulty and the move limits are tuned for a player with **no** upgrades and no helpers. Everything here is a convenience, not a requirement. Keep it that way: if a level can only be cleared with a purchase, the generator's slack is wrong. `P4GateTests` and `P7Tests` prove every level winnable by the bot with nothing bought, that the ending is reachable with no purchase and no optional memory, and that everything for sale is affordable from the campaign's own income.
 
-**The workshop** (`WorkshopService`, `WorkshopPage`) is Bram's hub. Its lamps light as regions are restored; lighting a corner is the only thing region progress changes there. Every door (workbench, paint shelf, archive, achievements, journal) is open from the start, so the workshop never stands between the player and the story.
+**The workshop** (`WorkshopService`, `WorkshopPage`) is Bram's one-screen hub with four tabs: UPGRADES, LOOKS, SUPPLIES and TROPHIES (achievements and the journal). Each tab has a lamp that lights as a region is restored (0, 3, 5 and 6); lighting a lamp is the only thing region progress changes there. Every tab is open from the start, so the workshop never stands between the player and the story. The Archive is deliberately not a workshop station: it opens from the main menu, and having two doors to it was the kind of repeat the workshop used to have (the workbench and the mechanic's bench were the same shop, and the paint shelf and the shop's LOOKS tab held the same cosmetics).
 
 To add or change an upgrade see [Extending](09-extending.md).
 

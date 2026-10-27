@@ -6,7 +6,7 @@ Code: `src/PopBlocks/`. Target: `net10.0-android`, minimum Android 7.0 (API 24),
 App.xaml / App.xaml.cs       resources (palette, brushes, styles) and window creation
 MauiProgram.cs               dependency injection registrations
 Diagnostics.cs               logcat breadcrumbs and unhandled-exception logging
-Views/                       MainPage, LevelSelectPage, ShopPage, AboutPage, GamePage
+Views/                       MainPage, LevelSelectPage, WorkshopPage (and its panels), AboutPage, GamePage
 ViewModels/                  GameViewModel, ObservableObject
 Graphics/                    drawing code (see doc 6)
 Services/                    LocalSettingsService (MAUI Preferences)
@@ -48,17 +48,20 @@ The full menu is: gold chip, logo, the **Story card** (shows "Start" with level 
 ### `LevelSelectPage`
 Sections per tier, each a wrapped grid of numbered tiles. Cleared levels are marked, the next level is highlighted, locked levels are dimmed and not tappable. Only the first batch of levels is built; "SHOW MORE LEVELS" appends more (the list is endless in principle, so it is never built whole). Tiles are built in code because they are numerous and uniform.
 
-### `ShopPage` (the workbench)
-Two tabs. **HELPERS** builds cards in code from `ShopService.Entries(...)` (title, description, level pips, "Now" and "Next" effects, a BUY button with the price). **SUPPLIES** shows the two used-up helpers from `ConsumableInventory.Entries()` (stock pips out of 3, the rules in one line, BUY ONE). A button is enabled only when the player can afford it, a full stock says STOCK FULL, and a locked row shows a "Restore ..." hint and no price. After a purchase the page rebuilds itself. The page contains no pricing logic; it only displays what the services say.
-
 ### `WorkshopPage`
-Bram's hub: one card per lamp, lit as regions are restored, each with an OPEN button to the workbench, the paint shelf, the archive, the achievements case or the journal. Every door is open from the start; lighting a corner is the only thing region progress changes.
+Bram's hub, one screen with four tabs: UPGRADES, LOOKS, SUPPLIES and TROPHIES. The page owns the header (back, lamp summary, gold chip), the tab bar and a line that spells out the selected lamp ("LAMP LIT ✓" or "LAMP DARK · Restore ... to light it"). Each tab shows one panel, built the first time it is opened and kept. A panel implements `IWorkshopPanel`: `Refresh()` redraws it and `Changed` tells the page that gold may have moved, so the gold chip stays current. Every tab is open from the start; lighting a lamp is the only thing region progress changes. The Archive is not here: it opens from the main menu.
 
-### `WardrobePage` (the paint shelf)
-Tabs for blocks, bursts, boards, frames and Pip's accessories. Each look is a card with a live preview (`SkinPreviewDrawable`, `BoardPreviewDrawable`), and one of: EQUIPPED / EQUIP (owned), BUY with the price (found, not owned), or a "Not found yet" hint. All state comes from `CosmeticShop`; looks apply at the start of the next level, never mid-level.
+### `ShopPanel` (UPGRADES and SUPPLIES)
+The workbench. One panel class, used twice with a `Category`. **UPGRADES** builds cards in code from `ShopService.Entries(...)` (title, description, level pips, "Now" and "Next" effects, a BUY button with the price). **SUPPLIES** shows the two used-up helpers from `ConsumableInventory.Entries()` (stock pips out of 3, the rules in one line, BUY ONE). What can be bought comes first and locked items follow. A button is enabled only when the player can afford it, a full stock says STOCK FULL, and a locked row shows a "Restore ..." hint and no price. After a purchase the panel raises `Changed` and rebuilds itself. The panel contains no pricing logic; it only displays what the services say.
 
-### `ArchivePage`, `JournalPage`, `AchievementsPage`
-The story the player has unlocked (scenes, characters, fragments, memories, with locked entries shown as hints), the lifetime statistics, and the achievements with their gold. After the ending, `ArchivePage` is also where the final look can be changed.
+### `WardrobePanel` (LOOKS)
+Chips for blocks, bursts, boards, frames and Pip's accessories. Each look is a card with a live preview (`SkinPreviewDrawable`, `BoardPreviewDrawable`), and one of: EQUIPPED / EQUIP (owned), BUY with the price (found, not owned), or a "Not found yet" hint. All state comes from `CosmeticShop`; looks apply at the start of the next level, never mid-level.
+
+### `ArchivePage`
+The story the player has unlocked (scenes, characters, fragments, memories, with locked entries shown as hints). It opens from the main menu only. After the ending, it is also where the final look can be changed.
+
+### `TrophiesPanel`, `AchievementsPanel`, `JournalPanel` (TROPHIES)
+`TrophiesPanel` is a row of two chips over one of the other two. `AchievementsPanel` lists the achievements with their gold, what is still to earn first and then what is earned. `JournalPanel` shows the lifetime statistics. Neither spends gold.
 
 ### `DevMenuPage`
 Testing shortcuts from `DevTools`. Shown only when `DevMenu.Enabled` is true (Debug builds, or any build made with `-p:DevMenu=true`). In a normal Release build its button and shortcuts never show.

@@ -45,11 +45,12 @@ public static class MauiProgram
         builder.Services.AddTransient<GamePage>();
         builder.Services.AddTransient<GameViewModel>();
         builder.Services.AddTransient<LevelSelectPage>();
-        builder.Services.AddTransient<ShopPage>();
         builder.Services.AddTransient<WorkshopPage>();
-        builder.Services.AddTransient<AchievementsPage>();
-        builder.Services.AddTransient<JournalPage>();
-        builder.Services.AddTransient<WardrobePage>();
+        builder.Services.AddTransient<ShopPanel>();
+        builder.Services.AddTransient<WardrobePanel>();
+        builder.Services.AddTransient<AchievementsPanel>();
+        builder.Services.AddTransient<JournalPanel>();
+        builder.Services.AddTransient<TrophiesPanel>();
         builder.Services.AddTransient<AboutPage>();
         builder.Services.AddTransient<WorldMapPage>();
         builder.Services.AddTransient<RegionPage>();
