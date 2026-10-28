@@ -1,6 +1,7 @@
 using PopBlocks.Engine.Logic;
 using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
+using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Engine.Levels;
 
@@ -55,6 +56,9 @@ public static class LevelSolver
 
         /// <summary>1 where the block sleeps (a solid piece nothing has joined yet). Mirrors <see cref="Board.IsDormant"/>.</summary>
         public byte[] Dormant = new byte[W * H];
+
+        /// <summary>Cracks on each block (0 to 2, 3 = waiting to break). Mirrors <see cref="Board.FractureAt"/>.</summary>
+        public byte[] Fracture = new byte[W * H];
         public int Score, Popped, BestChain, BestGroup;
         public int[] ByColour = new int[6];
 
@@ -66,6 +70,7 @@ public static class LevelSolver
             var c = new State { Score = Score, Popped = Popped, BestChain = BestChain, BestGroup = BestGroup };
             Array.Copy(Cells, c.Cells, Cells.Length);
             Array.Copy(Dormant, c.Dormant, Dormant.Length);
+            Array.Copy(Fracture, c.Fracture, Fracture.Length);
             Array.Copy(ByColour, c.ByColour, ByColour.Length);
             Array.Copy(ChainsByLength, c.ChainsByLength, ChainsByLength.Length);
             return c;
@@ -323,12 +328,13 @@ public static class LevelSolver
         {
             s.Cells[p.CellIndexes[i]] = p.Colours[i];
             s.Dormant[p.CellIndexes[i]] = 0;
+            s.Fracture[p.CellIndexes[i]] = 0;
         }
 
         // Like the engine: a piece that is a burst-sized group all by itself does not pop by landing; it sleeps.
         MarkDormant(s, p, sc);
 
-        int chain = Settle(s, sc);
+        int chain = Settle(s, sc, FractureOn(level));
         if (chain > 0) s.ChainsByLength[Math.Min(chain, ChainSlots - 1)]++;
         if (chain == 0 && level.NoPopPenalty > 0 && s.Score > 0)
             s.Score -= Math.Min(s.Score, level.NoPopPenalty);
@@ -369,8 +375,12 @@ public static class LevelSolver
         }
     }
 
+    /// <summary>Mirrors <c>GameEngine.FractureActive</c> under the normal rules (the solver only ever plays those).</summary>
+    private static bool FractureOn(LevelDefinition level) =>
+        RuleFeatures.Fracture && !level.IsTutorial && level.Number >= RegionRules.FractureIntro;
+
     /// <summary>Pops groups, applies gravity and repeats until stable. Returns the chain length.</summary>
-    private static int Settle(State s, Scratch sc)
+    private static int Settle(State s, Scratch sc, bool fracture)
     {
         int chain = 0;
         while (true)
@@ -412,15 +422,47 @@ public static class LevelSolver
                 }
             }
 
-            if (marked == 0) break;
+            // Blocks that cracked a third time in the wave before break now (unless a burst takes them anyway).
+            int brokenNow = 0;
+            if (fracture)
+                for (int i = 0; i < W * H; i++)
+                    if (s.Fracture[i] == Board.Broken && s.Cells[i] != 0 && sc.Mark[i] == 0)
+                    {
+                        sc.Mark[i] = 2;
+                        s.ByColour[s.Cells[i]]++;   // counts for its colour's goals, not for the burst-group goals
+                        brokenNow++;
+                    }
+
+            if (marked == 0 && brokenNow == 0) break;
 
             chain++;
             if (chain > s.BestChain) s.BestChain = chain;
             s.Score += wavePoints * ScoringSystem.Multiplier(chain);
-            s.Popped += marked;
+            s.Popped += marked + brokenNow;
 
             for (int i = 0; i < W * H; i++)
-                if (sc.Mark[i] != 0) { s.Cells[i] = 0; s.Dormant[i] = 0; }
+                if (sc.Mark[i] != 0) { s.Cells[i] = 0; s.Dormant[i] = 0; s.Fracture[i] = 0; }
+
+            // Survivors with a cleared neighbour on two or more different sides take one more crack (once per wave).
+            if (fracture)
+            {
+                int hitCount = 0;
+                for (int i = 0; i < W * H; i++)
+                {
+                    if (s.Cells[i] == 0) continue;
+                    int x = i % W, y = i / W, sides = 0;
+                    if (x > 0 && sc.Mark[i - 1] != 0) sides++;
+                    if (x < W - 1 && sc.Mark[i + 1] != 0) sides++;
+                    if (y > 0 && sc.Mark[i - W] != 0) sides++;
+                    if (y < H - 1 && sc.Mark[i + W] != 0) sides++;
+                    if (sides >= 2) sc.Stack[hitCount++] = i;   // (Stack is free here: the flood fill is done)
+                }
+                for (int k = 0; k < hitCount; k++)
+                {
+                    int i = sc.Stack[k];
+                    if (s.Fracture[i] < Board.Broken) s.Fracture[i]++;
+                }
+            }
 
             for (int x = 0; x < W; x++)
             {
@@ -435,6 +477,8 @@ public static class LevelSolver
                         s.Cells[y * W + x] = 0;
                         s.Dormant[write * W + x] = s.Dormant[y * W + x];   // a sleeping block keeps sleeping while it falls
                         s.Dormant[y * W + x] = 0;
+                        s.Fracture[write * W + x] = s.Fracture[y * W + x];   // and a cracked block keeps its cracks
+                        s.Fracture[y * W + x] = 0;
                     }
                     write--;
                 }

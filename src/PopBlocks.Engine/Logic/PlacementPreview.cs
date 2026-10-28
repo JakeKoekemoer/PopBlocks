@@ -14,7 +14,7 @@ public static class PlacementPreview
     /// Burst waves a hard drop of <paramref name="piece"/> from its current column and rotation would set off.
     /// 0 means nothing pops; 1 a single burst; 2 or more a chain.
     /// </summary>
-    public static int CountWaves(Board board, Piece piece, int minGroupSize = GameConfig.MinGroupSize)
+    public static int CountWaves(Board board, Piece piece, int minGroupSize = GameConfig.MinGroupSize, bool fracture = true)
     {
         var copy = board.Clone();
         int distance = CollisionDetector.HardDropDistance(copy, piece);
@@ -27,13 +27,24 @@ public static class PlacementPreview
         while (true)
         {
             var groups = ColourMatcher.FindGroups(copy, minGroupSize);
-            if (groups.Count == 0) return waves;
+            var cleared = groups.SelectMany(g => g.Cells).ToList();
+
+            // Blocks that cracked a third time in the wave before break with this one, as in the game.
+            if (fracture)
+            {
+                var inGroups = new HashSet<(int, int)>(cleared.Select(c => (c.X, c.Y)));
+                foreach (var b in copy.TakeBrokenList())
+                    if (!inGroups.Contains((b.X, b.Y))) cleared.Add(b);
+            }
+            if (cleared.Count == 0) return waves;
+
             waves++;
-            GravityResolver.Clear(copy, groups.SelectMany(g => g.Cells).ToList());
+            GravityResolver.Clear(copy, cleared);
+            if (fracture) GameEngine.CrackNeighbours(copy, cleared);
             GravityResolver.Apply(copy);
         }
     }
 
     /// <summary>A drop here would set off a chain: two or more waves from one piece.</summary>
-    public static bool StartsChain(Board board, Piece piece, int minGroupSize = GameConfig.MinGroupSize) => CountWaves(board, piece, minGroupSize) >= 2;
+    public static bool StartsChain(Board board, Piece piece, int minGroupSize = GameConfig.MinGroupSize, bool fracture = true) => CountWaves(board, piece, minGroupSize, fracture) >= 2;
 }

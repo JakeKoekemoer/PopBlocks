@@ -51,9 +51,11 @@ public static class GravityResolver
                 if (y != writeY)
                 {
                     bool dormant = board.IsDormant(x, y);   // a sleeping block keeps sleeping while it falls
+                    int cracks = board.FractureAt(x, y);    // and a cracked block keeps its cracks
                     board[x, writeY] = colour;
                     board[x, y] = CellColour.Empty;
                     if (dormant) board.SetDormant(x, writeY);
+                    if (cracks > 0) board.SetFracture(x, writeY, cracks);
                     moves.Add(new CellMove(x, y, writeY, colour));
                 }
                 writeY--;

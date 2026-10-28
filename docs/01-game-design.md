@@ -109,6 +109,10 @@ Two levels in each region (offsets 11 and 17 into it, never a finale) carry an *
 - **Flipped board.** The picture is turned 180 degrees so pieces enter from the bottom of the screen. The rules are unchanged; only drawing and input are mirrored. See [Graphics](06-graphics.md#66-the-upside-down-view).
 - **No-pop penalty.** When a piece locks and pops nothing, points are removed (never below zero). Because the penalty is about score, a penalty level always has a Score goal.
 
+### Cracked blocks (v1.1)
+
+From level 36 of the Story (and always in Endless, unless switched off in the player's own rules; never in a lesson) a block cracks when one pop hits it from two sides. After each wave clears its groups, every surviving block that has cleared neighbours on two or more different sides takes one crack (at most one per wave; corners and diagonals do not count; sleeping blocks crack too). A block with two cracks that is hit again breaks: it is removed in the next step of the same resolution, counts for its colour's pop goals (not for burst-group goals), and feeds gravity and chains like any other pop. Cracks travel with a block as it falls and come back with an undo. Gold: intact blocks pay in full, one crack three quarters, two cracks half, and a broken block half. The level solver mirrors every one of these rules, so the promise that every Story level has a way through holds for levels with cracks.
+
 ### Tall boards (v1.1)
 
 With a board height of 20 to 32 rows in the player's own rules, the board is taller than the screen and the view follows the stack: the top of the stack is kept in the middle of the screen, the view drops back as the stack is cleared, and a piece always appears at the top of what you can see. Losing is still a block that reaches the very top of the board, or a piece that has no room to appear. Taller boards are easier, so they pay half gold.

@@ -11,7 +11,7 @@ public static class RuleFeatures
     public static bool TallBoards => true;
 
     /// <summary>Blocks crack when a pop hits them from two sides.</summary>
-    public static bool Fracture => false;
+    public static bool Fracture => true;
 
     /// <summary>Orbs appear.</summary>
     public static bool Orbs => false;

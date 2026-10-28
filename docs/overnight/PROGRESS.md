@@ -15,8 +15,8 @@
 | 9c Pip looks | done | 461620f |
 | 10 Story Book | done | 01a16eb |
 | 11 Tall scrolling board | done (default height not flipped, see Unfinished) | 713b187 |
-| 12 Pip's Insight | done | PENDING12 |
-| 13 Fracture | pending | |
+| 12 Pip's Insight | done | cfb2750 |
+| 13 Fracture | done | PENDING13 |
 | 14 The Orb | pending | |
 | 15 Achievements | pending | |
 | 16 Performance | pending | |

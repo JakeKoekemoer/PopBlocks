@@ -15,6 +15,13 @@ public sealed class Board
     // placed is always live unless the engine puts it to sleep afterwards. Clone, CopyFrom and gravity carry the flags.
     private readonly bool[] _dormant;
 
+    // Cracks (0 intact, 1, 2; 3 = broken by a third crack and waiting to be removed in the next step of the same resolution).
+    // Written with the cell: setting a block clears its cracks. Clone, CopyFrom and gravity carry them.
+    private readonly byte[] _fracture;
+
+    /// <summary>The block would break if it cracked once more.</summary>
+    public const byte Broken = 3;
+
     public int Width { get; }
     public int Height { get; }
 
@@ -26,6 +33,7 @@ public sealed class Board
         Height = height;
         _cells = new CellColour[width * height];
         _dormant = new bool[width * height];
+        _fracture = new byte[width * height];
     }
 
     public CellColour this[int x, int y]
@@ -40,6 +48,7 @@ public sealed class Board
             if (!IsInside(x, y)) throw new ArgumentOutOfRangeException($"({x},{y}) is outside the board.");
             _cells[y * Width + x] = value;
             _dormant[y * Width + x] = false;
+            _fracture[y * Width + x] = 0;
         }
     }
 
@@ -61,6 +70,35 @@ public sealed class Board
     {
         Array.Clear(_cells);
         Array.Clear(_dormant);
+        Array.Clear(_fracture);
+    }
+
+    /// <summary>Cracks on the block at (x, y): 0 to 2, or <see cref="Broken"/>. 0 for an empty cell or outside the board.</summary>
+    public int FractureAt(int x, int y) => IsInside(x, y) ? _fracture[y * Width + x] : 0;
+
+    /// <summary>Sets the cracks on a block (0 to <see cref="Broken"/>). An empty cell cannot be cracked.</summary>
+    public void SetFracture(int x, int y, int level)
+    {
+        if (this[x, y] == CellColour.Empty) level = 0;
+        _fracture[y * Width + x] = (byte)Math.Clamp(level, 0, Broken);
+    }
+
+    /// <summary>Is any block waiting to break?</summary>
+    public bool AnyBroken()
+    {
+        for (int i = 0; i < _fracture.Length; i++)
+            if (_fracture[i] == Broken && _cells[i] != CellColour.Empty) return true;
+        return false;
+    }
+
+    /// <summary>The blocks waiting to break, top to bottom.</summary>
+    public List<BlockCell> TakeBrokenList()
+    {
+        var list = new List<BlockCell>();
+        for (int i = 0; i < _fracture.Length; i++)
+            if (_fracture[i] == Broken && _cells[i] != CellColour.Empty)
+                list.Add(new BlockCell(i % Width, i / Width, _cells[i]));
+        return list;
     }
 
     /// <summary>
@@ -77,6 +115,7 @@ public sealed class Board
             int from = (other.Height - 1 - r) * Width, to = (Height - 1 - r) * Width;
             Array.Copy(other._cells, from, _cells, to, Width);
             Array.Copy(other._dormant, from, _dormant, to, Width);
+            Array.Copy(other._fracture, from, _fracture, to, Width);
         }
     }
 
@@ -87,6 +126,7 @@ public sealed class Board
             throw new ArgumentException("Boards must be the same size.", nameof(other));
         Array.Copy(other._cells, _cells, _cells.Length);
         Array.Copy(other._dormant, _dormant, _dormant.Length);
+        Array.Copy(other._fracture, _fracture, _fracture.Length);
     }
 
     public Board Clone()
@@ -94,6 +134,7 @@ public sealed class Board
         var copy = new Board(Width, Height);
         Array.Copy(_cells, copy._cells, _cells.Length);
         Array.Copy(_dormant, copy._dormant, _dormant.Length);
+        Array.Copy(_fracture, copy._fracture, _fracture.Length);
         return copy;
     }
 

@@ -511,7 +511,7 @@ public sealed class GameEngine
         {
             // First wave resolves straight away; further waves (a chain) are paced by Tick.
             ApplyWave(groups);
-            if (ColourMatcher.FindGroups(Board, Rules.MinGroupSize).Count > 0)
+            if (MoreWaves())
             {
                 _phase = Phase.Instant;
                 State = GameState.ResolvingBursts;
@@ -534,6 +534,20 @@ public sealed class GameEngine
         State = GameState.ResolvingBursts;
     }
 
+    /// <summary>Blocks crack in this game: the rules and the feature allow it, and (in the Story) the level is far enough in. Never in a lesson.</summary>
+    public bool FractureActive =>
+        RuleFeatures.Fracture && Rules.Fracture
+        && (Story is null || (!Story.IsTutorial && Story.Number >= RegionRules.FractureIntro));
+
+    /// <summary>Another wave is waiting: a burst-sized group, or a block that cracked a third time.</summary>
+    private bool MoreWaves() => ColourMatcher.FindGroups(Board, Rules.MinGroupSize).Count > 0 || (FractureActive && Board.AnyBroken());
+
+    /// <summary>Gold weight of a block by its cracks: whole when intact, three quarters with one crack, half with two, and half when it breaks.</summary>
+    internal static double CrackGoldFactor(int cracks) => cracks switch { 0 => 1.0, 1 => 0.75, _ => 0.5 };
+
+    /// <summary>The same weights, for the tests.</summary>
+    public static double CrackGoldFactorForTests(int cracks) => CrackGoldFactor(cracks);
+
     /// <summary>Plays the next step of a pop. Timed pops go highlight, then pop, then settle; instant pops just pop.</summary>
     private void AdvanceResolution()
     {
@@ -548,21 +562,22 @@ public sealed class GameEngine
             case Phase.Settle:
             {
                 var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
-                if (groups.Count == 0) FinishResolution();
-                else BeginHighlight(groups);
+                if (groups.Count > 0) BeginHighlight(groups);
+                else if (FractureActive && Board.AnyBroken()) ApplyWave(NoGroups);   // a block that cracked a third time breaks now
+                else FinishResolution();
                 break;
             }
 
             default:
             {
                 var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
-                if (groups.Count == 0)
+                if (groups.Count == 0 && !(FractureActive && Board.AnyBroken()))
                 {
                     FinishResolution();
                     break;
                 }
                 ApplyWave(groups);
-                if (ColourMatcher.FindGroups(Board, Rules.MinGroupSize).Count == 0) FinishResolution();
+                if (!MoreWaves()) FinishResolution();
                 break;
             }
         }
@@ -578,31 +593,96 @@ public sealed class GameEngine
         int points = ScoringSystem.WavePoints(groups.Select(g => g.Size), Chain);
         var cleared = groups.SelectMany(g => g.Cells).ToList();
 
+        // Blocks that cracked a third time in the wave before break now, with this one.
+        bool fracture = FractureActive;
+        var broken = fracture ? Board.TakeBrokenList() : new List<BlockCell>();
+        var brokenGold = 0.0;
+        if (broken.Count > 0)
+        {
+            var inGroups = new HashSet<(int, int)>(cleared.Select(c => (c.X, c.Y)));
+            broken.RemoveAll(b => inGroups.Contains((b.X, b.Y)));   // one that is also part of a burst pops with it
+            foreach (var b in broken)
+            {
+                cleared.Add(b);
+                brokenGold += CrackGoldFactor(Board.Broken);
+            }
+        }
+
         // Pop gold is paid by the block, at the Endless level the pop happens at (before this wave's points are counted).
         // Every wave counts, chain waves included, with no chain multiplier. Drop points never count. Each group reports
         // what it paid and where it was, so the app can float the number over it.
         int rate = EarnsPopGold ? SeedingConfig.ClassicTenthsPerBlock(Level) : 0;
         bool scaled = Rules.GoldFactor < 1.0;   // easier rules pay half
-        var payouts = new GroupGold[groups.Count];
+        var payouts = new GroupGold[groups.Count + (broken.Count > 0 ? 1 : 0)];
         for (int g = 0; g < groups.Count; g++)
         {
             var cells = groups[g].Cells;
             float sx = 0, sy = 0;
-            for (int c = 0; c < cells.Count; c++) { sx += cells[c].X; sy += cells[c].Y; }
-            payouts[g] = new GroupGold(sx / cells.Count + 0.5f, sy / cells.Count + 0.5f, cells.Count, multiplier, scaled ? Rules.ScaleTenths(cells.Count * rate) : cells.Count * rate, groups[g].Colour);
+            double weight = 0;   // a cracked block pays less (see CrackGoldFactor)
+            for (int c = 0; c < cells.Count; c++)
+            {
+                sx += cells[c].X;
+                sy += cells[c].Y;
+                weight += fracture ? CrackGoldFactor(Board.FractureAt(cells[c].X, cells[c].Y)) : 1.0;
+            }
+            int tenths = (int)Math.Round(weight * rate, MidpointRounding.AwayFromZero);
+            payouts[g] = new GroupGold(sx / cells.Count + 0.5f, sy / cells.Count + 0.5f, cells.Count, multiplier, scaled ? Rules.ScaleTenths(tenths) : tenths, groups[g].Colour);
             ClassicGoldTenths += payouts[g].GoldTenths;
+        }
+        if (broken.Count > 0)
+        {
+            float bx = 0, by = 0;
+            foreach (var b in broken) { bx += b.X; by += b.Y; }
+            int tenths = (int)Math.Round(brokenGold * rate, MidpointRounding.AwayFromZero);   // half pay for each broken block
+            payouts[^1] = new GroupGold(bx / broken.Count + 0.5f, by / broken.Count + 0.5f, broken.Count, multiplier, scaled ? Rules.ScaleTenths(tenths) : tenths, broken[0].Colour);
+            ClassicGoldTenths += payouts[^1].GoldTenths;
         }
 
         GravityResolver.Clear(Board, cleared);
+        var cracked = fracture ? CrackNeighbours(Board, cleared) : (IReadOnlyList<BlockCell>)Array.Empty<BlockCell>();
         var moves = GravityResolver.Apply(Board);
         Score += points;
         _poppedClassic += cleared.Count;
 
-        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts };
+        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts, Broken = broken, Cracked = cracked };
         LastWave = wave;
         _goals?.OnWave(wave);
         WaveResolved?.Invoke(wave);
         Raise(GameEvent.Popped);
+    }
+
+    /// <summary>
+    /// After a wave has cleared its blocks: every surviving block with a cleared neighbour on two or more different sides gets one
+    /// more crack (at most once per wave; corners and diagonals do not count). A third crack leaves the block waiting
+    /// (<see cref="Board.Broken"/>) to break in the next step of the same resolution. Sleeping blocks crack like any other.
+    /// </summary>
+    internal static List<BlockCell> CrackNeighbours(Board board, List<BlockCell> cleared)
+    {
+        var result = new List<BlockCell>();
+        int w = board.Width;
+        var gone = new bool[w * board.Height];
+        foreach (var c in cleared) gone[c.Y * w + c.X] = true;
+
+        var hits = new List<(int X, int Y)>();
+        for (int y = 0; y < board.Height; y++)
+            for (int x = 0; x < w; x++)
+            {
+                if (gone[y * w + x] || board[x, y] == CellColour.Empty) continue;
+                int sides = 0;
+                if (x > 0 && gone[y * w + x - 1]) sides++;
+                if (x < w - 1 && gone[y * w + x + 1]) sides++;
+                if (y > 0 && gone[(y - 1) * w + x]) sides++;
+                if (y < board.Height - 1 && gone[(y + 1) * w + x]) sides++;
+                if (sides >= 2) hits.Add((x, y));
+            }
+
+        foreach (var (x, y) in hits)
+        {
+            int level = Math.Min(PopBlocks.Engine.Models.Board.Broken, board.FractureAt(x, y) + 1);
+            board.SetFracture(x, y, level);
+            result.Add(new BlockCell(x, y, board[x, y]));
+        }
+        return result;
     }
 
     private void ApplyPenalty()

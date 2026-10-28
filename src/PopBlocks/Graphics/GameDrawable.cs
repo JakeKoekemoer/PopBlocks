@@ -353,7 +353,8 @@ public sealed class GameDrawable : IDrawable
                     BoardSpace.ScreenY(y, Flip, originY, cell, fall),
                     cell,
                     colour,
-                    Flip ? CellRenderer.Flip(links) : links);
+                    Flip ? CellRenderer.Flip(links) : links,
+                    board.FractureAt(x, y));
             }
         }
     }
@@ -921,7 +922,7 @@ public sealed class GameDrawable : IDrawable
             {
                 _glowPiece = piece;
                 _glowPlaced = game.PiecesPlaced;
-                _glowChain = PlacementPreview.StartsChain(game.Board, piece, game.Rules.MinGroupSize);
+                _glowChain = PlacementPreview.StartsChain(game.Board, piece, game.Rules.MinGroupSize, game.FractureActive);
             }
             chain = _glowChain;
         }

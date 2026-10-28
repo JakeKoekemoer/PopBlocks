@@ -69,6 +69,10 @@ The board does not repaint on a fixed schedule. `GamePage` repaints when the vie
 
 `GameDrawable.Clock` is a replaceable `Func<long>` (default: `Environment.TickCount64`). Replace it to render a specific animation moment deterministically.
 
+### Cracked blocks (v1.1)
+
+`CellRenderer.DrawLayer` takes the block's crack level (`Board.FractureAt`): one crack is a three-segment dark line from the top-left corner with a one-pixel light edge, two cracks add a second line from the opposite corner that meets it and darken the face by a tenth. A block that has just cracked gets a 120 ms white tick and two specks of dust (`BlastEffects.DrawCracking`); a block that breaks splits into three grey-tinted chunks over 400 ms. Under Reduced motion only the tick remains.
+
 ### Pip's Insight (v1.1)
 
 `GameDrawable.DrawInsight` draws the suggestion as a dashed 2-unit outline where the piece would land (each block in its own colour at 70%, pulsing unless Reduced motion), an arrow above the column and a turn glyph with the number of quarter turns. It stops when the piece in hand is in position or after four seconds. The suggestion is made by `PlacementAdvisor` on a background task and cached per piece in `GameViewModel`.

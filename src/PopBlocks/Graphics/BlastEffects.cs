@@ -270,6 +270,70 @@ public sealed class BlastEffects
     }
 
     private static readonly IReadOnlyList<BlockCell> NoCells = Array.Empty<BlockCell>();
+    private const int CrackTickMs = 120;
+    private const int BreakMs = 400;
+
+    /// <summary>
+    /// Cracks and breaks. A block that has just cracked gets a 120 ms white tick and two specks of dust; a block that breaks
+    /// splits into three grey-tinted chunks that fall away over 400 ms. Under Reduced motion the tick is all there is.
+    /// </summary>
+    private static void DrawCracking(ICanvas canvas, Burst burst, float originX, float originY, float cell, bool flip, long age)
+    {
+        var wave = burst.Wave;
+        if (age < CrackTickMs)
+        {
+            float k = 1f - age / (float)CrackTickMs;
+            foreach (var c in wave.Cracked)
+            {
+                // Where the block ended up after the wave's gravity.
+                int y = c.Y;
+                foreach (var m in wave.Moves) if (m.X == c.X && m.FromY == c.Y) { y = m.ToY; break; }
+                if (BoardSpace.AboveView(y)) continue;
+                float px = BoardSpace.ScreenX(c.X, flip, originX, cell), py = BoardSpace.ScreenY(y, flip, originY, cell);
+                canvas.Alpha = 0.85f * k;
+                canvas.FillColor = Colors.White;
+                canvas.FillRoundedRectangle(px + 2f, py + 2f, cell - 4f, cell - 4f, cell * 0.2f);
+                if (!burst.Reduced)
+                {
+                    canvas.Alpha = k;
+                    float r = MathF.Max(1.2f, cell * 0.04f);
+                    for (int d = 0; d < 2; d++)
+                    {
+                        float ang = (BoardSpace.Noise(c.X * 7 + c.Y, d) * 2f - 1f) * MathF.PI;
+                        float dist = cell * (0.25f + 0.35f * (1f - k));
+                        canvas.FillEllipse(px + cell / 2f + MathF.Cos(ang) * dist - r, py + cell / 2f + MathF.Sin(ang) * dist - r, r * 2f, r * 2f);
+                    }
+                }
+            }
+        }
+
+        if (burst.Reduced || age >= BreakMs) { canvas.Alpha = 1f; return; }
+        float t = age / (float)BreakMs;
+        float dir = flip ? -1f : 1f;
+        foreach (var c in wave.Broken)
+        {
+            if (BoardSpace.AboveView(c.Y)) continue;
+            float cx = BoardSpace.ScreenX(c.X, flip, originX, cell) + cell / 2f, cy = BoardSpace.ScreenY(c.Y, flip, originY, cell) + cell / 2f;
+            for (int p = 0; p < 3; p++)
+            {
+                float angle = -MathF.PI / 2f + (p - 1) * 0.9f + (BoardSpace.Noise(c.X + p, c.Y) - 0.5f) * 0.4f;
+                float speed = cell * (1.2f + 0.8f * BoardSpace.Noise(p, c.X));
+                float x = cx + MathF.Cos(angle) * speed * t;
+                float y = cy + (MathF.Sin(angle) * speed * t + cell * 4.5f * t * t) * dir;
+                float s = cell * (0.30f - 0.05f * p);
+                canvas.Alpha = 1f - t * t;
+                canvas.FillColor = Mix(VisualDesign.BaseColour(c.Colour), Color.FromArgb("#808890"), 0.6f);
+                canvas.SaveState();
+                canvas.Translate(x, y);
+                canvas.Rotate(t * (200f + 90f * p));
+                canvas.FillRectangle(-s / 2f, -s / 2f, s, s * 0.8f);
+                canvas.RestoreState();
+            }
+        }
+        canvas.Alpha = 1f;
+    }
+
+    private static Color Mix(Color a, Color b, float t) => new(a.Red + (b.Red - a.Red) * t, a.Green + (b.Green - a.Green) * t, a.Blue + (b.Blue - a.Blue) * t, 1f);
 
     private static void DrawBurst(ICanvas canvas, Burst burst, float originX, float originY, float cell, bool flip, long age, float boardWidth)
     {
@@ -278,6 +342,7 @@ public sealed class BlastEffects
         float inset = cell * VisualDesign.CellInset;
         int flair = burst.Flair;
         var wave = burst.Wave;
+        if (wave.Cracked.Count > 0 || wave.Broken.Count > 0) DrawCracking(canvas, burst, originX, originY, cell, flip, age);
 
         // Petals and shards are whole particle systems of their own and replace the neon swell and the sparks.
         bool particles = burst.Style is BurstStyle.Petals or BurstStyle.Shards;

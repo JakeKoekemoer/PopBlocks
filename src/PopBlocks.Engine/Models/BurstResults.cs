@@ -33,6 +33,12 @@ public sealed record BurstWave(
     /// <summary>One entry per popped group, in the same order as <see cref="Groups"/>.</summary>
     public IReadOnlyList<GroupGold> Gold { get; init; } = Array.Empty<GroupGold>();
 
+    /// <summary>Blocks that broke in this wave because a third crack reached them (they are also in <see cref="ClearedCells"/>, not in <see cref="Groups"/>).</summary>
+    public IReadOnlyList<BlockCell> Broken { get; init; } = Array.Empty<BlockCell>();
+
+    /// <summary>Blocks that survived this wave with a new crack (positions as they were when the wave popped).</summary>
+    public IReadOnlyList<BlockCell> Cracked { get; init; } = Array.Empty<BlockCell>();
+
     /// <summary>Tenths of a gold this wave paid, over all its groups.</summary>
     public int GoldTenths
     {
