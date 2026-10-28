@@ -51,6 +51,10 @@ On top of that:
 A player who finishes the campaign has earned about **14,000** gold from the Story alone; Classic is extra, and is
 what a stuck player can turn to for the price of a reroll.
 
+## Pip's Insight (v1.1)
+
+Shop item `insight` (key `upgrade_insight`), Gameplay, no requirement: level 1 costs 250 (a button below the board, 3 uses per level), level 2 450 more (6 uses), level 3 800 more (unlimited, and an Always on switch, key `insight_always_on`, off by default): **1,500** in all. Like the new looks it is a long-term sink financed by pop gold and Endless income, so it is left out of the story-paced budget that `P7Tests` checks (level and region gold alone still buy every other upgrade and original look). It is off in lessons and on finales, and an Endless run that used it never sets the best score. It shows where the piece in hand does the most good and never plays the move.
+
 ## Easier rules pay half (v1.1)
 
 `GameRules.GoldFactor` is 0.5 when any custom rule is easier than the normal one (slower falling, fewer colours or shapes, smaller bursts, no cracking, no Orbs, a taller board). It halves pop gold (per group, to the nearest tenth), first-clear gold (rounded down) and the consolation, on every level the rules apply to. The solver-guaranteed promise still only covers the normal rules.

@@ -103,6 +103,7 @@ public static class SaveCode
             new(SaveKeys.CosmeticMixLime, Kind.Text),
             new(SaveKeys.CosmeticSeen, Kind.Unlocks),
             new(SaveKeys.StoryBookTab, Kind.Int, 0, 3),
+            new(SaveKeys.InsightAlwaysOn, Kind.Bool),
         };
         foreach (var item in ShopCatalog.Items) f.Add(new Field(item.SaveKey, Kind.Int, 0, item.MaxLevel));
         foreach (var c in ConsumableCatalog.All) f.Add(new Field(c.SaveKey, Kind.Int, 0, ConsumableCatalog.Cap));

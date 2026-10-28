@@ -34,6 +34,7 @@ Every rule that depends on a level number reads from here. That is why the bands
 | `ShapeDef`, `ShapeCatalog` | Every shape in the game. | See 3.2.2. |
 | `ColourGroup`, `CellMove`, `BurstWave` | Results of one burst wave. | `BurstWave` carries the chain index, multiplier, points, the groups, the cleared cells, and the cells that fell. It feeds scoring display, goal tracking and the visual effects. |
 | `GameMode`, `Tier`, `GameSetup` | What the player chose. | `GameSetup` is a record: Classic, or Story level N. |
+| `PlacementAdvisor`, `AdviceRequest`, `PlacementSuggestion` | Pip's Insight (v1.1): tries every turn and slide the real rules allow on a copy of the board, plays each out like the game (waves, gravity, goal progress), and returns the best by goal progress, then blocks popped, chain length, lower stack and fewer holes. One piece ahead, deterministic, never plays the move. `GameEngine.CreateAdviceRequest()` hands over a copy for a background task; `InsightAllowed` is false in lessons and on finales. | The app runs it off the UI thread and caches the answer per piece. |
 | `GameState`, `FailReason`, `GameEvent` | State machine, why a game was lost, and things that happened. | `GameEvent` is raised as things occur (moved, rotated, popped, penalty, level complete...) and drives tutorials. |
 
 ### 3.2.1 `Piece`

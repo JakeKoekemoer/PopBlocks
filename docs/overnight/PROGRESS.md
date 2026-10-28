@@ -14,8 +14,8 @@
 | 9b Boards and frames | done | 9cb5fd4 |
 | 9c Pip looks | done | 461620f |
 | 10 Story Book | done | 01a16eb |
-| 11 Tall scrolling board | done (default height not flipped, see Unfinished) | PENDING11 |
-| 12 Pip's Insight | pending | |
+| 11 Tall scrolling board | done (default height not flipped, see Unfinished) | 713b187 |
+| 12 Pip's Insight | done | PENDING12 |
 | 13 Fracture | pending | |
 | 14 The Orb | pending | |
 | 15 Achievements | pending | |

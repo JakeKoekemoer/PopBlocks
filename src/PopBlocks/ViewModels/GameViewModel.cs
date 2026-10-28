@@ -147,6 +147,13 @@ public sealed class GameViewModel : ObservableObject
         ChoiceDoneCommand = new Command(FinishChoice);
         SecondChanceCommand = new Command(UseSecondChance);
         PrismShiftCommand = new Command(UsePrismShift);
+        InsightCommand = new Command(() => RunInsight(countUse: true));
+        InsightAlwaysCommand = new Command(() =>
+        {
+            _shop.InsightAlwaysOn = !_shop.InsightAlwaysOn;
+            RaiseInsight();
+            if (_shop.InsightAlwaysOn) RunInsight(countUse: false);
+        });
         RerollCommand = new Command(Reroll);
         ToggleRerollHintCommand = new Command(() => { RerollHintOpen = !RerollHintOpen; });
         DismissLoadingCommand = new Command(DismissLoading);
@@ -216,6 +223,8 @@ public sealed class GameViewModel : ObservableObject
     public ICommand DismissLoadingCommand { get; }
     public ICommand CopySeedCommand { get; }
     public ICommand ShopCommand { get; }
+    public ICommand InsightCommand { get; }
+    public ICommand InsightAlwaysCommand { get; }
     public ICommand EaseCommand { get; }
 
     /// <summary>The player pressed EASE THIS LEVEL. The page asks them to confirm, then calls <see cref="ConfirmEase"/>.</summary>
@@ -482,6 +491,80 @@ public sealed class GameViewModel : ObservableObject
         if (hold == _chipHold) return;
         _chipHold = hold;
         OnPropertyChanged(nameof(SubText));
+    }
+
+    // ---- Pip's Insight (v1.1) ----
+    // A button below the board (and, at the top level, an Always on switch). It asks the advisor where the piece in hand
+    // would do the most good and the board draws that spot. It never plays the move. Off in lessons and finales.
+
+    private PlacementSuggestion? _insight;
+    private int _insightIndex = -1;      // the piece (by how many have been placed) the suggestion is for
+    private int _insightUses;            // uses spent on this level
+    private bool _insightUsedInRun;      // Insight was shown this run: an Endless run like that never sets a best score
+    private int _insightRequest;
+
+    /// <summary>The suggestion changed (or was taken away). The page hands it to the board to draw.</summary>
+    public event Action<PlacementSuggestion?>? InsightChanged;
+
+    public bool InsightRowVisible => _shop.InsightLevel > 0 && _game.InsightAllowed && !_isComplete && !_isFailed && !SceneVisible;
+    public bool AlwaysOnActive => _shop.InsightAlwaysOn && _game.InsightAllowed;
+    public bool ShowInsightButton => InsightRowVisible && !AlwaysOnActive;
+    public bool ShowAlwaysOn => InsightRowVisible && _shop.InsightLevel >= 3;
+    public int InsightUsesLeft => _shop.InsightUsesPerLevel == int.MaxValue ? int.MaxValue : Math.Max(0, _shop.InsightUsesPerLevel - _insightUses);
+    public bool CanInsight => ShowInsightButton && InsightUsesLeft > 0 && _game.State == GameState.Playing;
+    public string InsightText => InsightUsesLeft == int.MaxValue ? "INSIGHT" : $"INSIGHT · {InsightUsesLeft} LEFT";
+    public string AlwaysOnText => _shop.InsightAlwaysOn ? "ALWAYS ON: ON" : "ALWAYS ON: OFF";
+
+    private void RaiseInsight()
+    {
+        OnPropertyChanged(nameof(InsightRowVisible));
+        OnPropertyChanged(nameof(AlwaysOnActive));
+        OnPropertyChanged(nameof(ShowInsightButton));
+        OnPropertyChanged(nameof(ShowAlwaysOn));
+        OnPropertyChanged(nameof(InsightUsesLeft));
+        OnPropertyChanged(nameof(CanInsight));
+        OnPropertyChanged(nameof(InsightText));
+        OnPropertyChanged(nameof(AlwaysOnText));
+    }
+
+    /// <summary>Asks the advisor (off the UI thread) where the piece in hand should go. A suggestion already made for this piece is shown again for free.</summary>
+    private async void RunInsight(bool countUse)
+    {
+        if (!_game.InsightAllowed || _shop.InsightLevel == 0 || _game.State != GameState.Playing) return;
+        int index = _game.PiecesPlaced;
+
+        if (_insight is not null && _insightIndex == index)
+        {
+            InsightChanged?.Invoke(_insight);   // already worked out for this piece: show it again, no use spent
+            return;
+        }
+        if (countUse && InsightUsesLeft <= 0) return;
+
+        var request = _game.CreateAdviceRequest();
+        if (request is null) return;
+        int ticket = ++_insightRequest;
+        var result = await Task.Run(() => PlacementAdvisor.Best(request));
+        if (ticket != _insightRequest || _game.PiecesPlaced != index || _game.State != GameState.Playing) return;   // stale: the piece moved on
+
+        _insight = result;
+        _insightIndex = index;
+        if (countUse && _shop.InsightUsesPerLevel != int.MaxValue) _insightUses++;
+        _insightUsedInRun = true;
+        RaiseInsight();
+        InsightChanged?.Invoke(result);
+    }
+
+    /// <summary>A new piece has appeared: the old suggestion goes, and the new one is made at once if Always on is set.</summary>
+    private void OnPieceChangedForInsight()
+    {
+        if (_insightIndex == _game.PiecesPlaced && _insight is not null) return;
+        if (_insight is not null)
+        {
+            _insight = null;
+            InsightChanged?.Invoke(null);
+        }
+        RaiseInsight();
+        if (AlwaysOnActive && _game.State == GameState.Playing) RunInsight(countUse: false);
     }
 
     // ---- continues (v1.1) ----
@@ -1453,6 +1536,12 @@ public sealed class GameViewModel : ObservableObject
         }
         _failureCounted = false;
         RerollHintOpen = false;
+        _insight = null;
+        _insightIndex = -1;
+        _insightUses = 0;
+        _insightUsedInRun = false;
+        _insightRequest++;
+        InsightChanged?.Invoke(null);
         if (_setup.IsStory) _classicGold.BeginRun();   // Story pops pay too: this run starts with nothing banked
         _popGoldPaid = 0;
         _lossPaid = default;
@@ -1651,9 +1740,9 @@ public sealed class GameViewModel : ObservableObject
         {
             // Save the personal best the moment it is beaten, so an unexpected exit cannot lose it. A run on a seed the
             // player typed in pays gold like any other, but never sets a record (an easy seed would make it meaningless).
-            if (_setup.CountsForBest && _highScores.Submit(_setup.BestScoreKey, _game.Score))
+            if (_setup.CountsForBest && !_insightUsedInRun && _highScores.Submit(_setup.BestScoreKey, _game.Score))
                 BestScore = _highScores.GetBest(_setup.BestScoreKey);
-            IsNewBest = _setup.CountsForBest && _highScores.GetBest(_setup.BestScoreKey) > _bestAtStart;
+            IsNewBest = _setup.CountsForBest && !_insightUsedInRun && _highScores.GetBest(_setup.BestScoreKey) > _bestAtStart;
 
             // Game over pays out what the run earned, once, and says how much.
             if (_game.State == GameState.GameOver && !_classicBanked)
@@ -1693,6 +1782,7 @@ public sealed class GameViewModel : ObservableObject
 
         HandleCompletion();
         RaiseBonus();
+        OnPieceChangedForInsight();
 
         IsPaused = _game.State == GameState.Paused;
         IsFailed = _setup.HasLevel && _game.State == GameState.GameOver;

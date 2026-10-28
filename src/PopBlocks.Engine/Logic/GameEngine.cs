@@ -707,6 +707,17 @@ public sealed class GameEngine
 
     // ------------------------------------------------------------------ helpers
 
+    // ---- Pip's Insight ----
+
+    /// <summary>Insight is not given in a lesson or on a region's finale (the helpers are off there too).</summary>
+    public bool InsightAllowed => Story is null || (Story is { IsTutorial: false, AllowAbilities: true } s && RegionCatalog.For(s.Number)?.LastLevel != s.Number);
+
+    /// <summary>A copy of what the advisor needs for the piece in hand, or null if there is no piece in play.</summary>
+    public AdviceRequest? CreateAdviceRequest() =>
+        CurrentPiece is { } piece && State == GameState.Playing
+            ? new AdviceRequest(Board.Clone(), piece, _goals?.Clone(), Score, Rules.MinGroupSize)
+            : null;
+
     /// <summary>Second Chances used this level (0 or 1).</summary>
     public int SecondChanceUsed { get; private set; }
 

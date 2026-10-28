@@ -69,6 +69,10 @@ The board does not repaint on a fixed schedule. `GamePage` repaints when the vie
 
 `GameDrawable.Clock` is a replaceable `Func<long>` (default: `Environment.TickCount64`). Replace it to render a specific animation moment deterministically.
 
+### Pip's Insight (v1.1)
+
+`GameDrawable.DrawInsight` draws the suggestion as a dashed 2-unit outline where the piece would land (each block in its own colour at 70%, pulsing unless Reduced motion), an arrow above the column and a turn glyph with the number of quarter turns. It stops when the piece in hand is in position or after four seconds. The suggestion is made by `PlacementAdvisor` on a background task and cached per piece in `GameViewModel`.
+
 ### Tall boards (v1.1)
 
 The board can be taller than the screen (16 to 32 rows, chosen in the player's own rules). The engine owns the camera (`GameEngine.CameraBottom`, `ViewTopRow`, `CameraFor`): the top of the stack sits in the middle of the screen, between the floor and `Rows - 16`, and it is worked out only when the board has settled, just before a piece spawns, so it never moves while a piece falls; on the standard 16-row board it never leaves the floor. Pieces spawn one row above the top of the screen. Drawing keeps `BoardSpace.ViewTop` (the board row at the top of the screen); `GameDrawable` eases it between camera positions over 300 ms (instantly under Reduced motion) and every effect that maps a board row to the screen (bursts, floating gold, particles) reads it. Only the rows on the screen are drawn. When rows are below the screen the bottom edge fades and says "â–¼ n rows below", and a 4-wide gauge down the right edge shows the whole board, a bracket for the screen and a fill up to the top of the stack.

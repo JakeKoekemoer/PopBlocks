@@ -73,6 +73,13 @@ public partial class GamePage : ContentPage
         _vm.Banner += OnBanner;
         _vm.PropertyChanged += OnViewModelPropertyChanged;
         _vm.EndBeatStarted += OnEndBeatStarted;
+        _vm.InsightChanged += suggestion =>
+        {
+            _board.Insight = suggestion;
+            _board.InsightSinceMs = Environment.TickCount64;
+            BoardView.Invalidate();
+            if (suggestion is not null) StartAnimation();
+        };
         _vm.ShopRequested += OnShopRequested;
         _vm.EaseRequested += OnEaseRequested;
         _vm.ShareRequested += text => _ = Ui.ShareAsync(text);

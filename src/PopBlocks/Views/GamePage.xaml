@@ -219,6 +219,24 @@
                         HeightRequest="38"
                         SemanticProperties.Description="{Binding PrismShiftDescription}" />
             </Grid>
+            <!-- Pip's Insight: shows where the piece in hand would do the most good. Never plays the move. -->
+            <Grid IsVisible="{Binding InsightRowVisible}" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,4">
+                <Button Grid.Column="0"
+                        Text="{Binding InsightText}"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding InsightCommand}"
+                        IsVisible="{Binding ShowInsightButton}"
+                        IsEnabled="{Binding CanInsight}"
+                        HeightRequest="38"
+                        SemanticProperties.Description="Ask Pip where this piece would do the most good" />
+                <Button Grid.Column="1"
+                        Text="{Binding AlwaysOnText}"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding InsightAlwaysCommand}"
+                        IsVisible="{Binding ShowAlwaysOn}"
+                        HeightRequest="38"
+                        SemanticProperties.Description="Show Pip's suggestion for every piece" />
+            </Grid>
             <Label Text="{Binding HelperHint}"
                    IsVisible="{Binding HasHelperHint}"
                    Style="{StaticResource CaptionLabel}"

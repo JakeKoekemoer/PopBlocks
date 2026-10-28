@@ -108,6 +108,29 @@ public sealed class GameDrawable : IDrawable
     /// <summary>Cell edge length from the most recent draw, in the same units as touch coordinates.</summary>
     public float CellSize { get; private set; } = 24f;
 
+    /// <summary>Pip's Insight: where the piece in hand should go. Drawn as a dashed outline until it is reached or four seconds pass.</summary>
+    public PlacementSuggestion? Insight { get; set; }
+    public long InsightSinceMs { get; set; }
+    private const int InsightShowMs = 4000;
+    private static readonly float[] InsightDash = { 4f, 3f };
+    private string _turnText = string.Empty;
+    private static readonly PathF InsightArrow = BuildInsightArrow();
+
+    private static PathF BuildInsightArrow()
+    {
+        var p = new PathF();
+        p.MoveTo(-1f, -0.7f);
+        p.LineTo(1f, -0.7f);
+        p.LineTo(0f, 0.9f);
+        p.Close();
+        return p;
+    }
+
+    private bool InsightVisible(long nowMs) =>
+        Insight is not null && nowMs - InsightSinceMs < InsightShowMs
+        && Game is { State: GameState.Playing, CurrentPiece: { } piece }
+        && PlacementSuggestion.Describe(piece) != Insight.Signature;
+
     /// <summary>The page lets the board's own movement run (a game in play, not paused, not idle, not Reduced motion).</summary>
     public bool AmbientOn { get; set; }
 
@@ -121,7 +144,7 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>True while something on the board is animating, so the page keeps repainting.</summary>
     public bool NeedsAnimation(long nowMs) =>
-        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || HintColumn >= 0 || CameraMoving(nowMs);
+        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || HintColumn >= 0 || CameraMoving(nowMs) || (!ReducedMotion && InsightVisible(nowMs));
 
     /// <summary>The slow movement (board ambience, frame animation) is all that is running: a gentle repaint is enough.</summary>
     public bool OnlyAmbientRunning(long nowMs) =>
@@ -177,6 +200,7 @@ public sealed class GameDrawable : IDrawable
             Effects.Draw(canvas, originX, originY, cell, boardW, Flip, now);
             Floaters.Draw(canvas, originX, originY, cell, Flip, now);
             DrawCameraHints(canvas, game, originX, originY, boardW, boardH, cell);
+            if (InsightVisible(now)) DrawInsight(canvas, originX, originY, cell, now);
 
             if (TopRowFlash > 0f)
             {
@@ -589,6 +613,48 @@ public sealed class GameDrawable : IDrawable
             canvas.FillEllipse(minX - leaf * 0.6f, minY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
             canvas.FillEllipse(maxX - leaf * 0.6f, minY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
             canvas.FillEllipse(minX - leaf * 0.6f, maxY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
+        }
+    }
+
+    /// <summary>
+    /// A dashed 2-unit outline where the piece should land, in the piece's own colours at 70% (pulsing unless Reduced motion),
+    /// an arrow above its column and a turn glyph with the number of quarter turns. It disappears once the piece is in place.
+    /// </summary>
+    private void DrawInsight(ICanvas canvas, float originX, float originY, float cell, long now)
+    {
+        var s = Insight!;
+        float pulse = ReducedMotion ? 1f : 0.75f + 0.25f * MathF.Sin(now / 1000f * MathF.Tau * 1.2f);
+        float inset = cell * VisualDesign.CellInset * 0.5f;
+        canvas.StrokeSize = 2f;
+        canvas.StrokeDashPattern = InsightDash;
+        float minSx = float.MaxValue, maxSx = float.MinValue, topSy = float.MaxValue;
+        foreach (var c in s.Landed)
+        {
+            if (BoardSpace.AboveView(c.Y) || BoardSpace.BelowView(c.Y)) continue;
+            float sx = BoardSpace.ScreenX(c.X, Flip, originX, cell), sy = BoardSpace.ScreenY(c.Y, Flip, originY, cell);
+            minSx = MathF.Min(minSx, sx);
+            maxSx = MathF.Max(maxSx, sx + cell);
+            topSy = MathF.Min(topSy, sy);
+            canvas.StrokeColor = VisualDesign.NeonColour(c.Colour).WithAlpha(0.7f * pulse);
+            canvas.DrawRoundedRectangle(sx + inset, sy + inset, cell - 2f * inset, cell - 2f * inset, cell * VisualDesign.Corner);
+        }
+        canvas.StrokeDashPattern = null;
+        if (minSx > maxSx) return;
+
+        // An arrow above the column(s), pointing down at the spot.
+        float ax = (minSx + maxSx) / 2f, ay = originY + cell * 0.55f, r = cell * 0.28f;
+        canvas.FillColor = Colors.White.WithAlpha(0.85f * pulse);
+        canvas.SaveState();
+        canvas.Translate(ax, ay);
+        canvas.Scale(r, r);
+        canvas.FillPath(InsightArrow, WindingMode.NonZero);
+        canvas.RestoreState();
+        if (s.Rotations > 0)
+        {
+            if (_turnText.Length == 0 || _turnText[^1] != (char)('0' + s.Rotations)) _turnText = "\u21BB" + s.Rotations;
+            canvas.FontColor = Colors.White.WithAlpha(0.9f);
+            canvas.FontSize = cell * 0.42f;
+            canvas.DrawString(_turnText, ax - cell, ay + r + 2f, cell * 2f, cell * 0.6f, HorizontalAlignment.Center, VerticalAlignment.Top);
         }
     }
 

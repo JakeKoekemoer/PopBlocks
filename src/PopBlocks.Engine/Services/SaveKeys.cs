@@ -23,6 +23,8 @@ public static class SaveKeys
     public const string UpgradeColourLens = "upgrade_colourlens";
     public const string UpgradeChainSense = "upgrade_chainsense";
     public const string UpgradePrismReserve = "upgrade_prismreserve";
+    public const string UpgradeInsight = "upgrade_insight";         // Pip's Insight (v1.1)
+    public const string InsightAlwaysOn = "insight_always_on";      // Insight level 3: show the suggestion for every piece
 
     // ---- Consumables (ConsumableInventory): how many of each are in stock, 0 to 3 ----
     public const string ConsumableSecondChance = "consumable_second_chance";
@@ -169,7 +171,7 @@ public static class SaveKeys
     /// <summary>Every key, for tests and documentation.</summary>
     public static IReadOnlyList<string> All { get; } = new[]
     {
-        SaveVersion, ProgressHighest, Gold, UpgradePreview, UpgradePopFlair, UpgradeExtraMoves, UpgradeColourLens, UpgradeChainSense, UpgradePrismReserve, ConsumableSecondChance, ConsumablePrismShift, BestScore,
+        SaveVersion, ProgressHighest, Gold, UpgradePreview, UpgradePopFlair, UpgradeExtraMoves, UpgradeColourLens, UpgradeChainSense, UpgradePrismReserve, UpgradeInsight, InsightAlwaysOn, ConsumableSecondChance, ConsumablePrismShift, BestScore,
         BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects,
         AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced, AudioTrack,
         Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
