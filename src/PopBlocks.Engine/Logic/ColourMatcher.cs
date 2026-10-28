@@ -5,6 +5,7 @@ namespace PopBlocks.Engine.Logic;
 /// <summary>
 /// Finds connected same-colour groups using orthogonal adjacency only.
 /// Read-only: it never mutates the board, so all qualifying groups come from one consistent snapshot.
+/// A group made only of dormant blocks (a solid piece nothing has joined yet) is not reported: it waits.
 /// </summary>
 public static class ColourMatcher
 {
@@ -24,6 +25,7 @@ public static class ColourMatcher
                 if (colour == CellColour.Empty || visited[start]) continue;
 
                 var cells = new List<BlockCell>();
+                bool live = false;   // true once the group has a block that is not dormant
                 visited[start] = true;
                 stack.Push(start);
 
@@ -33,6 +35,7 @@ public static class ColourMatcher
                     int cx = index % width;
                     int cy = index / width;
                     cells.Add(new BlockCell(cx, cy, colour));
+                    if (!board.IsDormant(cx, cy)) live = true;
 
                     TryVisit(cx - 1, cy);
                     TryVisit(cx + 1, cy);
@@ -40,7 +43,7 @@ public static class ColourMatcher
                     TryVisit(cx, cy + 1);
                 }
 
-                if (cells.Count >= minSize)
+                if (cells.Count >= minSize && live)
                     groups.Add(new ColourGroup(colour, cells));
 
                 void TryVisit(int nx, int ny)
@@ -55,6 +58,22 @@ public static class ColourMatcher
         }
 
         return groups;
+    }
+
+    /// <summary>
+    /// Call right after a piece's cells are written to the board. Any burst-sized group made only of those cells (a solid
+    /// piece that touches nothing of its colour) is put to sleep, so landing does not pop it. A group that also holds
+    /// older blocks is left awake: the piece connected to something, so it pops as usual, sleeping blocks included.
+    /// </summary>
+    public static void MarkDormant(Board board, IEnumerable<(int X, int Y)> placed)
+    {
+        var own = new HashSet<(int, int)>(placed.Select(p => (p.X, p.Y)));
+        foreach (var group in FindGroups(board))
+        {
+            if (group.Cells.All(c => own.Contains((c.X, c.Y))))
+                foreach (var c in group.Cells)
+                    board.SetDormant(c.X, c.Y);
+        }
     }
 
     /// <summary>

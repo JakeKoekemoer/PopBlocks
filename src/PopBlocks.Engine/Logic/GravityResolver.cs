@@ -28,8 +28,10 @@ public static class GravityResolver
 
                 if (y != writeY)
                 {
+                    bool dormant = board.IsDormant(x, y);   // a sleeping block keeps sleeping while it falls
                     board[x, writeY] = colour;
                     board[x, y] = CellColour.Empty;
+                    if (dormant) board.SetDormant(x, writeY);
                     moves.Add(new CellMove(x, y, writeY, colour));
                 }
                 writeY--;

@@ -32,7 +32,9 @@ public class ClassicGoldEngineTests
     [Fact]
     public void Blocks_popped_pay_one_tenth_each_at_the_first_Classic_level()
     {
-        var engine = ClassicGame(Pieces.Square(CellColour.Coral), Pieces.Square(CellColour.Lime));
+        // A lone solid square would now sleep where it lands, so the pop comes from a bar joining a block already there.
+        var engine = ClassicGame(Pieces.Bar(CellColour.Coral), Pieces.Square(CellColour.Lime));
+        engine.Board[5, engine.Board.Height - 1] = CellColour.Coral;   // the bar lands beside it: 3 + 1 = 4
 
         engine.HardDrop();
         Story.Settle(engine);
@@ -58,7 +60,8 @@ public class ClassicGoldEngineTests
     [Fact]
     public void Drop_points_do_not_count_and_the_count_starts_again_with_each_game()
     {
-        var engine = ClassicGame(Pieces.Square(CellColour.Coral), Pieces.Square(CellColour.Coral));
+        var engine = ClassicGame(Pieces.Bar(CellColour.Coral), Pieces.Square(CellColour.Coral));
+        engine.Board[5, engine.Board.Height - 1] = CellColour.Coral;   // the bar lands beside it: 3 + 1 = 4
         engine.HardDrop();
         Story.Settle(engine);
         Assert.True(engine.Score > engine.TotalPopped * 10, "the score includes drop points that gold ignores");

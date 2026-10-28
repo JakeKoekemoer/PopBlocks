@@ -13,6 +13,8 @@ This document describes the game as the player experiences it, and the product r
 
 Pieces are not single-colour tetrominoes. A piece can have one or two colours, and its cells keep their colours when it rotates. That is what makes the puzzle: you are lining up colours, not filling lines. There is no "line clear" in the Tetris sense.
 
+**Solid pieces.** A piece never bursts just by landing. Now and then (about 1 piece in 60, `GameConfig.SolidPieceChance`) a piece arrives that is a group of four or more cells of one colour all by itself, such as a one-colour square. It does not burst when it lands; it sleeps there until another block of its colour touches it, and then the whole group bursts together. Every other would-be solid piece is quietly recoloured by the generator. Prism Shift never turns an ordinary piece into a solid one.
+
 Constants: `GameConfig.cs` (`Columns` 8, `VisibleRows` 16, `HiddenRows` 2, `MinGroupSize` 4, `ColourFamilies` 5).
 
 ## 1.2 Board and spawn area

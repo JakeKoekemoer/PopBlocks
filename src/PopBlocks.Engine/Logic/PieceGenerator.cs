@@ -10,7 +10,8 @@ public interface IPieceGenerator
 
 /// <summary>
 /// Random pieces: 2-5 cell clusters with one or two colours per piece. Classic shapes only unless an
-/// <c>exoticShare</c> is given, in which case that share of pieces comes from the exotic set.
+/// <c>exoticShare</c> is given, in which case that share of pieces comes from the exotic set. A piece that would be a
+/// burst-sized group of one colour by itself is recoloured, except for a small <c>solidChance</c> of the time.
 /// </summary>
 public sealed class PieceGenerator : IPieceGenerator
 {
@@ -21,11 +22,18 @@ public sealed class PieceGenerator : IPieceGenerator
 
     private readonly Random _random;
     private readonly double _exoticShare;
+    private readonly double _solidChance;
 
-    public PieceGenerator(Random? random = null, double exoticShare = 0.0)
+    /// <param name="solidChance">
+    /// Of the pieces that would come out as one burst-sized colour group by themselves ("solid" pieces), the share that stay
+    /// that way. All the others are recoloured. The engine keeps a solid piece from popping when it lands (see
+    /// <see cref="GameConfig.SolidPieceChance"/>), so it is a rare surprise, never an accident.
+    /// </param>
+    public PieceGenerator(Random? random = null, double exoticShare = 0.0, double solidChance = GameConfig.SolidPieceChance)
     {
         _random = random ?? new Random();
         _exoticShare = Math.Clamp(exoticShare, 0.0, 1.0);
+        _solidChance = Math.Clamp(solidChance, 0.0, 1.0);
     }
 
     public Piece Next(int colourCount)
@@ -35,9 +43,36 @@ public sealed class PieceGenerator : IPieceGenerator
         bool exotic = _exoticShare > 0.0 && _random.NextDouble() < _exoticShare;
         var shape = exotic ? Pick(ShapeCatalog.Exotic, ExoticWeight) : Pick(ShapeCatalog.Classic, ClassicWeight);
 
-        // Big exotic pieces are always two-coloured: a one-colour piece of five would pop on its own.
+        // Big exotic pieces are always two-coloured, which already avoids most solid pieces.
         var colours = PickColours(shape.CellCount, colourCount, forceTwo: exotic && shape.CellCount >= 4);
-        return ShapeCatalog.Build(shape, colours);
+        var piece = ShapeCatalog.Build(shape, colours);
+
+        // A piece that is a burst-sized group by itself is the exception: it stays only now and then. (With a single
+        // colour in play there is nothing to recolour with.) The draw happens only for these pieces.
+        if (piece.IsSolid && colourCount > 1 && _random.NextDouble() >= _solidChance)
+            piece = BreakUp(piece, colourCount);
+        return piece;
+    }
+
+    /// <summary>
+    /// Recolours cells of the solid group, last cell first, until the piece no longer holds a burst-sized group. It uses a
+    /// colour the piece already has, else the next one round the palette, and draws no random numbers.
+    /// </summary>
+    private static Piece BreakUp(Piece piece, int colourCount)
+    {
+        var solid = piece.SolidColour;
+        var other = piece.Cells.Select(c => c.Colour).FirstOrDefault(c => c != solid);
+        if (other == CellColour.Empty) other = (CellColour)(1 + (int)solid % colourCount);
+
+        var colours = piece.Cells.Select(c => c.Colour).ToArray();
+        var result = piece;
+        for (int i = colours.Length - 1; i >= 0 && result.IsSolid; i--)
+        {
+            if (colours[i] != solid) continue;
+            colours[i] = other;
+            result = piece.WithColourOrder(colours);
+        }
+        return result;
     }
 
     private ShapeDef Pick(ShapeDef[] shapes, int totalWeight)

@@ -374,6 +374,9 @@ public sealed class GameEngine
         foreach (var c in piece.Cells)
             Board[piece.X + c.X, piece.Y + c.Y] = c.Colour;
 
+        // A solid piece (one colour, burst-sized by itself) must not pop just by landing: it sleeps until something joins it.
+        ColourMatcher.MarkDormant(Board, piece.Cells.Select(c => (piece.X + c.X, piece.Y + c.Y)));
+
         CurrentPiece = null;
         PiecesPlaced++;
         Chain = 0;
@@ -647,7 +650,7 @@ public sealed class GameEngine
     {
         if (PrismShiftStatus != AbilityStatus.Ready) return false;
 
-        var shifted = NextPiece!.WithNextColourOrder();
+        var shifted = NextShiftedPiece();
         if (shifted is null) return false;
 
         if (_shiftFreeLeft > 0) { _shiftFreeLeft--; LastShiftWasPaid = false; }
@@ -659,6 +662,23 @@ public sealed class GameEngine
         Raise(GameEvent.PrismShifted);
         Notify();
         return true;
+    }
+
+    /// <summary>
+    /// The next colouring for Prism Shift. A shift never turns an ordinary piece into a solid one (a solid piece is a rare
+    /// surprise from the generator, not something to dial in), so colourings that would be solid are skipped. Null when
+    /// there is nothing to rearrange, or every other colouring would be solid.
+    /// </summary>
+    private Piece? NextShiftedPiece()
+    {
+        var next = NextPiece!;
+        var shifted = next.WithNextColourOrder();
+        if (shifted is null || next.IsSolid) return shifted;
+
+        // The last colouring wraps round to the current one, so there are DistinctColourOrders - 1 others to try.
+        for (int tried = 1; tried < next.DistinctColourOrders - 1 && shifted!.IsSolid; tried++)
+            shifted = shifted.WithNextColourOrder();
+        return shifted!.IsSolid ? null : shifted;
     }
 
     private void Raise(GameEvent e) => EventRaised?.Invoke(e);

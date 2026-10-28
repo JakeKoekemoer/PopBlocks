@@ -122,6 +122,42 @@ public sealed class Piece
         return true;
     }
 
+    /// <summary>
+    /// The colour of a connected same-colour group of <see cref="GameConfig.MinGroupSize"/> or more cells inside this
+    /// piece, or <see cref="CellColour.Empty"/> when there is none. A piece with one is "solid": it is a burst-sized
+    /// group all by itself, so the board keeps it dormant instead of popping it the moment it lands.
+    /// </summary>
+    public CellColour SolidColour
+    {
+        get
+        {
+            var colourAt = new Dictionary<(int, int), CellColour>(Cells.Count);
+            foreach (var c in Cells) colourAt[(c.X, c.Y)] = c.Colour;
+
+            var seen = new HashSet<(int, int)>();
+            foreach (var start in colourAt)
+            {
+                if (!seen.Add(start.Key)) continue;
+                var stack = new Stack<(int X, int Y)>();
+                stack.Push(start.Key);
+                int size = 0;
+                while (stack.Count > 0)
+                {
+                    var (x, y) = stack.Pop();
+                    size++;
+                    foreach (var next in new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) })
+                        if (colourAt.TryGetValue(next, out var colour) && colour == start.Value && seen.Add(next))
+                            stack.Push(next);
+                }
+                if (size >= GameConfig.MinGroupSize) return start.Value;
+            }
+            return CellColour.Empty;
+        }
+    }
+
+    /// <summary>True when the piece is a burst-sized group of one colour by itself (see <see cref="SolidColour"/>).</summary>
+    public bool IsSolid => SolidColour != CellColour.Empty;
+
     /// <summary>Absolute board coordinates of every cell (allocates; for logic and tests, not per-frame drawing).</summary>
     public IEnumerable<BlockCell> BoardCells()
     {
