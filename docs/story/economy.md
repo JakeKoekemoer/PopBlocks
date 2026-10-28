@@ -55,6 +55,10 @@ what a stuck player can turn to for the price of a reroll.
 
 `GameRules.GoldFactor` is 0.5 when any custom rule is easier than the normal one (slower falling, fewer colours or shapes, smaller bursts, no cracking, no Orbs, a taller board). It halves pop gold (per group, to the nearest tenth), first-clear gold (rounded down) and the consolation, on every level the rules apply to. The solver-guaranteed promise still only covers the normal rules.
 
+## Looks sold from the first day (v1.1)
+
+`CosmeticCatalog.NewPrice` (block sets, boards, frames and Pip looks added in v1.1) is separate from the story-paced budget (`OriginalPrice`, 2,960): those looks need no story step, cost 150 to 900 gold each, and are meant to be bought over time from Endless and Story pop gold. They are never required for anything.
+
 ## Sinks (continues)
 
 | Phase | What | Gold |

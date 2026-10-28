@@ -1,3 +1,4 @@
+using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
 
 namespace PopBlocks.Engine.Story;
@@ -79,11 +80,70 @@ public sealed class CosmeticLoadout
     public FrameStyle Frame => CosmeticCatalog.FrameOf(Selected(CosmeticSlot.Frame));
     public AccessoryStyle Accessory => CosmeticCatalog.AccessoryOf(Selected(CosmeticSlot.Accessory));
 
+    // ---- Patchwork: the block set used for each colour ----
+
+    private static readonly CellColour[] Five =
+        { CellColour.Cyan, CellColour.Coral, CellColour.Yellow, CellColour.Purple, CellColour.Lime };
+
+    public static string MixKey(CellColour colour) => colour switch
+    {
+        CellColour.Cyan => SaveKeys.CosmeticMixCyan,
+        CellColour.Coral => SaveKeys.CosmeticMixCoral,
+        CellColour.Yellow => SaveKeys.CosmeticMixYellow,
+        CellColour.Purple => SaveKeys.CosmeticMixPurple,
+        CellColour.Lime => SaveKeys.CosmeticMixLime,
+        _ => throw new ArgumentOutOfRangeException(nameof(colour), "Patchwork has only the five block colours."),
+    };
+
+    /// <summary>The block set Patchwork uses for a colour: the saved one if it is a set you own, otherwise Classic.</summary>
+    public string Mix(CellColour colour)
+    {
+        string saved = _settings.GetString(MixKey(colour), "");
+        if (saved.Length == 0 || saved == CosmeticCatalog.PatchworkSkin) return CosmeticCatalog.DefaultSkin;
+        return CosmeticCatalog.Find(saved) is { Slot: CosmeticSlot.Skin } c && IsOwned(c) ? saved : CosmeticCatalog.DefaultSkin;
+    }
+
+    /// <summary>Chooses the set for one colour. False (nothing changes) unless it is a block set you own other than Patchwork itself.</summary>
+    public bool SetMix(CellColour colour, string skinId)
+    {
+        if (skinId == CosmeticCatalog.PatchworkSkin) return false;
+        if (CosmeticCatalog.Find(skinId) is not { Slot: CosmeticSlot.Skin } c || !IsOwned(c)) return false;
+        if (Mix(colour) == skinId) return true;
+        _settings.SetString(MixKey(colour), skinId);
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>The block sets Patchwork draws each colour with, resolved once (a lookup table for the renderer).</summary>
+    public IReadOnlyDictionary<CellColour, SkinSpec> PatchworkSources() =>
+        Five.ToDictionary(c => c, c => CosmeticCatalog.SkinOf(Mix(c)));
+
+    // ---- The NEW ribbon: looks the player has not looked at yet ----
+
+    private HashSet<string> SeenIds() =>
+        _settings.GetString(SaveKeys.CosmeticSeen, "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>A look added in v1.1 that the player has not seen yet (it wears a NEW ribbon).</summary>
+    public bool IsUnseen(Cosmetic c) => CosmeticCatalog.IsNew(c) && !SeenIds().Contains(c.Id);
+
+    /// <summary>Marks looks as seen (the ribbon goes away). Does nothing for looks that are not new.</summary>
+    public void MarkSeen(IEnumerable<Cosmetic> looks)
+    {
+        var seen = SeenIds();
+        bool changed = false;
+        foreach (var c in looks)
+            if (CosmeticCatalog.IsNew(c)) changed |= seen.Add(c.Id);
+        if (!changed) return;
+        _settings.SetString(SaveKeys.CosmeticSeen, string.Join(',', seen.OrderBy(s => s, StringComparer.Ordinal)));
+        Changed?.Invoke();
+    }
+
     /// <summary>Puts every slot back to its default. For testing (see DevTools).</summary>
     public void ResetAll()
     {
         foreach (CosmeticSlot slot in Enum.GetValues<CosmeticSlot>())
             _settings.SetString(CosmeticCatalog.SaveKey(slot), "");
+        foreach (var colour in Five) _settings.SetString(MixKey(colour), "");
         Changed?.Invoke();
     }
 }

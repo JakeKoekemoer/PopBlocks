@@ -119,6 +119,12 @@ public static class SaveKeys
     public const string RuleOrbs = "rule_orbs";                     // 0 auto, 1 always, 2 never
     public const string RuleOrbTimer = "rule_orb_timer";            // 6, 8, 10 or 12
     public const string RuleUseInStory = "rule_use_in_story";
+    public const string CosmeticMixCyan = "cosmetic_mix_cyan";      // Patchwork: the block set used for each colour
+    public const string CosmeticMixCoral = "cosmetic_mix_coral";
+    public const string CosmeticMixYellow = "cosmetic_mix_yellow";
+    public const string CosmeticMixPurple = "cosmetic_mix_purple";
+    public const string CosmeticMixLime = "cosmetic_mix_lime";
+    public const string CosmeticSeen = "cosmetic_seen";             // new looks the player has looked at (comma-separated ids)
     public const string SettingsTab = "settings_tab";               // the tab the settings page opens on
     public const string ShowHanging = "show_hanging";               // the cue under blocks that hang over a gap
     public const string ColourAssist = "colour_assist";             // symbols on every block, whatever the skin
@@ -170,6 +176,7 @@ public static class SaveKeys
         LevelLosses, EasedLevels, ConsolationPaid,
         RuleFallSpeed, RuleColourCount, RuleColours, RuleShapes, RuleMinGroup, RuleSolidChance, RuleBoardRows, RuleFracture,
         RuleOrbs, RuleOrbTimer, RuleUseInStory, SettingsTab, ShowHanging, ColourAssist,
+        CosmeticMixCyan, CosmeticMixCoral, CosmeticMixYellow, CosmeticMixPurple, CosmeticMixLime, CosmeticSeen,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),

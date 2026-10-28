@@ -23,7 +23,7 @@ public enum CosmeticSlot
 
 public enum HighlightStyle { Gloss, Soft, Facet }
 
-public enum SkinPattern { None, Lines, Dots, Grain }
+public enum SkinPattern { None, Lines, Dots, Grain, Stars, Waves, Rock, Flame, Flower }
 
 public enum BurstStyle { Classic, Petals, Shards, Bubbles, Cogs, Frost, Starburst }
 
@@ -61,6 +61,18 @@ public sealed record SkinSpec(
     public string HighlightColour(CellColour c) => ColourMath.Lighten(Face(c), 0.65);
     public string Neon(CellColour c) => ColourMath.Neon(Face(c));
     public string Symbol => LightSymbol ? PaleSymbol : DarkSymbol;
+
+    /// <summary>
+    /// The set draws no symbol on its blocks unless colour assist (or the High Contrast board) is on. Its five colours are
+    /// still checked for hue and distance like every other set.
+    /// </summary>
+    public bool HideSymbol { get; init; }
+
+    /// <summary>A one-pixel light edge along the top and left of the face and a dark one along the bottom and right.</summary>
+    public bool InnerBevel { get; init; }
+
+    /// <summary>Each colour is drawn as the set the player chose for it (the faces here are only a fallback).</summary>
+    public bool IsPatchwork => Id == CosmeticCatalog.PatchworkSkin;
 }
 
 /// <summary>A board's colours and decoration. The block colours and the rules are never affected by it.</summary>
@@ -86,6 +98,7 @@ public sealed record Cosmetic(
 public static class CosmeticCatalog
 {
     public const string DefaultSkin = "skin_classic";
+    public const string PatchworkSkin = "skin_patchwork";
     public const string DefaultBurst = "burst_classic";
     public const string DefaultBoard = "classic";
     public const string DefaultFrame = "frame_none";
@@ -134,6 +147,24 @@ public static class CosmeticCatalog
             new[] { "#1FA8E0", "#F0506E", "#F2A91B", "#8B5CF6", "#84CC16" }),
         new SkinSpec("skin_spectrum", "Whole Spectrum", 1.0, 1.0, HighlightStyle.Facet, SkinPattern.None, false,
             new[] { "#00D4FF", "#FF4D88", "#FFD400", "#B44DFF", "#8CFF3A" }),
+
+        // ---- v1.1: sold from the first day, no story requirement (see CosmeticCatalog.NewIds) ----
+        new SkinSpec("skin_solid", "Pure Solid", 0.8, 0.5, HighlightStyle.Soft, SkinPattern.None, false,
+            new[] { "#1FB6F0", "#F2577A", "#F7B500", "#9566F2", "#86D11F" }) { HideSymbol = true, InnerBevel = true },
+        new SkinSpec("skin_starfield", "Starfield", 1.0, 0.9, HighlightStyle.Gloss, SkinPattern.Stars, false,
+            new[] { "#3A8FE0", "#E0507F", "#E6B83A", "#8C5CE6", "#6FC23A" }),
+        new SkinSpec("skin_tidepool", "Tidepool", 1.35, 0.8, HighlightStyle.Gloss, SkinPattern.Waves, false,
+            new[] { "#1BB0E3", "#F0708C", "#F5CB52", "#8F82F0", "#79D46A" }),
+        new SkinSpec("skin_granite", "Granite", 0.45, 1.5, HighlightStyle.Soft, SkinPattern.Rock, false,
+            new[] { "#4A97B3", "#C4677A", "#C49E48", "#8775B3", "#86A656" }),
+        new SkinSpec("skin_ember", "Ember", 0.9, 1.1, HighlightStyle.Soft, SkinPattern.Flame, false,
+            new[] { "#2FC0F0", "#FF5458", "#FFAE1A", "#AE58FF", "#96E02A" }),
+        new SkinSpec("skin_blossom", "Blossom", 1.35, 0.9, HighlightStyle.Soft, SkinPattern.Flower, false,
+            new[] { "#6CCDF0", "#FF8DAA", "#FFD66B", "#C19EFF", "#A6E278" }),
+
+        // Each colour is drawn as the set the player picked for it, from the sets they own.
+        new SkinSpec(PatchworkSkin, "Patchwork", 1.0, 1.0, HighlightStyle.Gloss, SkinPattern.None, false,
+            new[] { "#38BDF8", "#FB7185", "#FBBF24", "#A78BFA", "#A3E635" }),
     };
 
     // ------------------------------------------------------------------ boards
@@ -166,6 +197,10 @@ public static class CosmeticCatalog
     private static Cosmetic Priced(string id, string name, CosmeticSlot slot, string description, int region, int price) =>
         new(id, name, slot, description, Requirement.RegionRestored(region), price);
 
+    /// <summary>A v1.1 item: no story requirement, a price from the first day.</summary>
+    private static Cosmetic Open(string id, string name, CosmeticSlot slot, string description, int price) =>
+        new(id, name, slot, description, Requirement.None, price);
+
     private static Cosmetic Reward(string id, string name, CosmeticSlot slot, string description, Requirement from) =>
         new(id, name, slot, description, from, 0);
 
@@ -185,6 +220,15 @@ public static class CosmeticCatalog
             Priced("skin_ice", "Frost Glass", CosmeticSlot.Skin, "Pale, faceted blocks with a frosty grain.", 6, 280),
             Priced("skin_citadel", "Citadel Stone", CosmeticSlot.Skin, "Square, solid blocks with thick borders.", 7, 320),
             Reward("skin_spectrum", "Whole Spectrum", CosmeticSlot.Skin, "Every colour at its fullest. The world's thanks.", Requirement.RegionRestored(8)),
+
+            // ---- v1.1 block sets: open from the first day, bought with gold ----
+            Open("skin_solid", "Pure Solid", CosmeticSlot.Skin, "Flat, clean blocks. The symbols hide unless colour assist is on.", 350),
+            Open("skin_starfield", "Starfield", CosmeticSlot.Skin, "Deep blue-sky blocks with tiny stars.", 450),
+            Open("skin_tidepool", "Tidepool", CosmeticSlot.Skin, "Round, glassy blocks with rolling waves.", 450),
+            Open("skin_granite", "Granite", CosmeticSlot.Skin, "Chiselled stone with speckles and a hairline crack.", 450),
+            Open("skin_ember", "Ember", CosmeticSlot.Skin, "Glowing blocks with a hot core and licking flames.", 500),
+            Open("skin_blossom", "Blossom", CosmeticSlot.Skin, "Soft blocks with a small flower in the corner.", 450),
+            Open(PatchworkSkin, "Patchwork", CosmeticSlot.Skin, "Pick a block set for each colour, from the sets you own.", 900),
 
             // ---- Bursts ----
             Default(DefaultBurst, "Classic", CosmeticSlot.Burst, "The burst as it started."),
@@ -265,6 +309,20 @@ public static class CosmeticCatalog
 
     /// <summary>Everything that can be bought, for the budget. Rewards cost nothing.</summary>
     public static int TotalPrice => All.Sum(c => c.Price);
+
+    /// <summary>The ids added in v1.1 (open from the first day, shown with a NEW ribbon until viewed). The rest are the original looks.</summary>
+    public static IReadOnlySet<string> NewIds { get; } = new HashSet<string>
+    {
+        "skin_solid", "skin_starfield", "skin_tidepool", "skin_granite", "skin_ember", "skin_blossom", PatchworkSkin,
+    };
+
+    public static bool IsNew(Cosmetic c) => NewIds.Contains(c.Id);
+
+    /// <summary>What the original looks cost (the story-paced economy; see docs/story/economy.md).</summary>
+    public static int OriginalPrice => All.Where(c => !IsNew(c)).Sum(c => c.Price);
+
+    /// <summary>What the v1.1 looks cost. They are long-term sinks for pop gold, not part of the story economy.</summary>
+    public static int NewPrice => All.Where(IsNew).Sum(c => c.Price);
 
     /// <summary>Items a region's restoration reveals (priced or free).</summary>
     public static IEnumerable<Cosmetic> FoundByRestoring(int region) =>

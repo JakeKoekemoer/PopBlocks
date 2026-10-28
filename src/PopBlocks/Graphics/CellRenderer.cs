@@ -50,8 +50,8 @@ public static class CellRenderer
     public static void DrawLayer(ICanvas canvas, BlockLayer layer, float x, float y, float size, CellColour colour, CellLinks links)
     {
         float inset = size * VisualDesign.CellInset;
-        float border = size * VisualDesign.Border;
-        float radius = size * VisualDesign.Corner;
+        float border = size * VisualDesign.BorderFor(colour);
+        float radius = size * VisualDesign.CornerFor(colour);
         float half = size / 2f;
 
         float left = x + inset;
@@ -102,7 +102,7 @@ public static class CellRenderer
 
             default:
             {
-                var style = VisualDesign.Highlight;
+                var style = VisualDesign.HighlightFor(colour);
 
                 // Top highlight, only where the cell has an exposed top edge. (Faceted skins draw facets instead.)
                 if (!links.HasFlag(CellLinks.Up) && style != HighlightStyle.Facet)
@@ -134,7 +134,13 @@ public static class CellRenderer
                 }
 
                 if (style == HighlightStyle.Facet) DrawFacets(canvas, innerLeft, innerTop, innerSpan);
-                if (VisualDesign.Pattern != SkinPattern.None && size >= 14f) DrawPattern(canvas, VisualDesign.Pattern, innerLeft, innerTop, innerSpan);
+                var pattern = VisualDesign.PatternFor(colour);
+                if (pattern != SkinPattern.None && size >= 14f)
+                {
+                    if (pattern >= SkinPattern.Stars) PatternCache.Draw(canvas, pattern, colour, innerLeft, innerTop, innerSpan);
+                    else DrawPattern(canvas, pattern, innerLeft, innerTop, innerSpan);
+                }
+                if (VisualDesign.BevelFor(colour)) DrawBevel(canvas, innerLeft, innerTop, innerSpan);
 
                 DrawSymbol(canvas, x + half, y + half, size, colour);
                 break;
@@ -169,6 +175,19 @@ public static class CellRenderer
         canvas.FillColor = Colors.Black.WithAlpha(0.12f);
         canvas.FillPath(FacetDark, WindingMode.NonZero);
         canvas.RestoreState();
+    }
+
+    /// <summary>A one-pixel light edge along the top and left of the face and a dark one along the bottom and right (Pure Solid).</summary>
+    private static void DrawBevel(ICanvas canvas, float left, float top, float span)
+    {
+        canvas.StrokeSize = 1f;
+        canvas.StrokeLineCap = LineCap.Butt;
+        canvas.StrokeColor = Colors.White.WithAlpha(0.35f);
+        canvas.DrawLine(left + 1f, top + 1f, left + span - 1f, top + 1f);
+        canvas.DrawLine(left + 1f, top + 1f, left + 1f, top + span - 1f);
+        canvas.StrokeColor = Colors.Black.WithAlpha(0.25f);
+        canvas.DrawLine(left + 1f, top + span - 1f, left + span - 1f, top + span - 1f);
+        canvas.DrawLine(left + span - 1f, top + 1f, left + span - 1f, top + span - 1f);
     }
 
     /// <summary>
@@ -218,7 +237,7 @@ public static class CellRenderer
         float span = size - 2f * inset;
         float left = x + inset;
         float top = y + inset;
-        float radius = size * VisualDesign.Corner;
+        float radius = size * VisualDesign.CornerFor(colour);
         float half = size / 2f;
         var neon = VisualDesign.NeonColour(colour);
 
@@ -322,8 +341,9 @@ public static class CellRenderer
 
     public static void DrawSymbol(ICanvas canvas, float cx, float cy, float size, CellColour colour)
     {
+        if (VisualDesign.HidesSymbol(colour)) return;   // a clean set (Pure Solid), unless colour assist puts the symbols back
         float r = size * VisualDesign.SymbolRadius;
-        canvas.FillColor = VisualDesign.SymbolNow;
+        canvas.FillColor = VisualDesign.SymbolFor(colour);
 
         switch (colour)
         {

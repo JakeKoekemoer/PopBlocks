@@ -61,8 +61,35 @@ public static class VisualDesign
     private static readonly CellColour[] Five =
         { CellColour.Cyan, CellColour.Coral, CellColour.Yellow, CellColour.Purple, CellColour.Lime };
 
+    // Patchwork draws each colour as another block set. Its per-colour sets are kept here, as a table, until the next UseSkin.
+    private static bool _patch;
+    private static readonly SkinSpec?[] PatchSource = new SkinSpec?[6];
+
+    /// <summary>
+    /// Some block sets hide their symbols for a cleaner look. Colour assist (a setting) or the High Contrast board puts the
+    /// symbols back on every set, so colour is never the only cue for anyone who needs the shapes.
+    /// </summary>
+    public static bool ColourAssist { get; set; }
+
     /// <summary>The skin in use. The five symbols are drawn the same way whatever it is.</summary>
     public static SkinSpec ActiveSkin => _skin ?? CosmeticCatalog.Classic;
+
+    /// <summary>The block set a colour is drawn with: the active skin, or for Patchwork the set chosen for that colour.</summary>
+    public static SkinSpec SpecFor(CellColour c) =>
+        _patch && c != CellColour.Empty && PatchSource[(int)c] is { } source ? source : ActiveSkin;
+
+    public static float CornerFor(CellColour c) => CornerRadius * (float)SpecFor(c).CornerScale;
+    public static float BorderFor(CellColour c) => BorderWidth * (float)SpecFor(c).BorderScale;
+    public static HighlightStyle HighlightFor(CellColour c) => SpecFor(c).Highlight;
+    public static SkinPattern PatternFor(CellColour c) => SpecFor(c).Pattern;
+    public static bool BevelFor(CellColour c) => SpecFor(c).InnerBevel;
+
+    /// <summary>This colour draws no symbol: its set hides them and colour assist is off.</summary>
+    public static bool HidesSymbol(CellColour c) => !ColourAssist && SpecFor(c).HideSymbol;
+
+    public static Color SymbolFor(CellColour c) => SpecFor(c).LightSymbol
+        ? Color.FromArgb(SkinSpec.PaleSymbol).WithAlpha((float)SkinSpec.SymbolAlpha)
+        : Symbol;
 
     /// <summary>Corner radius as a fraction of the cell, after the skin's scale.</summary>
     public static float Corner => CornerRadius * (float)(_skin?.CornerScale ?? 1.0);
@@ -82,6 +109,7 @@ public static class VisualDesign
     /// <summary>Switches to a skin. Null or the classic skin goes back to the shipped colours.</summary>
     public static void UseSkin(SkinSpec? skin)
     {
+        _patch = false;
         if (skin is null || skin.Id == CosmeticCatalog.DefaultSkin)
         {
             _skin = null;
@@ -99,19 +127,66 @@ public static class VisualDesign
         _skin = skin;
     }
 
-    /// <summary>Shows a skin for a moment (the wardrobe's previews) and puts the previous one back when disposed.</summary>
-    public static IDisposable Preview(SkinSpec skin)
+    /// <summary>
+    /// Patchwork: each of the five colours is drawn as the block set chosen for it. The sets are resolved to a table here, once,
+    /// when the game starts (or a wardrobe tile is drawn); a colour with no entry is drawn as Classic.
+    /// </summary>
+    public static void UsePatchwork(IReadOnlyDictionary<CellColour, SkinSpec> sources)
     {
-        var previous = _skin;
-        UseSkin(skin);
-        return new SkinScope(previous);
+        foreach (var c in Five)
+        {
+            int i = (int)c;
+            var source = sources.TryGetValue(c, out var s) ? s : CosmeticCatalog.Classic;
+            PatchSource[i] = source;
+            if (source.Id == CosmeticCatalog.DefaultSkin)
+            {
+                // Classic keeps its hand-tuned borders and highlights, not the derived ones.
+                SkinFace[i] = ClassicBase(c);
+                SkinBorder[i] = ClassicBorder(c);
+                SkinHighlight[i] = ClassicHighlight(c);
+                SkinNeon[i] = ClassicNeon(c);
+            }
+            else
+            {
+                SkinFace[i] = Color.FromArgb(source.Face(c));
+                SkinBorder[i] = Color.FromArgb(source.Border(c));
+                SkinHighlight[i] = Color.FromArgb(source.HighlightColour(c));
+                SkinNeon[i] = Color.FromArgb(source.Neon(c));
+            }
+        }
+        _skin = CosmeticCatalog.SkinOf(CosmeticCatalog.PatchworkSkin);
+        _patch = true;
+    }
+
+    /// <summary>Shows a skin for a moment (the wardrobe's previews) and puts the previous one back when disposed.</summary>
+    public static IDisposable Preview(SkinSpec skin, IReadOnlyDictionary<CellColour, SkinSpec>? patchwork = null)
+    {
+        var scope = new SkinScope(_skin, _patch ? (SkinSpec?[])PatchSource.Clone() : null);
+        if (skin.IsPatchwork && patchwork is not null) UsePatchwork(patchwork);
+        else UseSkin(skin);
+        return scope;
     }
 
     private sealed class SkinScope : IDisposable
     {
         private readonly SkinSpec? _previous;
-        public SkinScope(SkinSpec? previous) => _previous = previous;
-        public void Dispose() => UseSkin(_previous);
+        private readonly SkinSpec?[]? _previousPatch;
+        public SkinScope(SkinSpec? previous, SkinSpec?[]? previousPatch)
+        {
+            _previous = previous;
+            _previousPatch = previousPatch;
+        }
+
+        public void Dispose()
+        {
+            if (_previousPatch is not null)
+            {
+                var back = new Dictionary<CellColour, SkinSpec>();
+                foreach (var c in Five) back[c] = _previousPatch[(int)c] ?? CosmeticCatalog.Classic;
+                UsePatchwork(back);
+            }
+            else UseSkin(_previous);
+        }
     }
 
     public static Color BaseColour(CellColour c) => _skin is not null && c != CellColour.Empty ? SkinFace[(int)c] : ClassicBase(c);

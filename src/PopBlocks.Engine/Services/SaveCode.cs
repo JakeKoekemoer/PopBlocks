@@ -96,6 +96,12 @@ public static class SaveCode
             new(SaveKeys.SettingsTab, Kind.Int, 0, 4),
             new(SaveKeys.ShowHanging, Kind.Bool),
             new(SaveKeys.ColourAssist, Kind.Bool),
+            new(SaveKeys.CosmeticMixCyan, Kind.Text),
+            new(SaveKeys.CosmeticMixCoral, Kind.Text),
+            new(SaveKeys.CosmeticMixYellow, Kind.Text),
+            new(SaveKeys.CosmeticMixPurple, Kind.Text),
+            new(SaveKeys.CosmeticMixLime, Kind.Text),
+            new(SaveKeys.CosmeticSeen, Kind.Unlocks),
         };
         foreach (var item in ShopCatalog.Items) f.Add(new Field(item.SaveKey, Kind.Int, 0, item.MaxLevel));
         foreach (var c in ConsumableCatalog.All) f.Add(new Field(c.SaveKey, Kind.Int, 0, ConsumableCatalog.Cap));
@@ -263,7 +269,7 @@ public static class SaveCode
                     foreach (var id in ids)
                         if (id.Length > MaxId || !id.All(IsIdChar)) return Fail(bad);
                     var clean = ids.Distinct(StringComparer.Ordinal).OrderBy(i => i, StringComparer.Ordinal).ToArray();
-                    unlocks = clean.Length;
+                    if (key == SaveKeys.Unlocks) unlocks = clean.Length;   // (the summary counts the real unlocks, not other id lists)
                     values.Add((key, string.Join(',', clean)));
                     break;
                 }

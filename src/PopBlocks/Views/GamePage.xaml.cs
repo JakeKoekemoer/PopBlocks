@@ -197,7 +197,10 @@ public partial class GamePage : ContentPage
         CoinFlyView.IsVisible = false;
 
         // Looks from the wardrobe. They are read once here, so nothing changes in the middle of a level.
-        VisualDesign.UseSkin(_loadout.Skin);
+        var skin = _loadout.Skin;
+        if (skin.IsPatchwork) VisualDesign.UsePatchwork(_loadout.PatchworkSources());
+        else VisualDesign.UseSkin(skin);
+        VisualDesign.ColourAssist = _settings.ColourAssist || _loadout.SelectedBoard == "board_contrast";
         _board.Effects.Style = _loadout.Burst;
         _board.Frame = _loadout.Frame;
         _bannerPip.Accessory = _vm.PipAccessory;
