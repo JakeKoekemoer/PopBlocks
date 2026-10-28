@@ -47,7 +47,7 @@ public partial class JournalPanel : ContentView, IWorkshopPanel
             ("Most blocks from one piece", Show(_stats.MostClearedByOnePiece)),
             ("Most moves left after a win", Show(_stats.MostMovesLeft)),
             ("Boards left empty", Show(_stats.BoardsCleared)),
-            ("Classic best score", Show(_scores.Best)),
+            ("Endless best score", Show(_scores.Best)),
         });
 
         Section("TOTALS", new (string, string)[]

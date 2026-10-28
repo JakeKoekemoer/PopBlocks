@@ -61,7 +61,7 @@ public static class AchievementCatalog
         new Achievement("balanced_world", "Balanced World", "Finish the campaign.", 150,
             f => f.CampaignComplete),
 
-        new Achievement("classic_champion", "Classic Champion", $"Score {ClassicGoal:N0} in Classic mode.", 100,
+        new Achievement("classic_champion", "Endless Champion", $"Score {ClassicGoal:N0} in Endless mode.", 100,
             f => f.ClassicScore >= ClassicGoal),
 
         new Achievement("chain_master", "Chain Master", $"Make a chain of {SparkingChain} waves from one piece.", 80,

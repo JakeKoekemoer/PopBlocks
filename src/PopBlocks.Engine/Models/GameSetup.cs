@@ -68,7 +68,7 @@ public sealed record GameSetup(GameMode Mode, int Level)
     /// <summary>Short label for the HUD.</summary>
     public string Title => Mode switch
     {
-        GameMode.Classic => "CLASSIC",
+        GameMode.Classic => "ENDLESS",
         GameMode.Tutorial => $"LESSON {Level}",
         _ => $"LEVEL {Level}",
     };

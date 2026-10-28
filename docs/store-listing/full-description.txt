@@ -11,14 +11,14 @@ STORY MODE
 - Stuck? Swap a level for a new one with a reroll. It costs a little gold, less after every try, and it is free after 10 tries
 - Later regions bring new twists, including boards that are drawn upside down
 
-CLASSIC MODE
+ENDLESS MODE
 Start from an empty board and keep going. The pieces speed up as your score grows. Beat your personal best, and earn gold for every block you pop. Want the same pieces again? Start a run from a seed.
 
 LEARN AT YOUR OWN PACE
 Ten short coached lessons teach moving, rotating, dropping, chains, moves and goals. You are offered them once, and you can replay them any time from the menu.
 
 GROW YOUR WORKSHOP
-Clear a level for the first time to earn gold, pop blocks in Classic to earn more, and earn more still by restoring regions and unlocking achievements. Spend it in Bram's workshop on helpers such as seeing more of the next pieces, extra moves, taking back your last block and shifting the colours of the next piece. You can also spend it on how the game looks: block skins, burst styles, boards, piece frames and accessories for Pip. Gold can only be earned by playing.
+Clear a level for the first time to earn gold, pop blocks in Endless to earn more, and earn more still by restoring regions and unlocking achievements. Spend it in Bram's workshop on helpers such as seeing more of the next pieces, extra moves, taking back your last block and shifting the colours of the next piece. You can also spend it on how the game looks: block skins, burst styles, boards, piece frames and accessories for Pip. Gold can only be earned by playing.
 
 MADE FOR EVERYONE
 - Every colour also has its own symbol on the block, so colour is never the only clue

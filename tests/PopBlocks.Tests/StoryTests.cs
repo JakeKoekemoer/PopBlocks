@@ -407,7 +407,7 @@ public class StoryRuleTests
     [Fact]
     public void Setup_titles()
     {
-        Assert.Equal("CLASSIC", GameSetup.Classic.Title);
+        Assert.Equal("ENDLESS", GameSetup.Classic.Title);
         Assert.Equal("LEVEL 7", GameSetup.Story(7).Title);
         Assert.Equal("LESSON 3", GameSetup.Lesson(3).Title);
         Assert.Equal(1, GameSetup.Story(-4).Level);

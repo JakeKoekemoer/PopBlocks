@@ -300,12 +300,12 @@ public sealed class GameViewModel : ObservableObject
 
     public int BestScore { get => _bestScore; private set { if (SetProperty(ref _bestScore, value)) RaiseHeader(); } }
 
-    /// <summary>"LEVEL 12 · EASY" or "CLASSIC".</summary>
+    /// <summary>"LEVEL 12 · EASY" or "ENDLESS".</summary>
     public string TitleText => _setup.IsLesson ? $"LESSON {_setup.Level} OF {StoryConfig.LessonCount}"
         : _setup.IsStory ? $"LEVEL {_setup.Level} · {StoryConfig.Name(StoryConfig.TierFor(_setup.Level)).ToUpperInvariant()}"
-        : "CLASSIC";
+        : "ENDLESS";
 
-    /// <summary>Best score in Classic, gold in Story, "TUTORIAL" in a lesson.</summary>
+    /// <summary>Best score in Endless, gold in Story, "TUTORIAL" in a lesson.</summary>
     public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{_progress.Gold:N0} gold" : $"BEST {_bestScore:N0}  ·  {RunGoldText}";
 
     public string ChainText { get => _chainText; private set { if (SetProperty(ref _chainText, value)) OnPropertyChanged(nameof(HasChain)); } }
@@ -946,7 +946,7 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>The "?" button appears only when the player cannot pay. It explains where gold comes from and is never the only way forward.</summary>
     public bool ShowRerollHint => ShowReroll && !CanReroll;
 
-    public string RerollHintText => "Short on gold? Pop blocks in Classic mode to earn some.";
+    public string RerollHintText => "Short on gold? Pop blocks in Endless mode to earn some.";
 
     public bool RerollHintOpen { get => _rerollHintOpen; set { if (SetProperty(ref _rerollHintOpen, value)) OnPropertyChanged(nameof(ShowRerollHintText)); } }
     public bool ShowRerollHintText => _rerollHintOpen && ShowRerollHint;

@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using PopBlocks.Engine;
 using PopBlocks.Engine.Audio;
 using PopBlocks.Engine.Models;
@@ -15,6 +15,7 @@ public partial class MainPage : ContentPage
     private readonly PlayerProgress _progress;
     private readonly PlayerIdentity _identity;
     private readonly PersistentSettings _save;
+    private readonly CachedSceneDrawable _storyScene = new();
     private bool _showingFullMenu;   // false: just PLAY and MORE. MORE shows the full menu.
 
     public MainPage(IServiceProvider services, HighScoreService highScores, PlayerProgress progress,
@@ -32,6 +33,7 @@ public partial class MainPage : ContentPage
         LogoView.Drawable = new LogoDrawable();
         StartLogoView.Drawable = new LogoDrawable();
         CoinView.Drawable = new GoldCoinDrawable();
+        StoryCardScene.Drawable = _storyScene;
         DevButton.IsVisible = DevMenu.Enabled;
         Diagnostics.Crumb("MainPage ctor: done");
     }
@@ -146,11 +148,24 @@ public partial class MainPage : ContentPage
         string place = RegionCatalog.For(next)?.Title ?? RegionCatalog.BeyondTitle;
         NextLevelDetail.Text = _progress.HighestCleared == 0
             ? "Start here."
-            : $"{place} · {StoryConfig.Name(tier)} · {_progress.HighestCleared} cleared";
-        PlayButton.Text = _progress.HighestCleared == 0 ? "START" : "CONTINUE";
+            : $"{place} Â· {StoryConfig.Name(tier)} Â· {_progress.HighestCleared} cleared";
+        PlayButton.Text = "CONTINUE";
+
+        // The card shows the next level's region as it is now. Past the campaign it is the Heart, restored.
+        var region = RegionCatalog.For(next) ?? RegionCatalog.Get(RegionCatalog.All.Count);
+        var state = RegionCatalog.For(next) is null
+            ? RegionState.Restored
+            : RegionCatalog.Progress(region, _progress.HighestCleared).State;
+        if (_storyScene.Show(region, state)) StoryCardScene.Invalidate();
+
+        var accent = StoryPalette.RegionAccent(region.Number);
+        PlayButton.Background = new SolidColorBrush(accent);
+        PlayButton.TextColor = StoryPalette.TextOn(accent);
+        StoryCard.Stroke = new SolidColorBrush(accent.WithAlpha(0.6f));
+        StoryCaption.TextColor = accent;
 
         int best = _highScores.GetBest(GameSetup.Classic.BestScoreKey);
-        BestLabel.Text = best > 0 ? $"Classic best  {best:N0}" : string.Empty;
+        BestLabel.Text = best > 0 ? $"Endless best  {best:N0}" : string.Empty;
         BestLabel.IsVisible = best > 0;
     }
 

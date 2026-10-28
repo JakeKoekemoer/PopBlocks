@@ -71,7 +71,7 @@
                         </Grid>
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                             <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
-                            <Label Grid.Column="1" Text="Gold is earned by playing, in the Story and by popping blocks in Classic. It can't be bought." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                            <Label Grid.Column="1" Text="Gold is earned by playing, in the Story and by popping blocks in Endless. It can't be bought." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
                         </Grid>
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                             <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
