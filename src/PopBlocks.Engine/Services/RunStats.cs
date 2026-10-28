@@ -32,6 +32,28 @@ public sealed class RunStats
     public bool Eased { get; private set; }
     public bool Failed { get; private set; }
 
+    // ---- v1.1: what cracks, breaks and Orbs did in this run ----
+
+    /// <summary>Blocks that cracked, blocks that broke from a third crack, and the most that broke because of one piece.</summary>
+    public int Cracks { get; private set; }
+    public int FractureBreaks { get; private set; }
+    public int MostBreaksByOnePiece { get; private set; }
+
+    /// <summary>Orbs broken, and the best close call (an Orb broken with the fewest pieces left on its timer; 0 if none).</summary>
+    public int OrbsBroken { get; private set; }
+    public bool OrbCloseCall { get; private set; }
+
+    /// <summary>Blocks popped paid this many tenths of a gold by the end of the level.</summary>
+    public int PopGoldTenths { get; private set; }
+
+    /// <summary>The board was left empty after it had scrolled (a tall board's camera had gone up).</summary>
+    public bool DeepDive { get; private set; }
+
+    /// <summary>The run was played on the player's own rules.</summary>
+    public bool CustomRules { get; private set; }
+
+    private int _breaksThisPiece;
+
     /// <summary>Continues bought in this run (moves bought after running out).</summary>
     public int Continues { get; private set; }
 
@@ -70,6 +92,8 @@ public sealed class RunStats
         MovesLeftAtFinish = 0;
         Completed = Failed = BoardCleared = Eased = false;
         Continues = 0;
+        Cracks = FractureBreaks = MostBreaksByOnePiece = OrbsBroken = PopGoldTenths = _breaksThisPiece = 0;
+        OrbCloseCall = DeepDive = CustomRules = false;
         _clearedByThisPiece = 0;
         _beforeLastLock = null;
         Array.Clear(_colourCounts);
@@ -105,6 +129,17 @@ public sealed class RunStats
         _clearedByThisPiece += wave.ClearedCells.Count;
         MostClearedByOnePiece = Math.Max(MostClearedByOnePiece, _clearedByThisPiece);
         foreach (var g in wave.Groups) LargestGroup = Math.Max(LargestGroup, g.Size);
+
+        Cracks += wave.Cracked.Count;
+        FractureBreaks += wave.Broken.Count;
+        _breaksThisPiece += wave.Broken.Count;
+        MostBreaksByOnePiece = Math.Max(MostBreaksByOnePiece, _breaksThisPiece);
+        if (wave.OrbBroke)
+        {
+            OrbsBroken++;
+            if (wave.OrbTimerAtBreak == 1) OrbCloseCall = true;
+        }
+        if (_engine is { } e && e.Board.CountOccupied() == 0 && e.HighestCamera > 0) DeepDive = true;
     }
 
     private void OnEvent(GameEvent e)
@@ -117,6 +152,8 @@ public sealed class RunStats
             case GameEvent.PieceLocked:
                 _beforeLastLock = Capture();
                 _clearedByThisPiece = 0;   // the next waves belong to the piece that has just locked
+                _breaksThisPiece = 0;
+                CustomRules = !engine.Rules.IsDefault;
                 PiecesPlaced++;
                 break;
 
@@ -131,6 +168,7 @@ public sealed class RunStats
                 break;
 
             case GameEvent.LevelComplete:
+                PopGoldTenths = engine.ClassicGoldTenths;
                 Eased = engine.Story?.Eased == true;
                 Completed = !Eased;   // an eased clear moves the story on but is never counted as a win
                 BoardCleared = engine.Board.CountOccupied() == 0;
@@ -139,6 +177,7 @@ public sealed class RunStats
                 break;
 
             case GameEvent.LevelFailed:
+                PopGoldTenths = engine.ClassicGoldTenths;
                 Failed = true;
                 break;
 

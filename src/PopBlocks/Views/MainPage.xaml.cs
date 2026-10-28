@@ -235,8 +235,12 @@ public partial class MainPage : ContentPage
     private async void OnAboutClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(_services.GetRequiredService<AboutPage>());
 
-    private async void OnShareClicked(object? sender, EventArgs e) =>
+    private async void OnShareClicked(object? sender, EventArgs e)
+    {
+        _services.GetService<LifetimeStats>()?.AddShare();
+        _services.GetService<AchievementService>()?.CheckNow();
         await Ui.ShareAsync(ShareText.Build(new ShareContext(ShareKind.Menu)));
+    }
 
     private async void OnSettingsClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(_services.GetRequiredService<SettingsPage>());

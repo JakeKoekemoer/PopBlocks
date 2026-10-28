@@ -226,13 +226,13 @@ public class AchievementTests
             Assert.True(a.Gold > 0);
             Assert.True(a.Name.Length > 0 && a.Description.Length > 0);
         });
-        Assert.Equal(13, AchievementCatalog.All.Count);
+        Assert.Equal(13 + 16, AchievementCatalog.All.Count);   // the original thirteen and the sixteen of v1.1
     }
 
     [Fact]
     public void Total_achievement_gold_is_in_the_economy_budget()
     {
-        Assert.InRange(AchievementCatalog.TotalGold, 900, 1100);
+        Assert.InRange(AchievementCatalog.TotalGold, 1700, 2000);   // 910 for the originals and 930 for the v1.1 sixteen
     }
 
     [Fact]

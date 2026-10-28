@@ -41,6 +41,9 @@ public sealed record BurstWave(
 
     /// <summary>An Orb broke in this wave. Its top-left cell is <see cref="OrbAt"/>.</summary>
     public bool OrbBroke { get; init; }
+
+    /// <summary>Pieces left on the Orb's timer when it broke (1 is a close call).</summary>
+    public int OrbTimerAtBreak { get; init; }
     public (int X, int Y)? OrbAt { get; init; }
 
     /// <summary>Blocks that survived this wave with a new crack (positions as they were when the wave popped).</summary>

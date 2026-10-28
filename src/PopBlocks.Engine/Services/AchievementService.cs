@@ -12,12 +12,19 @@ public sealed class AchievementService
     private readonly UnlockStore _unlocks;
     private readonly PlayerProgress _progress;
     private readonly CampaignService _campaign;
+    private readonly LifetimeStats? _lifetime;
+    private readonly CosmeticLoadout? _loadout;
+    private readonly StoryLevels? _levels;
 
-    public AchievementService(UnlockStore unlocks, PlayerProgress progress, CampaignService campaign)
+    public AchievementService(UnlockStore unlocks, PlayerProgress progress, CampaignService campaign,
+        LifetimeStats? lifetime = null, CosmeticLoadout? loadout = null, StoryLevels? levels = null)
     {
         _unlocks = unlocks;
         _progress = progress;
         _campaign = campaign;
+        _lifetime = lifetime;
+        _loadout = loadout;
+        _levels = levels;
     }
 
     /// <summary>Raised for each achievement as it is earned (for a toast).</summary>
@@ -41,7 +48,26 @@ public sealed class AchievementService
         RegionsWithMemory = _campaign.RegionsWithMemory,
         AnyRegionFullyRemembered = _campaign.AnyRegionFullyRemembered,
         CampaignComplete = _progress.HighestCleared >= RegionCatalog.LastCampaignLevel,
+        Rerolls = _lifetime?.Rerolls ?? 0,
+        OrbsBrokenTotal = _lifetime?.OrbsBroken ?? 0,
+        FractureBreaksTotal = _lifetime?.FractureBreaks ?? 0,
+        Shares = _lifetime?.Shares ?? 0,
+        CleanWins = _lifetime?.CleanWins ?? 0,
+        LevelLosses = level is { IsTutorial: false } && _levels is not null ? _levels.Losses(level.Number) : 0,
+        DressedUp = IsDressedUp(),
     };
+
+    /// <summary>A block set, a board, a frame and a Pip look that were all bought (not given) are equipped together.</summary>
+    private bool IsDressedUp()
+    {
+        if (_loadout is null) return false;
+        foreach (var slot in new[] { CosmeticSlot.Skin, CosmeticSlot.Board, CosmeticSlot.Frame, CosmeticSlot.Accessory })
+            if (CosmeticCatalog.Find(_loadout.Selected(slot)) is not { Price: > 0 }) return false;
+        return true;
+    }
+
+    /// <summary>Checks now, without a run (something happened outside play: the share sheet was opened, a look was equipped).</summary>
+    public IReadOnlyList<Achievement> CheckNow() => Check(Facts());
 
     /// <summary>Checks every achievement not yet earned against these facts. Returns the ones earned just now.</summary>
     public IReadOnlyList<Achievement> Check(AchievementFacts facts)

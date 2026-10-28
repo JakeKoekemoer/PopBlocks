@@ -154,6 +154,12 @@ public static class SaveKeys
     /// <summary>Continues bought, in total (v1.1).</summary>
     public const string StatContinues = "stat_continues";
 
+    /// <summary>Orbs broken, blocks broken by a third crack, times the share sheet was opened, and Story wins without a continue (v1.1).</summary>
+    public const string StatOrbsBroken = "stat_orbs_broken";
+    public const string StatFractureBreaks = "stat_fracture_breaks";
+    public const string StatShares = "stat_shares";
+    public const string StatCleanWins = "stat_clean_wins";
+
     /// <summary>Levels played in one region (the journal's per-region count): <c>stat_plays_r1</c> to <c>stat_plays_r8</c>.</summary>
     public static string StatRegionPlays(int region) => "stat_plays_r" + region;
 
@@ -163,7 +169,7 @@ public static class SaveKeys
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
-        StatRerolls, StatContinues,
+        StatRerolls, StatContinues, StatOrbsBroken, StatFractureBreaks, StatShares, StatCleanWins,
     };
 
     // Not listed here on purpose: PersistentSettings.EnabledKey ("save_file_enabled"). It records whether this phone keeps a
@@ -185,7 +191,7 @@ public static class SaveKeys
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
-        StatRerolls, StatContinues,
+        StatRerolls, StatContinues, StatOrbsBroken, StatFractureBreaks, StatShares, StatCleanWins,
     };
 }
 

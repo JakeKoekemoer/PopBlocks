@@ -51,6 +51,10 @@ On top of that:
 A player who finishes the campaign has earned about **14,000** gold from the Story alone; Classic is extra, and is
 what a stuck player can turn to for the price of a reroll.
 
+## Achievements (v1.1)
+
+Sixteen more, 930 gold in all (`AchievementCatalog.TotalGold` is now 1,840 over 29): Orb Breaker 30, Crystal Collector 120, Close Call 60, Hairline 20, Shatterer 100, Fault Lines 80, Not Done Yet 40, Full of Heart 50, Roll With It 40, Stubborn 80, Gold Rush 60, Deep Dive 60, Endless Night 100, Rule Maker 20, Dressed Up 50 and Spread the Word 20. An eased clear never counts as a win (`RunStats.Completed` stays false), so none of the win rules is met by one. New counters: `stat_orbs_broken`, `stat_fracture_breaks`, `stat_shares` and `stat_clean_wins` (Story wins without a continue; not in the plan's list, needed for Full of Heart). Several of these (Orb, Shatterer, Fault Lines, Close Call) can only be earned in Endless or on the player's own rules while Orbs are off in the Story. The total is still well under a quarter of the campaign's level gold.
+
 ## Orbs (v1.1)
 
 Breaking an Orb pays a 25 gold bonus on top of the pop gold for the blocks it clears (the crack weights apply), and the bonus is halved by easier rules. A timer that runs out pays nothing. Orbs appear in Endless, so this is Endless income; the Story has none until Orbs are played by the solver.

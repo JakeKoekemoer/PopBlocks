@@ -797,7 +797,7 @@ public sealed class GameEngine
         Score += points;
         _poppedClassic += cleared.Count;
 
-        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts, Broken = broken, Cracked = cracked, OrbPopped = orbPopped, OrbBroke = orbAt is not null, OrbAt = orbAt };
+        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts, Broken = broken, Cracked = cracked, OrbPopped = orbPopped, OrbBroke = orbAt is not null, OrbAt = orbAt, OrbTimerAtBreak = _orbTimer };
         if (orbAt is not null) Raise(GameEvent.OrbBroken);
         LastWave = wave;
         _goals?.OnWave(wave);

@@ -17,8 +17,8 @@
 | 11 Tall scrolling board | done (default height not flipped, see Unfinished) | 713b187 |
 | 12 Pip's Insight | done | cfb2750 |
 | 13 Fracture | done | a5a6cbd |
-| 14 The Orb | done (Endless and Always rule; Story auto-orbs off, see Unfinished) | PENDING14 |
-| 15 Achievements | pending | |
+| 14 The Orb | done (Endless and Always rule; Story auto-orbs off, see Unfinished) | 5a5a440 |
+| 15 Achievements | done | PENDING15 |
 | 16 Performance | pending | |
 | 17 Wrap-up | pending | |
 

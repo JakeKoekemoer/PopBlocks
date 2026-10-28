@@ -160,7 +160,12 @@ public sealed class GameViewModel : ObservableObject
         CopySeedCommand = new Command(CopySeed);
         EaseCommand = new Command(() => EaseRequested?.Invoke());
         ShopCommand = new Command(() => ShopRequested?.Invoke());
-        ShareCommand = new Command(() => ShareRequested?.Invoke(ShareMessage));
+        ShareCommand = new Command(() =>
+        {
+            _lifetime.AddShare();       // opening the share sheet is itself an achievement
+            _achievements.CheckNow();
+            ShareRequested?.Invoke(ShareMessage);
+        });
 
         _levels.Changed += RaiseReroll;
         _progress.Changed += RaiseReroll;
