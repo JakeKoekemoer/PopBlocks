@@ -36,6 +36,15 @@ public sealed class GameDrawable : IDrawable
     /// <summary>Calmer drawing: no pulsing or wobble in the highlights.</summary>
     public bool ReducedMotion { get; set; }
 
+    /// <summary>
+    /// Shows the empty cells under blocks that hang over a gap (they stay put until a pop lets everything fall) as a faint
+    /// column in the stack's colour with a small arrow where it would come to rest. Nothing moves, so it is the same
+    /// under Reduced motion.
+    /// </summary>
+    public bool ShowHanging { get; set; } = true;
+
+    private readonly List<HangingRun> _hanging = new();
+
     /// <summary>Outline around the piece you are moving (a cosmetic).</summary>
     public FrameStyle Frame { get; set; } = FrameStyle.None;
 
@@ -95,6 +104,7 @@ public sealed class GameDrawable : IDrawable
             canvas.ClipRectangle(originX - pad, originY - pad, boardW + 2f * pad, boardH + 2f * pad);
 
             DrawHint(canvas, originX, originY, cell, boardH, now);
+            if (ShowHanging) DrawHanging(canvas, game.Board, originX, originY, cell);
 
             for (int pass = 0; pass < 3; pass++)
                 DrawLockedCells(canvas, (CellRenderer.BlockLayer)pass, game.Board, originX, originY, cell, now);
@@ -191,6 +201,45 @@ public sealed class GameDrawable : IDrawable
         canvas.StrokeColor = Color.FromArgb("#38BDF8").WithAlpha(0.25f + 0.35f * pulse);
         canvas.StrokeSize = 2f;
         canvas.DrawRoundedRectangle(originX + screenCol * cell, originY, cell * HintWidth, boardH, cell * 0.2f);
+    }
+
+    /// <summary>
+    /// Blocks hanging over a gap stay where they are until a pop lets everything fall, which can look like a mistake. Tint
+    /// the empty cells under each hanging stack in its colour and put a small arrow in the lowest one, where it would come
+    /// to rest. The arrow means the cue does not rely on colour alone. Drawn under the blocks, so it never hides one.
+    /// </summary>
+    private void DrawHanging(ICanvas canvas, Board board, float originX, float originY, float cell)
+    {
+        GravityResolver.FindHanging(board, _hanging);
+        if (_hanging.Count == 0) return;
+
+        float inset = cell * VisualDesign.EmptyCellInset;
+        float size = cell - 2f * inset;
+        float down = Flip ? -1f : 1f;   // which way "down the board" points on screen
+        float s = cell * 0.15f;
+
+        foreach (var run in _hanging)
+        {
+            var neon = VisualDesign.NeonColour(run.Colour);
+            float x = BoardSpace.ScreenX(run.X, Flip, originX, cell) + inset;
+
+            canvas.FillColor = neon.WithAlpha(0.10f);
+            for (int g = 1; g <= run.Gap; g++)
+            {
+                float y = BoardSpace.ScreenY(run.Y + g, Flip, originY, cell) + inset;
+                canvas.FillRoundedRectangle(x, y, size, size, cell * VisualDesign.CornerRadius);
+            }
+
+            float cx = BoardSpace.ScreenX(run.X, Flip, originX, cell) + cell / 2f;
+            float cy = BoardSpace.ScreenY(run.Y + run.Gap, Flip, originY, cell) + cell / 2f;
+            var arrow = new PathF();
+            arrow.MoveTo(cx - s, cy - down * s * 0.6f);
+            arrow.LineTo(cx + s, cy - down * s * 0.6f);
+            arrow.LineTo(cx, cy + down * s * 0.8f);
+            arrow.Close();
+            canvas.FillColor = neon.WithAlpha(0.45f);
+            canvas.FillPath(arrow);
+        }
     }
 
     private void DrawLockedCells(ICanvas canvas, CellRenderer.BlockLayer layer, Board board, float originX, float originY, float cell, long now)

@@ -4,6 +4,28 @@ namespace PopBlocks.Engine.Logic;
 
 public static class GravityResolver
 {
+    /// <summary>
+    /// Finds the stacks that hang over empty cells. A piece locks exactly where it lands and gravity runs only after a pop,
+    /// so blocks can hang for several moves until something pops and everything falls. Read-only: the app uses this to show
+    /// the player what will drop and how far. Hidden spawn rows are ignored. <paramref name="result"/> is cleared first,
+    /// so a caller can reuse one list every frame.
+    /// </summary>
+    public static void FindHanging(Board board, List<HangingRun> result)
+    {
+        result.Clear();
+        for (int x = 0; x < board.Width; x++)
+        {
+            int gap = 0;   // empty cells seen so far, going up, since the last block
+            for (int y = board.Height - 1; y >= GameConfig.HiddenRows; y--)
+            {
+                var colour = board[x, y];
+                if (colour == CellColour.Empty) { gap++; continue; }
+                if (gap > 0) result.Add(new HangingRun(x, y, gap, colour));   // lowest block of a stack with air under it
+                gap = 0;
+            }
+        }
+    }
+
     /// <summary>Empties the given cells. Call only after every group has been identified.</summary>
     public static void Clear(Board board, IEnumerable<BlockCell> cells)
     {

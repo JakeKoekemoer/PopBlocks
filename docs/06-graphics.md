@@ -34,11 +34,12 @@ The picture is built in this order, all clipped to the board rectangle so fallin
 1. Board surface: soft outer glow, a vertical gradient panel, a rim.
 2. Empty-cell slots, grid lines, and a glowing floor line.
 3. The tutorial hint column (a pulsing highlight), if any.
-4. Locked cells (three passes, below).
-5. Pending groups (the match about to pop).
-6. The ghost outline of where the active piece will land.
-7. The active piece (three passes).
-8. Burst effects.
+4. The hanging-block cue (below), under the blocks.
+5. Locked cells (three passes, below).
+6. Pending groups (the match about to pop).
+7. The ghost outline of where the active piece will land.
+8. The active piece (three passes).
+9. Burst effects.
 
 ### Three-pass block drawing
 
@@ -72,6 +73,8 @@ The board does not repaint on a fixed schedule. `GamePage` repaints when the vie
 
 - **Ghost:** a faint outline of the active piece at its landing position (`LandingDistance`), toggled by `GameSettings.ShowGhost`. A tutorial level can force it on (`LevelDefinition.ForceGhost`).
 - **Hint column:** during a tutorial "Do" step the columns the player should use pulse (`HintColumn`, `HintWidth`). It is state set by the view model, not part of the engine.
+
+**Hanging blocks.** A piece locks exactly where it lands, and gravity runs only after a pop (then over the whole board), so a stack can hang over a gap for several moves and then drop when something else pops. `GravityResolver.FindHanging` lists those stacks (the lowest block, the colour and how many empty cells are under it). `GameDrawable.DrawHanging` tints those empty cells faintly in the stack's colour and puts a small arrow in the lowest one, where the stack would come to rest. The arrow means the cue does not depend on colour, nothing moves (so Reduced motion needs no special case), and `GameDrawable.ShowHanging` turns it off. The fall itself, once a pop lets the stack go, is the existing slide animation (`BlastEffects.FallOffsetCells`).
 
 ## 6.6 The upside-down view
 
