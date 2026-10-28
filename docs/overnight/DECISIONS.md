@@ -13,3 +13,4 @@ One line per judgement call made while executing PLAN.md.
 - P7: ShowHanging lives in GameSettings (key show_hanging) and Colour assist in GameSettings (key colour_assist); both are new keys not in the plan appendix, recorded in SaveKeys/SaveCode/frozen list. Colour assist is used by Phase 9a.
 - P7: IsEasierThanDefault is true when ANY dimension is easier (even if another is harder), so easy+hard pairs cannot earn full gold. A run on custom rules never sets the Endless best score.
 - P7: board height, cracking and Orbs rules are stored and normalized but hidden/inert behind RuleFeatures until Phases 11, 13 and 14 switch them on. Shape lists are saved as letters (a = first catalogue shape) so they fit the 64-character text field of a save code.
+- P8: the particles are stateless analytic functions of (cell, index, age) instead of pooled objects: nothing to pool, nothing allocated per frame, and the wardrobe tile can replay the identical motion.

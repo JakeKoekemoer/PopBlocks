@@ -190,6 +190,31 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
             case CosmeticSlot.Skin:
                 return new GraphicsView { Drawable = new SkinPreviewDrawable { Skin = CosmeticCatalog.SkinOf(item.Id) }, HeightRequest = 52, Margin = new Thickness(0, 4, 0, 0) };
 
+            case CosmeticSlot.Burst:
+            {
+                // The tile plays the real burst on a loop, but only while it is on screen.
+                var view = new GraphicsView
+                {
+                    Drawable = new BurstPreviewDrawable { Style = CosmeticCatalog.BurstOf(item.Id) },
+                    HeightRequest = 64,
+                    Margin = new Thickness(0, 4, 0, 0),
+                };
+                IDispatcherTimer? timer = null;
+                view.Loaded += (_, _) =>
+                {
+                    timer = view.Dispatcher.CreateTimer();
+                    timer.Interval = TimeSpan.FromMilliseconds(33);
+                    timer.Tick += (_, _) => view.Invalidate();
+                    timer.Start();
+                };
+                view.Unloaded += (_, _) =>
+                {
+                    timer?.Stop();
+                    timer = null;
+                };
+                return view;
+            }
+
             case CosmeticSlot.Board:
                 return new GraphicsView { Drawable = new BoardPreviewDrawable { BoardId = item.Id }, HeightRequest = 64, Margin = new Thickness(0, 4, 0, 0) };
 

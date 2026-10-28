@@ -70,6 +70,8 @@ public sealed class BlastEffects
             Reduced = ReducedMotion,
         };
         burst.DurationMs = burst.Flair >= 3 ? 1000 : VisualDesign.BurstDurationMs;
+        // Petals drift for about a second and shards are done in under half of one; they draw themselves (BurstParticles).
+        if (Style is BurstStyle.Petals or BurstStyle.Shards) burst.DurationMs = BurstParticles.LifeMs(Style, ReducedMotion);
         if (ReducedMotion) burst.DurationMs = Math.Min(burst.DurationMs, 450);
 
         foreach (var move in wave.Moves)
@@ -267,6 +269,8 @@ public sealed class BlastEffects
         }
     }
 
+    private static readonly IReadOnlyList<BlockCell> NoCells = Array.Empty<BlockCell>();
+
     private static void DrawBurst(ICanvas canvas, Burst burst, float originX, float originY, float cell, bool flip, long age, float boardWidth)
     {
         float t = MathF.Min(1f, age / (float)VisualDesign.BurstDurationMs);   // the core burst
@@ -275,8 +279,12 @@ public sealed class BlastEffects
         int flair = burst.Flair;
         var wave = burst.Wave;
 
+        // Petals and shards are whole particle systems of their own and replace the neon swell and the sparks.
+        bool particles = burst.Style is BurstStyle.Petals or BurstStyle.Shards;
+        if (particles) BurstParticles.Draw(canvas, burst.Style, wave, burst.Reduced, originX, originY, cell, flip, age);
+
         int index = 0;
-        foreach (var c in wave.ClearedCells)
+        foreach (var c in particles ? NoCells : wave.ClearedCells)
         {
             index++;
             if (c.Y < GameConfig.HiddenRows) continue;

@@ -8,8 +8,8 @@
 | 4 Loss support | done | c3eccf8 |
 | 5 Pop gold, floating gold, consolation | done | 60f1b4e |
 | 6 Continues | done | 729e940 |
-| 7 Settings tabs and custom rules | done | PENDING7 |
-| 8 Petals vs Shards | pending | |
+| 7 Settings tabs and custom rules | done | 6e9e29d |
+| 8 Petals vs Shards | done | PENDING8 |
 | 9a Block sets | pending | |
 | 9b Boards and frames | pending | |
 | 9c Pip looks | pending | |
