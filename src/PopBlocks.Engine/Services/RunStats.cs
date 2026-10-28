@@ -27,6 +27,9 @@ public sealed class RunStats
     public int AbilitiesUsed { get; private set; }
 
     public bool Completed { get; private set; }
+
+    /// <summary>The level was cleared in its eased form. <see cref="Completed"/> is false for it.</summary>
+    public bool Eased { get; private set; }
     public bool Failed { get; private set; }
 
     /// <summary>Moves left when the level was won, counted against the level's own limit (upgrades do not add to it). 0 if unlimited.</summary>
@@ -62,7 +65,7 @@ public sealed class RunStats
     {
         LargestGroup = LongestChain = MostClearedByOnePiece = CellsPopped = Waves = PiecesPlaced = AbilitiesUsed = 0;
         MovesLeftAtFinish = 0;
-        Completed = Failed = BoardCleared = false;
+        Completed = Failed = BoardCleared = Eased = false;
         _clearedByThisPiece = 0;
         _beforeLastLock = null;
         Array.Clear(_colourCounts);
@@ -124,7 +127,8 @@ public sealed class RunStats
                 break;
 
             case GameEvent.LevelComplete:
-                Completed = true;
+                Eased = engine.Story?.Eased == true;
+                Completed = !Eased;   // an eased clear moves the story on but is never counted as a win
                 BoardCleared = engine.Board.CountOccupied() == 0;
                 MovesLeftAtFinish = engine.Story is { MoveLimit: > 0 } s ? Math.Max(0, s.MoveLimit - engine.PiecesPlaced) : 0;
                 CountColours(engine.Board);

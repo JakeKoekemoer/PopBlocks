@@ -33,11 +33,22 @@ public static class LevelRoller
     /// <summary>After the normal attempts, keep looking for a verified candidate this many more times. Never reached in practice.</summary>
     private const int ExtraAttempts = 200;
 
+    /// <summary>
+    /// A reroll number at or above this asks for the eased variant of reroll <c>reroll - EasedRerollOffset</c>: the same
+    /// gate, but the hardness band is one step lower (<see cref="DifficultyBand.EasedFor"/>), from its own seed stream.
+    /// The caller plays the result with <see cref="LevelDefinition.ToEased"/>.
+    /// </summary>
+    public const int EasedRerollOffset = 1_000_000;
+
+    private const int EasedSeedStream = 5_000;
+
     private sealed record Candidate(RolledLevel Rolled, bool WithinRails);
 
     public static RolledLevel Roll(int level, int salt, int reroll, CancellationToken cancel = default)
     {
         level = Math.Max(1, level);
+        bool eased = reroll >= EasedRerollOffset;
+        if (eased) reroll = reroll - EasedRerollOffset + EasedSeedStream;
         var clock = Stopwatch.StartNew();
 
         RolledLevel? closest = null;            // inside the guard rails
@@ -57,7 +68,7 @@ public static class LevelRoller
             var candidate = Assess(level, seed, attempt);
             if (candidate is null) continue;
 
-            double gap = DifficultyBand.Gap(level, candidate.Rolled.Hardness);
+            double gap = eased ? DifficultyBand.EasedGap(level, candidate.Rolled.Hardness) : DifficultyBand.Gap(level, candidate.Rolled.Hardness);
             if (candidate.WithinRails)
             {
                 if (gap == 0) return candidate.Rolled;

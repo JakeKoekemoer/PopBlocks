@@ -258,6 +258,19 @@
                            TextColor="{StaticResource TextSecondary}"
                            HorizontalTextAlignment="Center" />
 
+                    <!-- After five losses: the level was solved before the player saw it -->
+                    <Label IsVisible="{Binding ShowSolvableNote}"
+                           FontSize="14"
+                           TextColor="{StaticResource TextSecondary}"
+                           HorizontalTextAlignment="Center">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="There is always a way through." FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                <Span Text=" Pip's puzzle machine solved this exact level before you saw it, so it can be done. Try a different first move, or reroll for a fresh version." />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
+
                     <!-- Classic game over: the gold this run paid, and the seed it used (so a good run can be shared or replayed) -->
                     <Label Text="{Binding ClassicOverGoldText}"
                            IsVisible="{Binding HasClassicOverGold}"
@@ -342,6 +355,17 @@
                             Style="{StaticResource PrimaryButton}"
                             IsVisible="{Binding CanRetry}"
                             Command="{Binding RestartCommand}" />
+                    <!-- After fifteen losses: an easier version of the level, for no gold -->
+                    <VerticalStackLayout IsVisible="{Binding ShowEase}" Spacing="4">
+                        <Button Text="EASE THIS LEVEL"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding EaseCommand}"
+                                SemanticProperties.Description="Ease this level. You still move on in the story, but this level pays no gold." />
+                        <Label Text="{Binding EaseNoteText}"
+                               Style="{StaticResource BodyLabel}"
+                               FontSize="12"
+                               HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
                     <Button Text="SHOP"
                             Style="{StaticResource GhostButton}"
                             IsVisible="{Binding ShowShopOnFailed}"

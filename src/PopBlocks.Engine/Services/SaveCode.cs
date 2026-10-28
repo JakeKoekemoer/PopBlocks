@@ -79,6 +79,8 @@ public static class SaveCode
             new(SaveKeys.CurrentLevelFailures, Kind.Int, 0, 100_000),
             new(SaveKeys.FirstClearSeeds, Kind.SeedList),
             new(SaveKeys.ClassicGoldCarry, Kind.Int, 0, 9),
+            new(SaveKeys.LevelLosses, Kind.SeedList),
+            new(SaveKeys.EasedLevels, Kind.SeedList),
         };
         foreach (var item in ShopCatalog.Items) f.Add(new Field(item.SaveKey, Kind.Int, 0, item.MaxLevel));
         foreach (var c in ConsumableCatalog.All) f.Add(new Field(c.SaveKey, Kind.Int, 0, ConsumableCatalog.Cap));

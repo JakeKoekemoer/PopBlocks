@@ -36,6 +36,9 @@ public sealed record GameSetup(GameMode Mode, int Level)
     /// <summary>The seed a Story level is built from. Legacy unless the player's own seed is given.</summary>
     public LevelSeed Seed { get; init; }
 
+    /// <summary>The player eased this Story level: it is played with <see cref="LevelDefinition.ToEased"/> and pays no gold.</summary>
+    public bool Eased { get; init; }
+
     /// <summary>Lesson <paramref name="lesson"/> of the tutorial (1 to <see cref="StoryConfig.LessonCount"/>).</summary>
     public static GameSetup Lesson(int lesson) => new(GameMode.Tutorial, Math.Max(1, lesson));
 

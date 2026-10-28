@@ -190,14 +190,14 @@ public sealed class GameEngine
     public void Start(GameSetup setup) =>
         StartCore(setup, setup.Mode switch
         {
-            GameMode.Story => LevelCatalog.Get(setup.Level, setup.Seed),
+            GameMode.Story => setup.Eased ? LevelCatalog.Get(setup.Level, setup.Seed).ToEased() : LevelCatalog.Get(setup.Level, setup.Seed),
             GameMode.Tutorial => LevelCatalog.Lesson(setup.Level),
             _ => null,
         });
 
     /// <summary>Starts a game from an explicit level definition (previews, tests). A tutorial level starts as a lesson.</summary>
     public void StartLevel(LevelDefinition level) =>
-        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number) : GameSetup.Story(level.Number, new LevelSeed(level.Seed)), level);
+        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number) : GameSetup.Story(level.Number, new LevelSeed(level.Seed)) with { Eased = level.Eased }, level);
 
     private void StartCore(GameSetup setup, LevelDefinition? level)
     {

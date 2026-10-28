@@ -143,6 +143,7 @@ public sealed class GameViewModel : ObservableObject
         ToggleRerollHintCommand = new Command(() => { RerollHintOpen = !RerollHintOpen; });
         DismissLoadingCommand = new Command(DismissLoading);
         CopySeedCommand = new Command(CopySeed);
+        EaseCommand = new Command(() => EaseRequested?.Invoke());
         ShopCommand = new Command(() => ShopRequested?.Invoke());
         ShareCommand = new Command(() => ShareRequested?.Invoke(ShareMessage));
 
@@ -207,6 +208,10 @@ public sealed class GameViewModel : ObservableObject
     public ICommand DismissLoadingCommand { get; }
     public ICommand CopySeedCommand { get; }
     public ICommand ShopCommand { get; }
+    public ICommand EaseCommand { get; }
+
+    /// <summary>The player pressed EASE THIS LEVEL. The page asks them to confirm, then calls <see cref="ConfirmEase"/>.</summary>
+    public event Action? EaseRequested;
     public ICommand ShareCommand { get; }
 
     /// <summary>The player asked for the workshop from a result card. The page decides how to get there.</summary>
@@ -405,6 +410,30 @@ public sealed class GameViewModel : ObservableObject
         }
     }
 
+    // ---- help after losing (v1.1) ----
+
+    /// <summary>
+    /// "There is always a way through": from the fifth loss on a level, on the failed card. Only while the level is the
+    /// solved, normal one: an eased level, a lesson, and (later) a level played on the player's own rules do not get it.
+    /// </summary>
+    public bool ShowSolvableNote => _isFailed && _setup.IsStory && !_setup.Eased && _levels.ShowsSolvableNote(_setup.Level);
+
+    /// <summary>EASE THIS LEVEL: from the fifteenth loss, on the current level only (never a finale).</summary>
+    public bool ShowEase => _isFailed && _setup.IsStory && _levels.CanEase(_setup.Level);
+
+    public string EaseNoteText => "Want an easier version of this level? You'll still move on in the story, but this level won't pay any gold.";
+
+    /// <summary>The player confirmed: swap in an easier version of the level (more moves, one band lower, no gold).</summary>
+    public void ConfirmEase()
+    {
+        if (!_setup.IsStory || _isLoading || !_levels.TryEase(_setup.Level)) return;
+        _failureCounted = true;   // leaving the run to ease it is the player's choice, not another loss
+        _seedPinned = false;
+        RerollHintOpen = false;
+        _setup = GameSetup.Story(_setup.Level);
+        NewGame();
+    }
+
     /// <summary>SHOP beside NEXT LEVEL on a cleared level, under TRY AGAIN on a failed one. Lessons have no shop button.</summary>
     public bool ShowShop => _isComplete && !_setup.IsLesson;
     public bool ShowShopOnFailed => _isFailed && !_setup.IsLesson;
@@ -424,6 +453,7 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>Small note under the card explaining why no gold was paid.</summary>
     public string GoldNote => !_isComplete ? string.Empty
         : _result.GoldAwarded > 0 ? string.Empty
+        : _setup.Eased ? "This was the easier version, so it paid no gold. Win the normal level any time to earn it."
         : _setup.IsLesson ? "Lessons don't pay gold."
         : _setup.Level <= StoryConfig.TutorialLastLevel ? "The first few levels don't pay gold."
         : "Gold is only paid the first time a level is cleared.";
@@ -440,6 +470,8 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowShop));
         OnPropertyChanged(nameof(ShowShopOnFailed));
         OnPropertyChanged(nameof(ShowShare));
+        OnPropertyChanged(nameof(ShowSolvableNote));
+        OnPropertyChanged(nameof(ShowEase));
         OnPropertyChanged(nameof(HasGoldReward));
         OnPropertyChanged(nameof(GoldRewardText));
         OnPropertyChanged(nameof(GoldNote));
@@ -1115,7 +1147,7 @@ public sealed class GameViewModel : ObservableObject
             _loadCts = null;
             RaiseLoading();
 
-            _setup = _setup with { Seed = seed };
+            _setup = _setup with { Seed = seed, Eased = _levels.IsEasedPlay(_setup.Level) };
             NewGame();
         }
         catch (OperationCanceledException)
@@ -1280,7 +1312,12 @@ public sealed class GameViewModel : ObservableObject
                 BeginLoad();
                 return;
             }
-            _setup = _setup with { Seed = ready };
+            // An eased level is the player's current level that they chose to ease; anything else is played as rolled.
+            _setup = _setup with { Seed = ready, Eased = _levels.IsEasedPlay(_setup.Level) };
+        }
+        else if (_setup.IsStory)
+        {
+            _setup = _setup with { Eased = false };
         }
         CancelLoad();
 

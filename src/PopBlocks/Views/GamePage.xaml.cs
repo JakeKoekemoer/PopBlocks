@@ -69,6 +69,7 @@ public partial class GamePage : ContentPage
         _vm.PropertyChanged += OnViewModelPropertyChanged;
         _vm.EndBeatStarted += OnEndBeatStarted;
         _vm.ShopRequested += OnShopRequested;
+        _vm.EaseRequested += OnEaseRequested;
         _vm.ShareRequested += text => _ = Ui.ShareAsync(text);
 
         BoardView.StartInteraction += OnTouchStart;
@@ -303,6 +304,15 @@ public partial class GamePage : ContentPage
         }
         OverlayGrid.Opacity = 0;
         await OverlayGrid.FadeToAsync(1, (uint)EndBeat.CardFadeMs, Easing.CubicOut);
+    }
+
+    /// <summary>EASE THIS LEVEL asks first, in plain words: the level pays no gold but the story moves on.</summary>
+    private async void OnEaseRequested()
+    {
+        bool ease = await DisplayAlertAsync("Ease this level?",
+            "You'll get an easier version of this level with more moves. You'll still move on in the story when you clear it, but this level won't pay any gold. Win the normal level later to earn it.",
+            "EASE IT", "KEEP TRYING");
+        if (ease) _vm.ConfirmEase();
     }
 
     /// <summary>SHOP on a result card: the workshop opens on Upgrades, and Back leads to the Map rather than into the finished level.</summary>

@@ -53,6 +53,9 @@ public sealed class PlayerProgress
     public int NextLevel => HighestCleared + 1;
 
     public bool IsCleared(int level) => level >= 1 && level <= HighestCleared;
+
+    /// <summary>The player eased this level (shown as a feather on the Map once it is cleared).</summary>
+    public bool IsEased(int level) => SeedStore.IsEased(_settings, level);
     public bool IsUnlocked(int level) => level >= 1 && level <= HighestCleared + 1;
 
     /// <summary>
@@ -61,10 +64,27 @@ public sealed class PlayerProgress
     /// </summary>
     public CompletionResult Complete(LevelDefinition level)
     {
-        if (level.Number != HighestCleared + 1) return new CompletionResult(false, 0);
+        if (level.Number != HighestCleared + 1)
+        {
+            // A level that was cleared in its eased form still owes its first-clear gold: a normal win pays it, once, and
+            // takes the feather off the Map.
+            if (!level.Eased && !level.IsTutorial && level.Number >= 1 && level.Number <= HighestCleared && IsEased(level.Number))
+            {
+                int owed = GoldRewards.For(level.Number, level.IsTutorial);
+                SeedStore.SetEased(_settings, level.Number, false);
+                if (owed > 0)
+                {
+                    Gold += owed;
+                    _settings.SetInt(GoldKey, Gold);
+                }
+                Changed?.Invoke();
+                return new CompletionResult(false, owed);
+            }
+            return new CompletionResult(false, 0);
+        }
 
         HighestCleared = level.Number;
-        int gold = GoldRewards.For(level.Number, level.IsTutorial);
+        int gold = level.Eased ? 0 : GoldRewards.For(level.Number, level.IsTutorial);   // an eased clear moves the story on and pays nothing
         Gold += gold;
 
         _settings.SetInt(HighestClearedKey, HighestCleared);
@@ -74,6 +94,7 @@ public sealed class PlayerProgress
         // every other seed is thrown away. Then the next level starts with a clean slate: no seed, rerolls or failures.
         SeedStore.RecordFirstClear(_settings, level.Number, level.Seed);
         SeedStore.ResetCurrent(_settings);
+        if (level.Eased) SeedStore.SetEased(_settings, level.Number, true);
 
         Changed?.Invoke();
         return new CompletionResult(true, gold);

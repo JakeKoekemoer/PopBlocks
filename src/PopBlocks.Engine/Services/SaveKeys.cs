@@ -97,6 +97,13 @@ public static class SaveKeys
     /// <summary>Comma-separated <c>level:seed</c> pairs: the seed each cleared level was first cleared with.</summary>
     public const string FirstClearSeeds = "first_clear_seeds";
 
+    // ---- v1.1: losses and eased levels ----
+    /// <summary>Comma-separated <c>level:count</c> pairs: how many times each level has been lost. Never resets.</summary>
+    public const string LevelLosses = "level_losses";
+
+    /// <summary>Comma-separated <c>level:1</c> pairs: levels the player chose to ease (a feather on the Map).</summary>
+    public const string EasedLevels = "eased_levels";
+
     // ---- Classic gold (ClassicGold) ----
     /// <summary>Tenths of a gold earned in Classic and not yet paid (0 to 9).</summary>
     public const string ClassicGoldCarry = "classic_gold_carry";
@@ -138,6 +145,7 @@ public static class SaveKeys
         AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced, AudioTrack,
         Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
         PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
+        LevelLosses, EasedLevels,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),

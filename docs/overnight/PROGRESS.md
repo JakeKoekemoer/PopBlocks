@@ -4,8 +4,8 @@
 |---|---|---|
 | 1 Main menu | done | b403232 |
 | 2 Level-end cards | done | c533cc3 |
-| 3 Rerolls | done | PENDING3 |
-| 4 Loss support | pending | |
+| 3 Rerolls | done | 19f59e1 |
+| 4 Loss support | done | PENDING4 |
 | 5 Pop gold, floating gold, consolation | pending | |
 | 6 Continues | pending | |
 | 7 Settings tabs and custom rules | pending | |

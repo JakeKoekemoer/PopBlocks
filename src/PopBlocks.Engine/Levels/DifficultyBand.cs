@@ -304,6 +304,25 @@ public static class DifficultyBand
         return (Low[i], High[i]);
     }
 
+    /// <summary>
+    /// The band one step easier, for a level the player eased: from the easiest possible (1.0) up to the middle of the normal
+    /// band. Where the normal band is already 1.0 wide there is nothing easier to ask for, and the extra moves do the easing.
+    /// </summary>
+    public static (double Low, double High) EasedFor(int level)
+    {
+        var (low, high) = For(level);
+        return (1.0, Math.Max(1.0, low + (high - low) / 2.0));
+    }
+
+    /// <summary>Like <see cref="Gap"/>, against the eased band.</summary>
+    public static double EasedGap(int level, double hardness)
+    {
+        var (low, high) = EasedFor(level);
+        if (hardness < low - Epsilon) return low - hardness;
+        if (hardness > high + Epsilon) return hardness - high;
+        return 0;
+    }
+
     /// <summary>How far a hardness score is outside the band for this level: 0 when inside it.</summary>
     public static double Gap(int level, double hardness)
     {

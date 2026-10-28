@@ -24,6 +24,16 @@ public static class SeedingConfig
     /// <summary>Failures after which a reroll is free. The price falls by a tenth of the first-clear gold per failure.</summary>
     public const int FailuresForFreeReroll = 10;
 
+    // ---- Help after losing (v1.1) ----
+    /// <summary>Total losses on a level after which "there is always a way through" is shown on the failed card.</summary>
+    public const int LossesForSolvableNote = 5;
+
+    /// <summary>Total losses on a level after which the player may ease it.</summary>
+    public const int LossesForEase = 15;
+
+    /// <summary>An eased level gets this many times the moves (rounded up) and is rolled one difficulty band lower.</summary>
+    public const double EasedMoveFactor = 1.5;
+
     // ---- Player ----
     public const int NameMinLength = 1;
     public const int NameMaxLength = 20;
