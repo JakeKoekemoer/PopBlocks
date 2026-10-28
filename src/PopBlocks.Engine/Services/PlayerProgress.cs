@@ -62,7 +62,7 @@ public sealed class PlayerProgress
     /// Records a cleared level. Only the first clear of a level moves progress on and pays gold;
     /// replaying a cleared level (or a tutorial) pays nothing.
     /// </summary>
-    public CompletionResult Complete(LevelDefinition level)
+    public CompletionResult Complete(LevelDefinition level, double goldFactor = 1.0)
     {
         if (level.Number != HighestCleared + 1)
         {
@@ -70,7 +70,7 @@ public sealed class PlayerProgress
             // takes the feather off the Map.
             if (!level.Eased && !level.IsTutorial && level.Number >= 1 && level.Number <= HighestCleared && IsEased(level.Number))
             {
-                int owed = GoldRewards.For(level.Number, level.IsTutorial);
+                int owed = (int)Math.Floor(GoldRewards.For(level.Number, level.IsTutorial) * goldFactor + 1e-9);
                 SeedStore.SetEased(_settings, level.Number, false);
                 if (owed > 0)
                 {
@@ -84,7 +84,8 @@ public sealed class PlayerProgress
         }
 
         HighestCleared = level.Number;
-        int gold = level.Eased ? 0 : GoldRewards.For(level.Number, level.IsTutorial);   // an eased clear moves the story on and pays nothing
+        // An eased clear moves the story on and pays nothing. Rules that make the game easier pay half (goldFactor 0.5).
+        int gold = level.Eased ? 0 : (int)Math.Floor(GoldRewards.For(level.Number, level.IsTutorial) * goldFactor + 1e-9);
         Gold += gold;
 
         _settings.SetInt(HighestClearedKey, HighestCleared);

@@ -186,6 +186,7 @@ public partial class GamePage : ContentPage
         _board.ShowGhost = _settings.LandingGuideStyle > 0 || (_vm.Level?.ForceGhost ?? false);
         _board.GuideBold = _settings.LandingGuideStyle == 2;
         _board.ReducedMotion = _settings.ReducedMotion;
+        _board.ShowHanging = _settings.ShowHanging;
         _board.Effects.Enabled = _settings.BlastEffects;
         _board.Effects.ReducedMotion = _settings.ReducedMotion;
         _board.Effects.Flair = _shop.FlairLevel;

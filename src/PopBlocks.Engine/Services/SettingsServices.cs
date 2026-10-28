@@ -75,6 +75,24 @@ public sealed class GameSettings
         _reducedMotion = settings.GetBool(ReducedMotionKey, false);
         _controlsCollapsed = settings.GetBool(ControlsCollapsedKey, false);
         _soundEffects = settings.GetBool(SoundEffectsKey, true);
+        _showHanging = settings.GetBool(SaveKeys.ShowHanging, true);
+        _colourAssist = settings.GetBool(SaveKeys.ColourAssist, false);
+    }
+
+    private bool _showHanging;
+    /// <summary>The faint column and arrow under blocks that hang over a gap. On by default.</summary>
+    public bool ShowHanging
+    {
+        get => _showHanging;
+        set { _showHanging = value; _settings.SetBool(SaveKeys.ShowHanging, value); }
+    }
+
+    private bool _colourAssist;
+    /// <summary>A symbol on every block, whatever the block set. Some sets hide them for a cleaner look; this puts them back.</summary>
+    public bool ColourAssist
+    {
+        get => _colourAssist;
+        set { _colourAssist = value; _settings.SetBool(SaveKeys.ColourAssist, value); }
     }
 
     private bool _blastEffects;

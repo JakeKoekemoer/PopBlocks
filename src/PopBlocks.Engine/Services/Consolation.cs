@@ -42,13 +42,13 @@ public sealed class Consolation
     /// paid (the attempt went on after a continue and was lost again): only the difference is due.
     /// </summary>
     public ConsolationResult Preview(int level, int runPopGold, double goalProgress, bool levelCleared, bool eased,
-        ConsolationResult alreadyPaid = default)
+        ConsolationResult alreadyPaid = default, double goldFactor = 1.0)
     {
         if (eased) return default;
         int pop = Math.Max(0, PopPart(runPopGold) - alreadyPaid.PopPart);
         if (levelCleared) return new ConsolationResult(pop, 0);
 
-        int reward = GoldRewards.For(level, isTutorial: level <= StoryConfig.TutorialLastLevel);
+        int reward = (int)Math.Floor(GoldRewards.For(level, isTutorial: level <= StoryConfig.TutorialLastLevel) * goldFactor + 1e-9);
         int remaining = Math.Max(0, reward - ProgressPaid(level) + alreadyPaid.ProgressPart);
         int target = Math.Min(ProgressPart(reward, goalProgress), remaining);
         return new ConsolationResult(pop, Math.Max(0, target - alreadyPaid.ProgressPart));
@@ -56,9 +56,9 @@ public sealed class Consolation
 
     /// <summary>Pays the consolation for a lost attempt, once. Returns what was paid.</summary>
     public ConsolationResult Pay(int level, int runPopGold, double goalProgress, bool levelCleared, bool eased,
-        ConsolationResult alreadyPaid = default)
+        ConsolationResult alreadyPaid = default, double goldFactor = 1.0)
     {
-        var result = Preview(level, runPopGold, goalProgress, levelCleared, eased, alreadyPaid);
+        var result = Preview(level, runPopGold, goalProgress, levelCleared, eased, alreadyPaid, goldFactor);
         if (result.Total <= 0) return result;
 
         if (result.ProgressPart > 0)

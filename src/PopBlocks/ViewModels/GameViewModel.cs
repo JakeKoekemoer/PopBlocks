@@ -43,6 +43,7 @@ public sealed class GameViewModel : ObservableObject
     private readonly StoryLevels _levels;
     private readonly ClassicGold _classicGold;
     private readonly Consolation _consolation;
+    private readonly GameRulesStore _rules;
     private int _popGoldPaid;                // Story: the pop gold banked on a win
     private ConsolationResult _lossPaid;     // Story: what a loss paid
     private bool _lossHandled;
@@ -93,8 +94,9 @@ public sealed class GameViewModel : ObservableObject
     public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, GameAudio audio, AudioSettings audioSettings,
         CampaignService campaign, CosmeticLoadout loadout, DevTools dev, LifetimeStats lifetime, EndingService ending,
         AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial,
-        StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks, Consolation consolation)
+        StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks, Consolation consolation, GameRulesStore rules)
     {
+        _rules = rules;
         _consolation = consolation;
         _levels = levels;
         _classicGold = classicGold;
@@ -422,7 +424,11 @@ public sealed class GameViewModel : ObservableObject
     /// "There is always a way through": from the fifth loss on a level, on the failed card. Only while the level is the
     /// solved, normal one: an eased level, a lesson, and (later) a level played on the player's own rules do not get it.
     /// </summary>
-    public bool ShowSolvableNote => _isFailed && _setup.IsStory && !_setup.Eased && _levels.ShowsSolvableNote(_setup.Level);
+    public bool ShowSolvableNote => _isFailed && _setup.IsStory && !_setup.Eased && _setup.Rules.IsDefault && _levels.ShowsSolvableNote(_setup.Level);
+
+    /// <summary>"Custom rules" (or "Custom rules · half gold") on the HUD while the player's own rules are in force.</summary>
+    public bool HasRulesChip => !_setup.Rules.IsDefault;
+    public string RulesChipText => _setup.Rules.IsEasierThanDefault ? "Custom rules · half gold" : "Custom rules";
 
     /// <summary>EASE THIS LEVEL: from the fifteenth loss, on the current level only (never a finale).</summary>
     public bool ShowEase => _isFailed && _setup.IsStory && _levels.CanEase(_setup.Level);
@@ -555,6 +561,8 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ContinuesLeft));
         OnPropertyChanged(nameof(ContinuesLeftText));
         OnPropertyChanged(nameof(ShowSolvableNote));
+        OnPropertyChanged(nameof(HasRulesChip));
+        OnPropertyChanged(nameof(RulesChipText));
         OnPropertyChanged(nameof(ShowEase));
         OnPropertyChanged(nameof(HasGoldReward));
         OnPropertyChanged(nameof(GoldRewardText));
@@ -1159,7 +1167,7 @@ public sealed class GameViewModel : ObservableObject
         if (_lossHandled || !_setup.IsStory || _game.Story is not { IsTutorial: false } story) return;
         _lossHandled = true;
         var due = _consolation.Pay(story.Number, _game.ClassicGoldTenths / 10, _game.GoalProgress,
-            levelCleared: _progress.IsCleared(story.Number), eased: story.Eased, alreadyPaid: _lossPaid);
+            levelCleared: _progress.IsCleared(story.Number), eased: story.Eased, alreadyPaid: _lossPaid, goldFactor: _setup.Rules.GoldFactor);
         _lossPaid = new ConsolationResult(_lossPaid.PopPart + due.PopPart, _lossPaid.ProgressPart + due.ProgressPart);
         _chipHold = due.Total;
         UpdateOverlay();
@@ -1514,6 +1522,7 @@ public sealed class GameViewModel : ObservableObject
         if (_setup.IsStory && !_promptOpen && !SceneVisible && _campaign.ReplayRemark(_setup.Level) is { } remark)
             Banner?.Invoke(remark);
 
+        _setup = _setup with { Rules = _rules.EffectiveFor(_setup) };   // the player's own rules, where they apply
         _game.Start(_setup);
 
         LoadLevelState();
@@ -1742,7 +1751,7 @@ public sealed class GameViewModel : ObservableObject
             return;
         }
 
-        _result = _progress.Complete(_game.Story);
+        _result = _progress.Complete(_game.Story, _setup.Rules.GoldFactor);
         int banked = _game.EarnsPopGold ? _classicGold.Bank(_game.ClassicGoldTenths) : 0;   // pop gold on top of the first clear, replays too
         int credit = Math.Min(banked, _lossPaid.PopPart);   // the attempt was lost once before a continue: that half was already paid
         if (credit > 0) _progress.TrySpend(credit);

@@ -51,6 +51,10 @@ On top of that:
 A player who finishes the campaign has earned about **14,000** gold from the Story alone; Classic is extra, and is
 what a stuck player can turn to for the price of a reroll.
 
+## Easier rules pay half (v1.1)
+
+`GameRules.GoldFactor` is 0.5 when any custom rule is easier than the normal one (slower falling, fewer colours or shapes, smaller bursts, no cracking, no Orbs, a taller board). It halves pop gold (per group, to the nearest tenth), first-clear gold (rounded down) and the consolation, on every level the rules apply to. The solver-guaranteed promise still only covers the normal rules.
+
 ## Sinks (continues)
 
 | Phase | What | Gold |

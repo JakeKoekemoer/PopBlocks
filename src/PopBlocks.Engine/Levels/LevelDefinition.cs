@@ -78,9 +78,9 @@ public sealed record LevelDefinition
     public Board CreateBoard() =>
         StartRows is not null ? Board.FromRows(StartRows) : BoardGenerator.Generate(BoardSeed, Profile);
 
-    public IPieceGenerator CreateGenerator()
+    public IPieceGenerator CreateGenerator(GameRules? rules = null)
     {
-        var random = new PieceGenerator(new Random(PieceSeed), ExoticShare);
+        var random = new PieceGenerator(new Random(PieceSeed), ExoticShare, rules: rules is { IsDefault: false } ? rules : null);
         return Script.Count > 0 ? new ScriptedPieceGenerator(Script, random) : random;
     }
 }

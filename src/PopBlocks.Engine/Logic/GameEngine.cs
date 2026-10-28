@@ -214,7 +214,11 @@ public sealed class GameEngine
     /// <summary>Colours pieces may use: fixed by the level in Story mode, rising with the score in Classic.</summary>
     public int ColoursInPlay => Story?.Colours ?? ScoringSystem.ColourCountForLevel(Level);
 
-    public int FallIntervalMs => Story?.FallIntervalMs ?? ScoringSystem.FallIntervalMs(Level);
+    /// <summary>The rules this game is played by. The normal rules unless the player set their own.</summary>
+    public GameRules Rules => Setup.Rules;
+
+    /// <summary>How long the falling piece waits between steps (the rules' fall speed applies to it, not to pops).</summary>
+    public int FallIntervalMs => Rules.FallIntervalMs(Story?.FallIntervalMs ?? ScoringSystem.FallIntervalMs(Level));
 
     /// <summary>How long the application layer should wait before the next <see cref="Tick"/>.</summary>
     public int TimerIntervalMs => State != GameState.ResolvingBursts
@@ -253,8 +257,9 @@ public sealed class GameEngine
         });
 
     /// <summary>Starts a game from an explicit level definition (previews, tests). A tutorial level starts as a lesson.</summary>
-    public void StartLevel(LevelDefinition level) =>
-        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number) : GameSetup.Story(level.Number, new LevelSeed(level.Seed)) with { Eased = level.Eased }, level);
+    public void StartLevel(LevelDefinition level, GameRules? rules = null) =>
+        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number)
+            : GameSetup.Story(level.Number, new LevelSeed(level.Seed)) with { Eased = level.Eased, Rules = rules ?? GameRules.Default }, level);
 
     private void StartCore(GameSetup setup, LevelDefinition? level)
     {
@@ -265,14 +270,20 @@ public sealed class GameEngine
 
         if (level is not null)
         {
+            // A goal that names a colour the player's rules switched off becomes "any colour": it could never be met otherwise.
+            if (setup.Rules.RemapsColours && level.Goals.Any(g => g.Colour != CellColour.Empty && !setup.Rules.Allows(g.Colour)))
+                level = level with { Goals = level.Goals.Select(g => g.Colour != CellColour.Empty && !setup.Rules.Allows(g.Colour) ? g with { Colour = CellColour.Empty } : g).ToList() };
+            Story = level;
             Board.CopyFrom(level.CreateBoard());
-            _rewindable = new RewindableGenerator(level.CreateGenerator());
+            _rewindable = new RewindableGenerator(level.CreateGenerator(setup.Rules));
             _goals = new GoalTracker(level.Goals, Board.CountOccupied());
         }
         else
         {
             // A seeded Classic run draws its pieces from the seed; any other starts with the generator the engine was built with.
-            IPieceGenerator source = setup.ClassicSeed is { } classicSeed ? new SeededPieceGenerator(classicSeed) : _defaultGenerator;
+            IPieceGenerator source = setup.ClassicSeed is { } classicSeed ? new SeededPieceGenerator(classicSeed, setup.Rules)
+                : setup.Rules.ChangesPieces ? new PieceGenerator(rules: setup.Rules)
+                : _defaultGenerator;
             _rewindable = new RewindableGenerator(source);
         }
         _generator = _rewindable;
@@ -312,7 +323,7 @@ public sealed class GameEngine
     /// <summary>Starts over with the same setup (the same level gives the same pile and pieces again).</summary>
     public void Restart()
     {
-        if (Story is not null) StartLevel(Story);
+        if (Story is not null) StartCore(Setup, Story);   // the same setup (eased, rules, seed) and the same level
         else Start(Setup);
     }
 
@@ -434,7 +445,7 @@ public sealed class GameEngine
             Board[piece.X + c.X, piece.Y + c.Y] = c.Colour;
 
         // A solid piece (one colour, burst-sized by itself) must not pop just by landing: it sleeps until something joins it.
-        ColourMatcher.MarkDormant(Board, piece.Cells.Select(c => (piece.X + c.X, piece.Y + c.Y)));
+        ColourMatcher.MarkDormant(Board, piece.Cells.Select(c => (piece.X + c.X, piece.Y + c.Y)), Rules.MinGroupSize);
 
         CurrentPiece = null;
         PiecesPlaced++;
@@ -443,7 +454,7 @@ public sealed class GameEngine
         LastPenalty = 0;
         Raise(GameEvent.PieceLocked);
 
-        var groups = ColourMatcher.FindGroups(Board);
+        var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
         if (groups.Count == 0)
         {
             ApplyPenalty();
@@ -455,7 +466,7 @@ public sealed class GameEngine
         {
             // First wave resolves straight away; further waves (a chain) are paced by Tick.
             ApplyWave(groups);
-            if (ColourMatcher.FindGroups(Board).Count > 0)
+            if (ColourMatcher.FindGroups(Board, Rules.MinGroupSize).Count > 0)
             {
                 _phase = Phase.Instant;
                 State = GameState.ResolvingBursts;
@@ -491,7 +502,7 @@ public sealed class GameEngine
 
             case Phase.Settle:
             {
-                var groups = ColourMatcher.FindGroups(Board);
+                var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
                 if (groups.Count == 0) FinishResolution();
                 else BeginHighlight(groups);
                 break;
@@ -499,14 +510,14 @@ public sealed class GameEngine
 
             default:
             {
-                var groups = ColourMatcher.FindGroups(Board);
+                var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
                 if (groups.Count == 0)
                 {
                     FinishResolution();
                     break;
                 }
                 ApplyWave(groups);
-                if (ColourMatcher.FindGroups(Board).Count == 0) FinishResolution();
+                if (ColourMatcher.FindGroups(Board, Rules.MinGroupSize).Count == 0) FinishResolution();
                 break;
             }
         }
@@ -526,13 +537,14 @@ public sealed class GameEngine
         // Every wave counts, chain waves included, with no chain multiplier. Drop points never count. Each group reports
         // what it paid and where it was, so the app can float the number over it.
         int rate = EarnsPopGold ? SeedingConfig.ClassicTenthsPerBlock(Level) : 0;
+        bool scaled = Rules.GoldFactor < 1.0;   // easier rules pay half
         var payouts = new GroupGold[groups.Count];
         for (int g = 0; g < groups.Count; g++)
         {
             var cells = groups[g].Cells;
             float sx = 0, sy = 0;
             for (int c = 0; c < cells.Count; c++) { sx += cells[c].X; sy += cells[c].Y; }
-            payouts[g] = new GroupGold(sx / cells.Count + 0.5f, sy / cells.Count + 0.5f, cells.Count, multiplier, cells.Count * rate, groups[g].Colour);
+            payouts[g] = new GroupGold(sx / cells.Count + 0.5f, sy / cells.Count + 0.5f, cells.Count, multiplier, scaled ? Rules.ScaleTenths(cells.Count * rate) : cells.Count * rate, groups[g].Colour);
             ClassicGoldTenths += payouts[g].GoldTenths;
         }
 
@@ -599,7 +611,24 @@ public sealed class GameEngine
     private void FillQueue()
     {
         while (_queue.Count < _previewCount)
-            _queue.Add(_generator.Next(ColoursInPlay));
+            _queue.Add(NextFromGenerator());
+    }
+
+    /// <summary>
+    /// The next piece from the generator. With the player's own colours the generator deals colours 1..n as usual and they are
+    /// then mapped onto the enabled colours in order (so only n of them are dealt, never a disabled one). With the normal five
+    /// the mapping is the identity and this is exactly the old call.
+    /// </summary>
+    private Piece NextFromGenerator()
+    {
+        var rules = Rules;
+        if (!rules.RemapsColours) return _generator.Next(ColoursInPlay);
+
+        var piece = _generator.Next(Math.Min(ColoursInPlay, rules.ColourCount));
+        var cells = new BlockCell[piece.Cells.Count];
+        for (int i = 0; i < cells.Length; i++)
+            cells[i] = new BlockCell(piece.Cells[i].X, piece.Cells[i].Y, rules.MapColour(piece.Cells[i].Colour));
+        return new Piece(cells, piece.X, piece.Y, piece.Pivot2X, piece.Pivot2Y);
     }
 
     private void SpawnNext()
@@ -743,12 +772,12 @@ public sealed class GameEngine
     {
         var next = NextPiece!;
         var shifted = next.WithNextColourOrder();
-        if (shifted is null || next.IsSolid) return shifted;
+        if (shifted is null || next.IsSolidFor(Rules.MinGroupSize)) return shifted;
 
         // The last colouring wraps round to the current one, so there are DistinctColourOrders - 1 others to try.
-        for (int tried = 1; tried < next.DistinctColourOrders - 1 && shifted!.IsSolid; tried++)
+        for (int tried = 1; tried < next.DistinctColourOrders - 1 && shifted!.IsSolidFor(Rules.MinGroupSize); tried++)
             shifted = shifted.WithNextColourOrder();
-        return shifted!.IsSolid ? null : shifted;
+        return shifted!.IsSolidFor(Rules.MinGroupSize) ? null : shifted;
     }
 
     private void Raise(GameEvent e) => EventRaised?.Invoke(e);

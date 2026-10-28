@@ -14,19 +14,19 @@ public static class PlacementPreview
     /// Burst waves a hard drop of <paramref name="piece"/> from its current column and rotation would set off.
     /// 0 means nothing pops; 1 a single burst; 2 or more a chain.
     /// </summary>
-    public static int CountWaves(Board board, Piece piece)
+    public static int CountWaves(Board board, Piece piece, int minGroupSize = GameConfig.MinGroupSize)
     {
         var copy = board.Clone();
         int distance = CollisionDetector.HardDropDistance(copy, piece);
         var landed = piece.Moved(0, distance);
         foreach (var c in landed.Cells)
             copy[landed.X + c.X, landed.Y + c.Y] = c.Colour;
-        ColourMatcher.MarkDormant(copy, landed.Cells.Select(c => (landed.X + c.X, landed.Y + c.Y)));
+        ColourMatcher.MarkDormant(copy, landed.Cells.Select(c => (landed.X + c.X, landed.Y + c.Y)), minGroupSize);
 
         int waves = 0;
         while (true)
         {
-            var groups = ColourMatcher.FindGroups(copy);
+            var groups = ColourMatcher.FindGroups(copy, minGroupSize);
             if (groups.Count == 0) return waves;
             waves++;
             GravityResolver.Clear(copy, groups.SelectMany(g => g.Cells).ToList());
@@ -35,5 +35,5 @@ public static class PlacementPreview
     }
 
     /// <summary>A drop here would set off a chain: two or more waves from one piece.</summary>
-    public static bool StartsChain(Board board, Piece piece) => CountWaves(board, piece) >= 2;
+    public static bool StartsChain(Board board, Piece piece, int minGroupSize = GameConfig.MinGroupSize) => CountWaves(board, piece, minGroupSize) >= 2;
 }

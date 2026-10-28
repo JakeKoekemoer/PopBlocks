@@ -15,25 +15,45 @@ public interface IPieceGenerator
 /// </summary>
 public sealed class PieceGenerator : IPieceGenerator
 {
-    private static readonly int ClassicWeight = ShapeCatalog.Classic.Sum(s => s.Weight);
-    private static readonly int ExoticWeight = ShapeCatalog.Exotic.Sum(s => s.Weight);
-
     private const double SingleColourChance = 0.4;
 
     private readonly Random _random;
     private readonly double _exoticShare;
     private readonly double _solidChance;
+    private readonly int _minGroup;
+    private readonly ShapeDef[] _classic;
+    private readonly ShapeDef[] _exotic;
+    private readonly int _classicWeight;
+    private readonly int _exoticWeight;
 
     /// <param name="solidChance">
     /// Of the pieces that would come out as one burst-sized colour group by themselves ("solid" pieces), the share that stay
     /// that way. All the others are recoloured. The engine keeps a solid piece from popping when it lands (see
     /// <see cref="GameConfig.SolidPieceChance"/>), so it is a rare surprise, never an accident.
     /// </param>
-    public PieceGenerator(Random? random = null, double exoticShare = 0.0, double solidChance = GameConfig.SolidPieceChance)
+    /// <param name="rules">The player's rules, if they differ from the normal ones: which shapes may appear, how often a solid piece stays solid, and how many blocks make a burst.</param>
+    public PieceGenerator(Random? random = null, double exoticShare = 0.0, double solidChance = GameConfig.SolidPieceChance, GameRules? rules = null)
     {
         _random = random ?? new Random();
         _exoticShare = Math.Clamp(exoticShare, 0.0, 1.0);
-        _solidChance = Math.Clamp(solidChance, 0.0, 1.0);
+        _solidChance = Math.Clamp(rules?.ChangesPieces == true ? rules.SolidPieceChance : solidChance, 0.0, 1.0);
+        _minGroup = rules?.MinGroupSize ?? GameConfig.MinGroupSize;
+
+        if (rules is { ChangesPieces: true })
+        {
+            _classic = ShapeCatalog.Classic.Where(s => rules.AllowsShape(s.Name)).ToArray();
+            _exotic = ShapeCatalog.Exotic.Where(s => rules.AllowsShape(s.Name)).ToArray();
+            // If a whole family is switched off the other one carries on alone.
+            if (_classic.Length == 0) _classic = _exotic;
+            if (_exotic.Length == 0) { _exotic = _classic; _exoticShare = 0.0; }
+        }
+        else
+        {
+            _classic = ShapeCatalog.Classic;
+            _exotic = ShapeCatalog.Exotic;
+        }
+        _classicWeight = _classic.Sum(s => s.Weight);
+        _exoticWeight = _exotic.Sum(s => s.Weight);
     }
 
     public Piece Next(int colourCount)
@@ -41,7 +61,7 @@ public sealed class PieceGenerator : IPieceGenerator
         colourCount = Math.Clamp(colourCount, 1, GameConfig.ColourFamilies);
 
         bool exotic = _exoticShare > 0.0 && _random.NextDouble() < _exoticShare;
-        var shape = exotic ? Pick(ShapeCatalog.Exotic, ExoticWeight) : Pick(ShapeCatalog.Classic, ClassicWeight);
+        var shape = exotic ? Pick(_exotic, _exoticWeight) : Pick(_classic, _classicWeight);
 
         // Big exotic pieces are always two-coloured, which already avoids most solid pieces.
         var colours = PickColours(shape.CellCount, colourCount, forceTwo: exotic && shape.CellCount >= 4);
@@ -49,7 +69,7 @@ public sealed class PieceGenerator : IPieceGenerator
 
         // A piece that is a burst-sized group by itself is the exception: it stays only now and then. (With a single
         // colour in play there is nothing to recolour with.) The draw happens only for these pieces.
-        if (piece.IsSolid && colourCount > 1 && _random.NextDouble() >= _solidChance)
+        if (piece.IsSolidFor(_minGroup) && colourCount > 1 && _random.NextDouble() >= _solidChance)
             piece = BreakUp(piece, colourCount);
         return piece;
     }
@@ -58,15 +78,15 @@ public sealed class PieceGenerator : IPieceGenerator
     /// Recolours cells of the solid group, last cell first, until the piece no longer holds a burst-sized group. It uses a
     /// colour the piece already has, else the next one round the palette, and draws no random numbers.
     /// </summary>
-    private static Piece BreakUp(Piece piece, int colourCount)
+    private Piece BreakUp(Piece piece, int colourCount)
     {
-        var solid = piece.SolidColour;
+        var solid = piece.SolidColourFor(_minGroup);
         var other = piece.Cells.Select(c => c.Colour).FirstOrDefault(c => c != solid);
         if (other == CellColour.Empty) other = (CellColour)(1 + (int)solid % colourCount);
 
         var colours = piece.Cells.Select(c => c.Colour).ToArray();
         var result = piece;
-        for (int i = colours.Length - 1; i >= 0 && result.IsSolid; i--)
+        for (int i = colours.Length - 1; i >= 0 && result.IsSolidFor(_minGroup); i--)
         {
             if (colours[i] != solid) continue;
             colours[i] = other;
@@ -198,8 +218,14 @@ public sealed class SeededPieceGenerator : IPieceGenerator
     private readonly int _seed;
     private int _index;
 
-    public SeededPieceGenerator(int seed) => _seed = seed;
+    private readonly GameRules? _rules;
+
+    public SeededPieceGenerator(int seed, GameRules? rules = null)
+    {
+        _seed = seed;
+        _rules = rules is { IsDefault: false } ? rules : null;
+    }
 
     public Piece Next(int colourCount) =>
-        new PieceGenerator(new Random(Levels.SeedMix.Mix32(_seed, _index++))).Next(colourCount);
+        new PieceGenerator(new Random(Levels.SeedMix.Mix32(_seed, _index++)), rules: _rules).Next(colourCount);
 }

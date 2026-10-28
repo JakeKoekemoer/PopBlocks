@@ -82,6 +82,20 @@ public static class SaveCode
             new(SaveKeys.LevelLosses, Kind.SeedList),
             new(SaveKeys.EasedLevels, Kind.SeedList),
             new(SaveKeys.ConsolationPaid, Kind.SeedList),
+            new(SaveKeys.RuleFallSpeed, Kind.Int, 50, 200),
+            new(SaveKeys.RuleColourCount, Kind.Int, 3, 5),
+            new(SaveKeys.RuleColours, Kind.Text),
+            new(SaveKeys.RuleShapes, Kind.Text),
+            new(SaveKeys.RuleMinGroup, Kind.Int, 3, 6),
+            new(SaveKeys.RuleSolidChance, Kind.Int, 0, 100),
+            new(SaveKeys.RuleBoardRows, Kind.Int, 16, 32),
+            new(SaveKeys.RuleFracture, Kind.Bool),
+            new(SaveKeys.RuleOrbs, Kind.Int, 0, 2),
+            new(SaveKeys.RuleOrbTimer, Kind.Int, 6, 12),
+            new(SaveKeys.RuleUseInStory, Kind.Bool),
+            new(SaveKeys.SettingsTab, Kind.Int, 0, 4),
+            new(SaveKeys.ShowHanging, Kind.Bool),
+            new(SaveKeys.ColourAssist, Kind.Bool),
         };
         foreach (var item in ShopCatalog.Items) f.Add(new Field(item.SaveKey, Kind.Int, 0, item.MaxLevel));
         foreach (var c in ConsumableCatalog.All) f.Add(new Field(c.SaveKey, Kind.Int, 0, ConsumableCatalog.Cap));

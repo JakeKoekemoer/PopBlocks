@@ -107,6 +107,22 @@ public static class SaveKeys
     /// <summary>Comma-separated <c>level:gold</c> pairs: the progress half of the loss consolation already paid for each uncleared level (never above that level's first-clear reward).</summary>
     public const string ConsolationPaid = "consolation_paid";
 
+    // ---- v1.1: the player's own rules (GameRulesStore) and a few settings ----
+    public const string RuleFallSpeed = "rule_fall_speed";          // percent: 50 to 200
+    public const string RuleColourCount = "rule_colour_count";      // 3 to 5
+    public const string RuleColours = "rule_colours";               // digits 1 to 5, the enabled colours
+    public const string RuleShapes = "rule_shapes";                 // comma-separated shape names
+    public const string RuleMinGroup = "rule_min_group";            // 3 to 6
+    public const string RuleSolidChance = "rule_solid_chance";      // percent: 0, 15 or 40
+    public const string RuleBoardRows = "rule_board_rows";          // 16 to 32
+    public const string RuleFracture = "rule_fracture";
+    public const string RuleOrbs = "rule_orbs";                     // 0 auto, 1 always, 2 never
+    public const string RuleOrbTimer = "rule_orb_timer";            // 6, 8, 10 or 12
+    public const string RuleUseInStory = "rule_use_in_story";
+    public const string SettingsTab = "settings_tab";               // the tab the settings page opens on
+    public const string ShowHanging = "show_hanging";               // the cue under blocks that hang over a gap
+    public const string ColourAssist = "colour_assist";             // symbols on every block, whatever the skin
+
     // ---- Classic gold (ClassicGold) ----
     /// <summary>Tenths of a gold earned in Classic and not yet paid (0 to 9).</summary>
     public const string ClassicGoldCarry = "classic_gold_carry";
@@ -152,6 +168,8 @@ public static class SaveKeys
         Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
         PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
         LevelLosses, EasedLevels, ConsolationPaid,
+        RuleFallSpeed, RuleColourCount, RuleColours, RuleShapes, RuleMinGroup, RuleSolidChance, RuleBoardRows, RuleFracture,
+        RuleOrbs, RuleOrbTimer, RuleUseInStory, SettingsTab, ShowHanging, ColourAssist,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),

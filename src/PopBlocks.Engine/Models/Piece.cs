@@ -127,9 +127,11 @@ public sealed class Piece
     /// piece, or <see cref="CellColour.Empty"/> when there is none. A piece with one is "solid": it is a burst-sized
     /// group all by itself, so the board keeps it dormant instead of popping it the moment it lands.
     /// </summary>
-    public CellColour SolidColour
+    public CellColour SolidColour => SolidColourFor(GameConfig.MinGroupSize);
+
+    /// <summary>Like <see cref="SolidColour"/>, for a game whose bursts need <paramref name="minGroupSize"/> blocks.</summary>
+    public CellColour SolidColourFor(int minGroupSize)
     {
-        get
         {
             var colourAt = new Dictionary<(int, int), CellColour>(Cells.Count);
             foreach (var c in Cells) colourAt[(c.X, c.Y)] = c.Colour;
@@ -149,7 +151,7 @@ public sealed class Piece
                         if (colourAt.TryGetValue(next, out var colour) && colour == start.Value && seen.Add(next))
                             stack.Push(next);
                 }
-                if (size >= GameConfig.MinGroupSize) return start.Value;
+                if (size >= minGroupSize) return start.Value;
             }
             return CellColour.Empty;
         }
@@ -157,6 +159,8 @@ public sealed class Piece
 
     /// <summary>True when the piece is a burst-sized group of one colour by itself (see <see cref="SolidColour"/>).</summary>
     public bool IsSolid => SolidColour != CellColour.Empty;
+
+    public bool IsSolidFor(int minGroupSize) => SolidColourFor(minGroupSize) != CellColour.Empty;
 
     /// <summary>Absolute board coordinates of every cell (allocates; for logic and tests, not per-frame drawing).</summary>
     public IEnumerable<BlockCell> BoardCells()

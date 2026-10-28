@@ -34,6 +34,12 @@
                            FontSize="12"
                            FontAttributes="Bold"
                            TextColor="{StaticResource GoldColor}" />
+                    <Label Text="{Binding RulesChipText}"
+                           IsVisible="{Binding HasRulesChip}"
+                           FontSize="11"
+                           FontAttributes="Bold"
+                           TextColor="#FF9F6B"
+                           SemanticProperties.Description="Your own rules are on" />
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Grid.Column="2"

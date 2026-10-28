@@ -529,7 +529,7 @@ public sealed class GameDrawable : IDrawable
     {
         if (game.State is not (GameState.Playing or GameState.Paused)) return;
 
-        var groups = ColourMatcher.FindNearGroups(game.Board, LensLevel >= 2 ? 2 : 3, 3);
+        var groups = ColourMatcher.FindNearGroups(game.Board, LensLevel >= 2 ? 2 : 3, 3, game.Rules.MinGroupSize);
         if (groups.Count == 0) return;
 
         canvas.StrokeSize = MathF.Max(1.5f, cell * 0.06f);
@@ -575,7 +575,7 @@ public sealed class GameDrawable : IDrawable
             {
                 _glowPiece = piece;
                 _glowPlaced = game.PiecesPlaced;
-                _glowChain = PlacementPreview.StartsChain(game.Board, piece);
+                _glowChain = PlacementPreview.StartsChain(game.Board, piece, game.Rules.MinGroupSize);
             }
             chain = _glowChain;
         }

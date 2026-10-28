@@ -73,7 +73,7 @@ The story the player has unlocked (scenes, characters, fragments, memories, with
 Testing shortcuts from `DevTools`. Shown only when `DevMenu.Enabled` is true (Debug builds, or any build made with `-p:DevMenu=true`). In a normal Release build its button and shortcuts never show.
 
 ### `SettingsPage`
-Opened by SETTINGS on the full menu. Four cards:
+Opened by SETTINGS on the full menu. Since v1.1 it has five tabs (the last one is remembered in `settings_tab`): **GAME** (the player's own rules, built in code by `GameRulesPanel`: a status chip Default / Custom / Custom · half gold, fall-speed slider written on release with a "1.25× faster" / "0.75× slower" label, colour chips with symbols, a piece grid of `ShapeChipDrawable`s, burst size, solid pieces, "Use my rules in Story", RESET TO DEFAULT, and a warning sheet before the first change of colours, shapes, burst size or board height and whenever Use in Story is turned on; board height, cracking and Orbs are listed but only offered once `RuleFeatures` switches them on), **DISPLAY**, **SOUND**, **PLAYER** and **SAVE**. DISPLAY adds Hanging drops (`show_hanging`) and Colour assist (`colour_assist`). The older four cards:
 
 - **Game**: pop effects, landing guide (off, outline, bold), reduced motion, sound effects (the same switch as before; it now mutes the new effects), and board style (only once a style has been earned). All of them write straight to `GameSettings` / `CosmeticLoadout`.
 - **Your name**: shows and renames the in-game name (renaming never changes a level).

@@ -16,12 +16,22 @@ public partial class SettingsPage : ContentPage
     private readonly PersistentSettings _save;
     private readonly AudioSettings _audio;
     private readonly GameAudio _gameAudio;
+    private readonly ILocalSettings _local;
+    private readonly GameRulesPanel _rulesPanel;
     private bool _loadingSettings;
+    private int _tab;
+
+    private static readonly string[] TabNames = { "GAME", "DISPLAY", "SOUND", "PLAYER", "SAVE" };
 
     public SettingsPage(GameSettings settings, CosmeticLoadout loadout, PlayerIdentity identity, PersistentSettings save,
-        AudioSettings audio, GameAudio gameAudio)
+        AudioSettings audio, GameAudio gameAudio, GameRulesStore rules, ILocalSettings local)
     {
         InitializeComponent();
+        _local = local;
+        _rulesPanel = new GameRulesPanel(rules);
+        GameTab.Content = _rulesPanel;
+        foreach (var _ in TabNames) TabBar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        _tab = Math.Clamp(local.GetInt(SaveKeys.SettingsTab, 0), 0, TabNames.Length - 1);
         _audio = audio;
         _gameAudio = gameAudio;
         _settings = settings;
@@ -36,6 +46,8 @@ public partial class SettingsPage : ContentPage
         base.OnAppearing();
 
         _loadingSettings = true;
+        HangingSwitch.IsToggled = _settings.ShowHanging;
+        AssistSwitch.IsToggled = _settings.ColourAssist;
         EffectsSwitch.IsToggled = _settings.BlastEffects;
         MotionSwitch.IsToggled = _settings.ReducedMotion;
         SoundSwitch.IsToggled = !_audio.SfxMuted;
@@ -49,12 +61,54 @@ public partial class SettingsPage : ContentPage
         BoardStyleButton.Text = BoardName(_loadout.SelectedBoard).ToUpperInvariant();
 
         ShowSaveStatus();
+        _rulesPanel.Refresh();
+        ShowTab();
 
         // A restore or an erase earlier in this run leaves the game waiting to be closed and opened again.
         if (_save.IsFrozen) Lock("Close PopBlocks completely and open it again to carry on.");
     }
 
     private async void OnBackClicked(object? sender, EventArgs e) => await Navigation.PopAsync();
+
+    // ------------------------------------------------------------------ tabs
+
+    /// <summary>Shows the chosen tab and hides the others. The tab is remembered (a small number in the save).</summary>
+    private void ShowTab()
+    {
+        GameTab.IsVisible = _tab == 0;
+        DisplayCard.IsVisible = _tab == 1;
+        SoundCard.IsVisible = _tab == 2;
+        PlayerCard.IsVisible = _tab == 3;
+        SaveCard.IsVisible = _tab == 4;
+
+        TabBar.Children.Clear();
+        for (int i = 0; i < TabNames.Length; i++)
+        {
+            bool selected = i == _tab;
+            var tab = new Button
+            {
+                Text = TabNames[i],
+                FontSize = 11,
+                FontAttributes = FontAttributes.Bold,
+                CharacterSpacing = 0.7,
+                CornerRadius = 22,
+                HeightRequest = 44,
+                Padding = new Thickness(2, 0),
+                MinimumWidthRequest = 0,
+                BackgroundColor = selected ? Ui.Res("Accent", Colors.Cyan) : Colors.Transparent,
+                TextColor = selected ? Ui.Res("AccentText", Colors.Black) : Ui.Res("TextSecondary", Colors.Gray),
+            };
+            SemanticProperties.SetDescription(tab, $"{TabNames[i]} tab{(selected ? ", selected" : "")}");
+            int chosen = i;
+            tab.Clicked += (_, _) =>
+            {
+                _tab = chosen;
+                _local.SetInt(SaveKeys.SettingsTab, chosen);
+                ShowTab();
+            };
+            TabBar.Add(tab, i, 0);
+        }
+    }
 
     /// <summary>Switches the page off once a restore or erase has happened: the running game must not be used any further.</summary>
     private void Lock(string message)
@@ -98,6 +152,16 @@ public partial class SettingsPage : ContentPage
     {
         _settings.LandingGuideStyle = (_settings.LandingGuideStyle + 1) % 3;
         ShowGuideStyle();
+    }
+
+    private void OnHangingToggled(object? sender, ToggledEventArgs e)
+    {
+        if (!_loadingSettings) _settings.ShowHanging = e.Value;
+    }
+
+    private void OnAssistToggled(object? sender, ToggledEventArgs e)
+    {
+        if (!_loadingSettings) _settings.ColourAssist = e.Value;
     }
 
     private void OnMotionToggled(object? sender, ToggledEventArgs e)
