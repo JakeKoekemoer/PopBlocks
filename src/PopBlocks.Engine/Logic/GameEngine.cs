@@ -630,6 +630,30 @@ public sealed class GameEngine
         return true;
     }
 
+    /// <summary>Gives every block on the board one more crack, up to two (development tools).</summary>
+    public void DevCrackAll()
+    {
+        for (int y = 0; y < Board.Height; y++)
+            for (int x = 0; x < Board.Width; x++)
+                if (Board[x, y] is not (CellColour.Empty or CellColour.Orb))
+                    Board.SetFracture(x, y, Math.Min(2, Board.FractureAt(x, y) + 1));
+        Notify();
+    }
+
+    /// <summary>Fills the bottom <paramref name="rows"/> rows (all but the last column) with blocks that never join, to reach the camera and the overflow (development tools).</summary>
+    public void DevFillRows(int rows)
+    {
+        rows = Math.Clamp(rows, 0, BoardRows - 1);
+        for (int r = 0; r < rows; r++)
+            for (int x = 0; x < Board.Width - 1; x++)
+            {
+                int y = Board.Height - 1 - r;
+                if (Board[x, y] == CellColour.Empty) Board[x, y] = (CellColour)(1 + (x + r * 2) % 3);
+            }
+        UpdateCamera();
+        Notify();
+    }
+
     /// <summary>Puts an Orb at the best spot there is, ignoring every condition (development tools).</summary>
     public bool SpawnOrbNow()
     {

@@ -316,6 +316,13 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>Dev shortcuts on the pause / failed card. False in normal Release builds.</summary>
     public bool ShowDevTools => DevMenu.Enabled && _setup.HasLevel && (_isPaused || _isFailed);
 
+    /// <summary>The board tools (spawn an Orb, crack every block, fill rows) work in Endless too, from the pause card. Development builds only.</summary>
+    public bool ShowDevBoardTools => DevMenu.Enabled && _isPaused;
+
+    public ICommand DevSpawnOrbCommand => new Command(() => { _game.SpawnOrbNow(); Redraw?.Invoke(); });
+    public ICommand DevCrackAllCommand => new Command(() => { _game.DevCrackAll(); Redraw?.Invoke(); });
+    public ICommand DevFillRowsCommand => new Command<string>(n => { if (int.TryParse(n, out int rows)) _game.DevFillRows(rows); Redraw?.Invoke(); });
+
     /// <summary>Dev: wins the current Story level now; the normal completion path (gold, story, rewards) then runs.</summary>
     private void DevSkipLevel()
     {
@@ -671,6 +678,7 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(BonusResultText));
         OnPropertyChanged(nameof(HasBonusResult));
         OnPropertyChanged(nameof(ShowDevTools));
+        OnPropertyChanged(nameof(ShowDevBoardTools));
         OnPropertyChanged(nameof(ClassicOverGoldText));
         OnPropertyChanged(nameof(HasClassicOverGold));
         OnPropertyChanged(nameof(ClassicSeedText));

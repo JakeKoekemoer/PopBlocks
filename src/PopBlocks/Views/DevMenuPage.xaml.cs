@@ -126,6 +126,13 @@ public partial class DevMenuPage : ContentPage
             ("5", () => _dev.SetFailures(5)),
             ("9", () => _dev.SetFailures(9)),
             ("10", () => _dev.SetFailures(10))));
+        seeds.Children.Add(Ui.Caption("LOSSES ON THE CURRENT LEVEL (5 SHOWS THE NOTE, 15 OFFERS EASING)"));
+        seeds.Children.Add(ButtonRow(
+            ("0", () => _dev.SetLosses(0)),
+            ("5", () => _dev.SetLosses(5)),
+            ("14", () => _dev.SetLosses(14)),
+            ("15", () => _dev.SetLosses(15)),
+            ("25", () => _dev.SetLosses(25))));
         seeds.Children.Add(Ui.Body("Rolling a level searches for a seed the bot can win inside the difficulty band. This times it here, on this phone: about 30 seconds.", 12));
         seeds.Children.Add(timeGate);
         seeds.Children.Add(timing);

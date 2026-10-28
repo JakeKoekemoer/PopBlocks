@@ -296,6 +296,16 @@ public sealed class StoryLevels
         Changed?.Invoke();
     }
 
+    /// <summary>Sets how many times the current level has been lost, for the "always a way through" note and easing (development tools).</summary>
+    public void DevSetLosses(int losses)
+    {
+        int level = _progress.NextLevel;
+        var map = new Dictionary<int, int>(SaveCode.ParseSeedList(_settings.GetString(SaveKeys.LevelLosses, "")));
+        if (losses <= 0) map.Remove(level); else map[level] = Math.Min(100_000, losses);
+        _settings.SetString(SaveKeys.LevelLosses, SaveCode.FormatSeedList(map));
+        Changed?.Invoke();
+    }
+
     /// <summary>Forgets every recorded seed, the current level's seed, rerolls and failures. For testing; the name is kept.</summary>
     public void DevReset()
     {

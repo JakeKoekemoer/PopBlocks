@@ -50,6 +50,17 @@ Each region has its own character (big groups, colour goals, tight moves, chains
 
 Goals: reach a score, pop N blocks, pop N blocks of one colour, make a chain of N, pop one group of N, leave N blocks or fewer ("clear the board" when N is 0), or make N separate chains. Several can be combined.
 
+**Version 1.1** adds, all of it optional and none of it needed to finish the Story:
+
+- **Cracked blocks (Fracture).** A block next to a burst cracks; a second crack breaks it for a reduced share of the gold. Cracks are part of the board, so the level solver plays them too (`Board` keeps a crack level per cell, `GameEngine` applies it after every wave, `LevelSolver` mirrors it).
+- **The Orb.** A 2x2 glass sphere that is never part of a group. Any pop that touches it breaks it, clearing its two rows and two columns for a bonus; if its timer runs out first it cracks the twelve blocks round it. On in Endless and wherever the player's own rules say Always (`RuleFeatures.OrbsInStory` is off, because the solver does not play Orbs).
+- **Tall boards.** Boards of 20 to 32 rows with a camera that follows the stack and a gauge for the rows out of sight (`BoardSpace`, `GameEngine.CameraBottom`). The default is still 16 rows.
+- **Pip's Insight.** A shop helper that outlines the best place for the piece in hand (`PlacementAdvisor`, run off the UI thread).
+- **Your own rules.** Settings, Game rules: fall speed, colour count, colour set, shapes, burst size, solid chance, board rows, cracks, Orbs and whether the rules apply in the Story (`GameRules`, `GameRulesStore`).
+- **Looks.** More block sets, boards, frames and Pip looks, the Story Book (the Archive's new name), petals or shards for bursts, level-end cards, rerolls, loss support, continues, floating pop gold, and sharing a result as text (no permission needed).
+
+Developer builds (Debug, or `DEVMENU`) add a Dev Menu and, on the pause card, buttons to spawn an Orb, crack every block, and fill the board to 12 or 20 rows. The Dev Menu can also set the losses on the current level and unlock every look. None of it exists in a Release build.
+
 Every generated level is **proven winnable**: a bot plays it first, and the move limit is set from the number of pieces the bot needed plus slack that shrinks as the tiers get harder (`LevelCatalog.cs`, `LevelSolver.cs`). The bot plays with **no upgrades and no helpers**, so the whole campaign can be finished without buying anything. The test suite replays the bot's plan through the real engine for every level.
 
 **The tutorial** is separate from the Story. It is ten hand-made, coached lessons (moving, rotating, dropping, speed, mixed colours, chains, moves, goals) with their own progress and no gold. A new player is asked once, on Story level 1, whether they want it; it can also be played any time from **More → TUTORIAL**. Lessons never move Story progress, play story scenes or count towards achievements and lifetime bests (`LevelCatalog.Lesson`, `GameSetup.Lesson`, `TutorialProgress`).

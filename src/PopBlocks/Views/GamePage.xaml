@@ -537,6 +537,17 @@
                         <Button Grid.Column="1" Text="DEV: +1,000 GOLD" Style="{StaticResource GhostButton}"
                                 TextColor="{StaticResource Danger}" Command="{Binding DevGoldCommand}" />
                     </Grid>
+                    <!-- Development builds only: the new board features, from the pause card -->
+                    <Grid IsVisible="{Binding ShowDevBoardTools}" ColumnDefinitions="*,*,*,*" ColumnSpacing="4">
+                        <Button Grid.Column="0" Text="ORB" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevSpawnOrbCommand}" />
+                        <Button Grid.Column="1" Text="CRACK" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevCrackAllCommand}" />
+                        <Button Grid.Column="2" Text="FILL 12" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevFillRowsCommand}" CommandParameter="12" />
+                        <Button Grid.Column="3" Text="FILL 20" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevFillRowsCommand}" CommandParameter="20" />
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
         </Grid>

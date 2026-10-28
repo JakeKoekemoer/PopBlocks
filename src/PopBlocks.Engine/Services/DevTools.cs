@@ -42,6 +42,9 @@ public sealed class DevTools
     /// <summary>Sets how many times the current level has been failed (a reroll is free from the tenth).</summary>
     public void SetFailures(int failures) => _levels?.DevSetFailures(failures);
 
+    /// <summary>Sets the current level's loss count (5 shows the "always a way through" note, 15 offers easing).</summary>
+    public void SetLosses(int losses) => _levels?.DevSetLosses(losses);
+
     /// <summary>
     /// Makes <paramref name="level"/> the next level to play (levels below it count as cleared). Story flags are
     /// reset first and then rebuilt for that point: regions already passed have their fragment, journal entry and
