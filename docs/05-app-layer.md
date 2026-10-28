@@ -63,8 +63,8 @@ The workbench. One panel class, used twice with a `Category`. **UPGRADES** build
 ### `WardrobePanel` (LOOKS)
 Chips for blocks, bursts, boards, frames and Pip's accessories. Each look is a card with a live preview (`SkinPreviewDrawable`, `BoardPreviewDrawable`), and one of: EQUIPPED / EQUIP (owned), BUY with the price (found, not owned), or a "Not found yet" hint. All state comes from `CosmeticShop`; looks apply at the start of the next level, never mid-level.
 
-### `ArchivePage`
-The story the player has unlocked (scenes, characters, fragments, memories, with locked entries shown as hints). It opens from the main menu only. After the ending, it is also where the final look can be changed.
+### `ArchivePage` (the Story Book)
+The page keeps its class name and files, but the player calls it the **Story Book** (menu button STORY BOOK, title "Story Book"). Since v1.1 it has four tabs in the workshop's style (remembered in `storybook_tab`): **STORY** (the overview, the journal and every scene seen), **MEMORIES** (memories by region, and after the ending the picker for how the world looks), **PEOPLE** (Pip, Mara, Bram and the Warden as they are met) and **WORLD** (the fragments and the restored world). A tab with nothing unlocked shows "Nothing here yet. Keep playing to fill this page." instead of locked placeholders. It opens from the main menu only.
 
 ### `TrophiesPanel`, `AchievementsPanel`, `JournalPanel` (TROPHIES)
 `TrophiesPanel` is a row of two chips over one of the other two. `AchievementsPanel` lists the achievements with their gold, what is still to earn first and then what is earned. `JournalPanel` shows the lifetime statistics. Neither spends gold.

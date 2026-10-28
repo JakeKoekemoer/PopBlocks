@@ -52,7 +52,7 @@ public static class AchievementCatalog
         new Achievement("restorer", "Restorer", "Restore your first region.", 50,
             f => f.RegionsRestored >= 1),
 
-        new Achievement("keeper_of_memories", "Keeper of Memories", $"Collect {ArchiveGoal} entries in the Archive.", 60,
+        new Achievement("keeper_of_memories", "Keeper of Memories", $"Collect {ArchiveGoal} entries in the Story Book.", 60,
             f => f.ArchiveEntries >= ArchiveGoal),
 
         new Achievement("spectrum_seeker", "Spectrum Seeker", "Find a memory in every region.", 150,

@@ -12,8 +12,8 @@
 | 8 Petals vs Shards | done | 3524659 |
 | 9a Block sets | done | 1254745 |
 | 9b Boards and frames | done | 9cb5fd4 |
-| 9c Pip looks | done | PENDING9C |
-| 10 Story Book | pending | |
+| 9c Pip looks | done | 461620f |
+| 10 Story Book | done | PENDING10 |
 | 11 Tall scrolling board | pending | |
 | 12 Pip's Insight | pending | |
 | 13 Fracture | pending | |

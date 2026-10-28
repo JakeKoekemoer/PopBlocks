@@ -693,7 +693,7 @@
                            FontSize="20"
                            FontAttributes="Bold"
                            TextColor="{StaticResource TextPrimary}" />
-                    <Label Text="This only changes how things are drawn. You can change it again any time in the Archive."
+                    <Label Text="This only changes how things are drawn. You can change it again any time in the Story Book."
                            Style="{StaticResource BodyLabel}"
                            FontSize="13" />
 

@@ -125,6 +125,7 @@ public static class SaveKeys
     public const string CosmeticMixPurple = "cosmetic_mix_purple";
     public const string CosmeticMixLime = "cosmetic_mix_lime";
     public const string CosmeticSeen = "cosmetic_seen";             // new looks the player has looked at (comma-separated ids)
+    public const string StoryBookTab = "storybook_tab";             // the tab the Story Book opens on
     public const string SettingsTab = "settings_tab";               // the tab the settings page opens on
     public const string ShowHanging = "show_hanging";               // the cue under blocks that hang over a gap
     public const string ColourAssist = "colour_assist";             // symbols on every block, whatever the skin
@@ -176,7 +177,7 @@ public static class SaveKeys
         LevelLosses, EasedLevels, ConsolationPaid,
         RuleFallSpeed, RuleColourCount, RuleColours, RuleShapes, RuleMinGroup, RuleSolidChance, RuleBoardRows, RuleFracture,
         RuleOrbs, RuleOrbTimer, RuleUseInStory, SettingsTab, ShowHanging, ColourAssist,
-        CosmeticMixCyan, CosmeticMixCoral, CosmeticMixYellow, CosmeticMixPurple, CosmeticMixLime, CosmeticSeen,
+        CosmeticMixCyan, CosmeticMixCoral, CosmeticMixYellow, CosmeticMixPurple, CosmeticMixLime, CosmeticSeen, StoryBookTab,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),

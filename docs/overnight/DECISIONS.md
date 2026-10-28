@@ -18,3 +18,4 @@ One line per judgement call made while executing PLAN.md.
 - P9a: cosmetic_seen is stored as an id list in the existing Unlocks text format and does not count towards the save-code summary of unlocks.
 - P9b: the static board layer is not rendered to an offscreen image (the gradient and the motifs are drawn each paint as before); the ambient movement is capped at 12 stateless particles at 15 steps a second instead. Revisit in Phase 16 if the draw budget is missed.
 - P9c: Pip is not drawn on the main menu or the map, so Party Pip's confetti is available through PipDrawable.Confetti but is only shown where Pip has an animation clock (the story stage); the wardrobe tile is a still picture.
+- P10: the Story Book keeps its class and file names (ArchivePage); every player-facing "Archive" (menu, page title, keeper_of_memories text, the repeat-memory line, the look-picker hint) now says "Story Book". An empty tab shows the one-line message instead of locked placeholders.

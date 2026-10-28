@@ -639,7 +639,7 @@ public sealed class GameViewModel : ObservableObject
             if (_foundLore.Any(l => l.Kind == LoreKind.Memory)) return string.Empty;   // already shown as a reward line
             var memory = StoryContent.FindLore(b.MemoryId);
             return memory is not null && _campaign.HasLore(memory)
-                ? "The memory on this level is already in your Archive."
+                ? "The memory on this level is already in your Story Book."
                 : $"Optional memory not found: {b.Describe()}.";
         }
     }

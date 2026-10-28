@@ -16,7 +16,7 @@ src/
     Graphics/           VisualDesign (palette, skins), CellRenderer, GameDrawable (board, neon pops, flip, boards, frames), BlastEffects (burst styles, flair), Pip and the story pictures
     ViewModels/         GameViewModel (observable state, commands, game timer, tutorial coaching)
     Views/              MainPage (menu), WorldMapPage (the Story map: each region with its levels), GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage (the four workshop tabs: ShopPanel for
-                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage, SettingsPage (settings, name, saved data), AboutPage,
+                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage (the Story Book), SettingsPage (settings, name, saved data), AboutPage,
                         DevMenuPage (development builds)
     Services/           LocalSettingsService (MAUI Preferences)
 tests/
