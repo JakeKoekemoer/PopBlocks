@@ -588,6 +588,7 @@ public partial class GamePage : ContentPage
         face.Accessory = pip ? _vm.PipAccessory : AccessoryStyle.None;
         face.Detail = pip ? _vm.PipDetail : 0;
         face.Mood = _vm.SceneMood;
+        face.MoodRequested = true;   // the scene decides the expression; Shy and Party Pip step aside
         ScenePipView.Invalidate();
         ScenePipRightView.Invalidate();
     }

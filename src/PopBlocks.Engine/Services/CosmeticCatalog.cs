@@ -31,7 +31,7 @@ public enum BoardMotif { None, Leaves, Crystals, Bubbles, Gears, Snowflakes, Bat
 
 public enum FrameStyle { None, Soft, Gold, Prism, Starlight, Ripple, Stone, Flame, Vine, Neon }
 
-public enum AccessoryStyle { None, Bow, Cap, Antenna, Lantern }
+public enum AccessoryStyle { None, Bow, Cap, Antenna, Lantern, Daisy, NerdGlasses, Sunglasses, Sporty, Shy, Party }
 
 /// <summary>
 /// How blocks look. Every skin keeps each colour's hue and its symbol (the symbols are drawn by the app and are never
@@ -291,6 +291,14 @@ public static class CosmeticCatalog
             Reward("pip_cap", "Thinking Cap", CosmeticSlot.Accessory, "A cap for careful planners.", Requirement.Achievement("careful_planner")),
             Reward("pip_antenna", "Spark Antenna", CosmeticSlot.Accessory, "An antenna that catches chains.", Requirement.Achievement("chain_master")),
             Reward("pip_lantern", "Memory Lantern", CosmeticSlot.Accessory, "A tiny lantern for keeping memories.", Requirement.Achievement("keeper_of_memories")),
+
+            // v1.1 looks for Pip: open from the first day, bought with gold.
+            Open("pip_daisy", "Daisy", CosmeticSlot.Accessory, "A white daisy tucked by Pip's head.", 150),
+            Open("pip_nerd", "Nerdy Glasses", CosmeticSlot.Accessory, "Big round glasses, taped at the bridge.", 180),
+            Open("pip_shades", "Sunglasses", CosmeticSlot.Accessory, "Wide dark lenses and thin gold arms.", 200),
+            Open("pip_sporty", "Sporty Pip", CosmeticSlot.Accessory, "A sweatband, a whistle and a bit of speed.", 220),
+            Open("pip_shy", "Shy Pip", CosmeticSlot.Accessory, "Blushing, glancing away, peeking back now and then.", 220),
+            Open("pip_party", "Party Pip", CosmeticSlot.Accessory, "A striped party hat, a horn and a little confetti.", 260),
         };
         return list;
     }
@@ -336,6 +344,12 @@ public static class CosmeticCatalog
         "pip_cap" => AccessoryStyle.Cap,
         "pip_antenna" => AccessoryStyle.Antenna,
         "pip_lantern" => AccessoryStyle.Lantern,
+        "pip_daisy" => AccessoryStyle.Daisy,
+        "pip_nerd" => AccessoryStyle.NerdGlasses,
+        "pip_shades" => AccessoryStyle.Sunglasses,
+        "pip_sporty" => AccessoryStyle.Sporty,
+        "pip_shy" => AccessoryStyle.Shy,
+        "pip_party" => AccessoryStyle.Party,
         _ => AccessoryStyle.None,
     };
 
@@ -348,6 +362,7 @@ public static class CosmeticCatalog
         "skin_solid", "skin_starfield", "skin_tidepool", "skin_granite", "skin_ember", "skin_blossom", PatchworkSkin,
         "board_nightsky", "board_nebula", "board_tidepool", "board_canyon", "board_forge", "board_blossom", "board_quilt",
         "frame_starlight", "frame_ripple", "frame_stone", "frame_flame", "frame_vine", "frame_neon",
+        "pip_daisy", "pip_nerd", "pip_shades", "pip_sporty", "pip_shy", "pip_party",
     };
 
     public static bool IsNew(Cosmetic c) => NewIds.Contains(c.Id);

@@ -220,6 +220,43 @@ public class LookTests
         Assert.Contains(CosmeticLoadout.Themes, t => t.Id == "board_nightsky");
     }
 
+    // ------------------------------------------------------------------ Pip looks (9c)
+
+    [Fact]
+    public void The_new_Pip_looks_are_sold_from_the_first_day_at_the_planned_prices()
+    {
+        var looks = new Dictionary<string, (int Price, AccessoryStyle Style)>
+        {
+            ["pip_daisy"] = (150, AccessoryStyle.Daisy),
+            ["pip_nerd"] = (180, AccessoryStyle.NerdGlasses),
+            ["pip_shades"] = (200, AccessoryStyle.Sunglasses),
+            ["pip_sporty"] = (220, AccessoryStyle.Sporty),
+            ["pip_shy"] = (220, AccessoryStyle.Shy),
+            ["pip_party"] = (260, AccessoryStyle.Party),
+        };
+        var (l, shop, progress, _, _) = Make(gold: 5_000);
+        foreach (var (id, want) in looks)
+        {
+            var c = CosmeticCatalog.Find(id)!;
+            Assert.Equal(CosmeticSlot.Accessory, c.Slot);
+            Assert.Equal(want.Price, c.Price);
+            Assert.Equal(RequirementKind.None, c.Discover.Kind);
+            Assert.Equal(want.Style, CosmeticCatalog.AccessoryOf(id));
+            Assert.True(CosmeticCatalog.IsNew(c));
+            Assert.True(shop.TryBuy(id), id);
+            Assert.True(shop.Equip(id), id);
+            Assert.Equal(want.Style, l.Accessory);
+        }
+        Assert.Equal(5_000 - looks.Values.Sum(v => v.Price), progress.Gold);
+    }
+
+    [Fact]
+    public void The_earned_Pip_things_are_still_never_sold()
+    {
+        foreach (var c in CosmeticCatalog.In(CosmeticSlot.Accessory).Where(c => !CosmeticCatalog.IsNew(c)))
+            Assert.Equal(0, c.Price);
+    }
+
     [Fact]
     public void Resetting_the_wardrobe_clears_the_mix_too()
     {

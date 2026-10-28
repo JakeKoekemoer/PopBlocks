@@ -5,7 +5,7 @@ using Region = PopBlocks.Engine.Story.Region;
 
 namespace PopBlocks.Graphics;
 
-public enum PipMood { Calm, Happy, Worried, Curious, Excited, Sad }
+public enum PipMood { Calm, Happy, Worried, Curious, Excited, Sad, Shy, Party }
 
 /// <summary>The colour each speaker of a story panel is drawn in. Pip keeps the default (null).</summary>
 public static class PortraitTints
@@ -38,8 +38,22 @@ public sealed class PipDrawable : IDrawable
     /// </summary>
     public Color? Tint { get; set; }
 
-    /// <summary>Something Pip wears (a cosmetic from the workshop). Drawn over the body; it never changes Pip's mood or face.</summary>
+    /// <summary>Something Pip wears (a cosmetic from the workshop). Drawn over the body. Most never touch Pip's face; Shy and Party Pip set a mood of their own (see <see cref="MoodRequested"/>).</summary>
     public AccessoryStyle Accessory { get; set; } = AccessoryStyle.None;
+
+    /// <summary>
+    /// A story scene asked for this expression (<see cref="Mood"/>). A scene's expression always wins; without one, Shy Pip
+    /// is shy and Party Pip is partying.
+    /// </summary>
+    public bool MoodRequested { get; set; }
+
+    /// <summary>Drift a few specks of confetti round Pip (Party Pip, on pages that are not in the middle of a story scene).</summary>
+    public bool Confetti { get; set; }
+
+    private PipMood EffectiveMood => MoodRequested ? Mood
+        : Accessory == AccessoryStyle.Shy ? PipMood.Shy
+        : Accessory == AccessoryStyle.Party ? PipMood.Party
+        : Mood;
 
     /// <summary>Regions restored, 0 to 8: each adds one small light in orbit, so Pip looks more detailed as the world returns.</summary>
     public int Detail { get; set; }
@@ -65,6 +79,10 @@ public sealed class PipDrawable : IDrawable
         if (d < 8f) return;
 
         bool live = Time >= 0f;
+        var mood = EffectiveMood;
+        // Shy Pip glances away and down, and peeks up now and then (every six seconds); a still picture stays shy.
+        bool shy = mood == PipMood.Shy;
+        bool peek = shy && live && Time % 6f < 0.6f;
         float cx = dirtyRect.X + dirtyRect.Width / 2f;
         float cy = dirtyRect.Y + dirtyRect.Height / 2f;
         float b = Math.Clamp(Brightness, 0f, 1f);
@@ -107,9 +125,10 @@ public sealed class PipDrawable : IDrawable
         // Eyes: large, with a blink every few seconds and a catch-light so they read as alive.
         var ink = Color.FromArgb("#1B2547");
         float eyeDx = body * 0.38f;
-        float eyeR = body * (Mood == PipMood.Excited ? 0.17f : 0.14f);
-        float eyeY = cy - body * 0.12f + (Mood == PipMood.Sad ? body * 0.05f : 0f) - (LookUp ? body * 0.10f : 0f);
-        float ox = Math.Clamp(Look, -1f, 1f) * body * 0.10f;
+        float eyeR = body * (mood is PipMood.Excited or PipMood.Party ? 0.17f : 0.14f);
+        float eyeY = cy - body * 0.12f + (mood == PipMood.Sad ? body * 0.05f : 0f) - (LookUp ? body * 0.10f : 0f)
+            + (shy && !peek ? body * 0.07f : 0f);
+        float ox = Math.Clamp(Look, -1f, 1f) * body * 0.10f + (shy && !peek ? -body * 0.10f : 0f);
 
         float open = 1f;
         if (live)
@@ -137,8 +156,18 @@ public sealed class PipDrawable : IDrawable
         float mw = body * 0.30f;
         var mouth = new PathF();
         bool strokeMouth = true;   // Curious and Excited draw their mouth another way
-        switch (Mood)
+        switch (mood)
         {
+            case PipMood.Shy:
+                // A small wavy mouth.
+                mouth.MoveTo(cx - mw * 0.7f, my);
+                mouth.QuadTo(cx - mw * 0.35f, my - body * 0.10f, cx, my);
+                mouth.QuadTo(cx + mw * 0.35f, my + body * 0.10f, cx + mw * 0.7f, my);
+                break;
+            case PipMood.Party:
+                mouth.MoveTo(cx - mw, my - body * 0.04f);
+                mouth.QuadTo(cx, my + body * 0.30f, cx + mw, my - body * 0.04f);
+                break;
             case PipMood.Happy:
                 mouth.MoveTo(cx - mw, my - body * 0.04f);
                 mouth.QuadTo(cx, my + body * 0.26f, cx + mw, my - body * 0.04f);
@@ -244,8 +273,143 @@ public sealed class PipDrawable : IDrawable
         var ink = Color.FromArgb("#1B2547");
         canvas.StrokeLineCap = LineCap.Round;
 
+        float eyeDx = body * 0.38f, eyeY = cy - body * 0.12f;
         switch (Accessory)
         {
+            case AccessoryStyle.Daisy:
+            {
+                // A white eight-petal daisy to the right of the head, tilted 15 degrees, with a yellow heart.
+                float fx = cx + body * 0.66f, fy = cy - body * 0.70f, r = body * 0.30f;
+                canvas.SaveState();
+                canvas.Translate(fx, fy);
+                canvas.Rotate(15f);
+                canvas.FillColor = Colors.White;
+                for (int k = 0; k < 8; k++)
+                {
+                    float a = k * MathF.PI / 4f;
+                    canvas.FillEllipse(MathF.Cos(a) * r * 0.62f - r * 0.24f, MathF.Sin(a) * r * 0.62f - r * 0.24f, r * 0.48f, r * 0.48f);
+                }
+                canvas.FillColor = Color.FromArgb("#FFC93C");
+                canvas.FillEllipse(-r * 0.30f, -r * 0.30f, r * 0.60f, r * 0.60f);
+                canvas.RestoreState();
+                break;
+            }
+
+            case AccessoryStyle.NerdGlasses:
+            {
+                // Round dark frames round both eyes, a strip of white tape on the bridge and a faint glint on each lens.
+                float fr = body * 0.27f;
+                canvas.StrokeColor = Color.FromArgb("#1B1B1F");
+                canvas.StrokeSize = 2.5f;
+                canvas.DrawEllipse(cx - eyeDx - fr, eyeY - fr, fr * 2f, fr * 2f);
+                canvas.DrawEllipse(cx + eyeDx - fr, eyeY - fr, fr * 2f, fr * 2f);
+                canvas.DrawLine(cx - eyeDx + fr, eyeY, cx + eyeDx - fr, eyeY);
+                canvas.FillColor = Colors.White;
+                canvas.FillRectangle(cx - body * 0.07f, eyeY - body * 0.05f, body * 0.14f, body * 0.10f);
+                canvas.FillColor = Colors.White.WithAlpha(0.18f);
+                canvas.FillEllipse(cx - eyeDx - fr * 0.7f, eyeY - fr * 0.75f, fr * 0.7f, fr * 0.45f);
+                canvas.FillEllipse(cx + eyeDx - fr * 0.7f, eyeY - fr * 0.75f, fr * 0.7f, fr * 0.45f);
+                break;
+            }
+
+            case AccessoryStyle.Sunglasses:
+            {
+                // Wide dark lenses with a diagonal shine, joined at the bridge, with thin gold arms going back.
+                float lw = body * 0.52f, lh = body * 0.34f;
+                canvas.StrokeColor = Color.FromArgb("#E6B84A");
+                canvas.StrokeSize = MathF.Max(1.2f, body * 0.05f);
+                canvas.DrawLine(cx - eyeDx - lw / 2f, eyeY, cx - body * 0.98f, eyeY - body * 0.04f);
+                canvas.DrawLine(cx + eyeDx + lw / 2f, eyeY, cx + body * 0.98f, eyeY - body * 0.04f);
+                canvas.DrawLine(cx - eyeDx + lw / 2f, eyeY - lh * 0.1f, cx + eyeDx - lw / 2f, eyeY - lh * 0.1f);
+                canvas.FillColor = Color.FromArgb("#14161C");
+                canvas.FillRoundedRectangle(cx - eyeDx - lw / 2f, eyeY - lh / 2f, lw, lh, lh * 0.45f);
+                canvas.FillRoundedRectangle(cx + eyeDx - lw / 2f, eyeY - lh / 2f, lw, lh, lh * 0.45f);
+                canvas.StrokeColor = Colors.White.WithAlpha(0.35f);
+                canvas.StrokeSize = MathF.Max(1.2f, body * 0.04f);
+                canvas.DrawLine(cx - eyeDx - lw * 0.25f, eyeY + lh * 0.30f, cx - eyeDx + lw * 0.05f, eyeY - lh * 0.30f);
+                canvas.DrawLine(cx + eyeDx - lw * 0.25f, eyeY + lh * 0.30f, cx + eyeDx + lw * 0.05f, eyeY - lh * 0.30f);
+                break;
+            }
+
+            case AccessoryStyle.Sporty:
+            {
+                // A red sweatband with a white stripe, a whistle on a cord and a swoosh by the cheek.
+                float by = cy - body * 0.62f;
+                canvas.FillColor = Color.FromArgb("#E8434F");
+                canvas.FillRoundedRectangle(cx - body * 0.88f, by - body * 0.11f, body * 1.76f, body * 0.22f, body * 0.08f);
+                canvas.FillColor = Colors.White;
+                canvas.FillRectangle(cx - body * 0.84f, by - body * 0.02f, body * 1.68f, body * 0.04f);
+                canvas.StrokeColor = ink;
+                canvas.StrokeSize = MathF.Max(1.2f, body * 0.04f);
+                canvas.DrawLine(cx - body * 0.30f, cy + body * 0.86f, cx + body * 0.05f, cy + body * 1.10f);
+                canvas.FillColor = Color.FromArgb("#9CA3AF");
+                canvas.FillRoundedRectangle(cx - body * 0.02f, cy + body * 1.04f, body * 0.34f, body * 0.18f, body * 0.07f);
+                canvas.StrokeColor = Colors.White.WithAlpha(0.55f);
+                canvas.StrokeSize = MathF.Max(1.2f, body * 0.05f);
+                canvas.DrawLine(cx - body * 1.35f, cy + body * 0.05f, cx - body * 1.0f, cy + body * 0.05f);
+                canvas.DrawLine(cx - body * 1.45f, cy + body * 0.22f, cx - body * 1.05f, cy + body * 0.22f);
+                canvas.DrawLine(cx - body * 1.30f, cy + body * 0.39f, cx - body * 1.0f, cy + body * 0.39f);
+                break;
+            }
+
+            case AccessoryStyle.Shy:
+            {
+                // Pink blush on both cheeks and a small hand at one cheek.
+                canvas.FillColor = Color.FromArgb("#FF9EB5").WithAlpha(0.7f);
+                canvas.FillEllipse(cx - eyeDx - body * 0.26f, cy + body * 0.14f, body * 0.34f, body * 0.20f);
+                canvas.FillEllipse(cx + eyeDx - body * 0.08f, cy + body * 0.14f, body * 0.34f, body * 0.20f);
+                canvas.FillColor = Blend(Color.FromArgb("#9FB4C6"), Color.FromArgb("#E9FBFF"), 0.8f);
+                canvas.FillEllipse(cx + body * 0.44f, cy + body * 0.30f, body * 0.34f, body * 0.30f);
+                canvas.StrokeColor = Colors.White.WithAlpha(0.4f);
+                canvas.StrokeSize = MathF.Max(1f, body * 0.03f);
+                canvas.DrawEllipse(cx + body * 0.44f, cy + body * 0.30f, body * 0.34f, body * 0.30f);
+                break;
+            }
+
+            case AccessoryStyle.Party:
+            {
+                // A striped cone hat with a pom-pom, a party horn, and (where asked for) a few specks of confetti.
+                float hx = cx, hy = cy - body * 0.92f, hw = body * 0.72f, hh = body * 1.0f;
+                for (int k = 0; k < 4; k++)
+                {
+                    float y0 = hy - hh * k / 4f, y1 = hy - hh * (k + 1) / 4f;
+                    float w0 = hw * (1f - k / 4f), w1 = hw * (1f - (k + 1) / 4f);
+                    var band = new PathF();
+                    band.MoveTo(hx - w0, y0);
+                    band.LineTo(hx + w0, y0);
+                    band.LineTo(hx + w1, y1);
+                    band.LineTo(hx - w1, y1);
+                    band.Close();
+                    canvas.FillColor = k % 2 == 0 ? Color.FromArgb("#FF5C7A") : Color.FromArgb("#FFD54A");
+                    canvas.FillPath(band);
+                }
+                canvas.FillColor = Color.FromArgb("#7CF5C8");
+                canvas.FillEllipse(hx - body * 0.11f, hy - hh - body * 0.11f, body * 0.22f, body * 0.22f);
+                var horn = new PathF();
+                horn.MoveTo(cx + body * 0.18f, cy + body * 0.40f);
+                horn.LineTo(cx + body * 0.78f, cy + body * 0.18f);
+                horn.LineTo(cx + body * 0.74f, cy + body * 0.54f);
+                horn.Close();
+                canvas.FillColor = Color.FromArgb("#FFD54A");
+                canvas.FillPath(horn);
+                canvas.StrokeColor = Color.FromArgb("#FF5C7A");
+                canvas.StrokeSize = MathF.Max(1.2f, body * 0.05f);
+                canvas.DrawLine(cx + body * 0.50f, cy + body * 0.30f, cx + body * 0.51f, cy + body * 0.47f);
+                if (Confetti && Time >= 0f)
+                {
+                    var colours = new[] { "#FF5C7A", "#FFD54A", "#7CF5C8", "#8CA2FF", "#FFB35C", "#E9A2FF" };
+                    for (int k = 0; k < 6; k++)
+                    {
+                        float fall = ((Time * 0.25f + k / 6f) % 1f);
+                        float px = cx + (k - 2.5f) * body * 0.5f + MathF.Sin(Time * 1.6f + k) * body * 0.1f;
+                        float py = cy - body * 1.4f + fall * body * 3.2f;
+                        canvas.FillColor = Color.FromArgb(colours[k]);
+                        canvas.FillRectangle(px - body * 0.04f, py - body * 0.07f, body * 0.08f, body * 0.14f);
+                    }
+                }
+                break;
+            }
+
             case AccessoryStyle.Bow:
             {
                 // A bow at the upper right: two wings and a knot.

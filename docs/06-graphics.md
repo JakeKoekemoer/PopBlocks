@@ -69,6 +69,10 @@ The board does not repaint on a fixed schedule. `GamePage` repaints when the vie
 
 `GameDrawable.Clock` is a replaceable `Func<long>` (default: `Environment.TickCount64`). Replace it to render a specific animation moment deterministically.
 
+### Pip looks added in v1.1
+
+Six looks for Pip are sold from the first day (Daisy 150, Nerdy Glasses 180, Sunglasses 200, Sporty Pip 220, Shy Pip 220, Party Pip 260), drawn by `PipDrawable.DrawAccessory` at the same anchors as the earned ones. Shy and Party Pip also set a mood of their own: `PipMood.Shy` (eyes down and to the side, a small wavy mouth, and a peek up every six seconds while a clock runs) and `PipMood.Party`. The rule is `PipDrawable.EffectiveMood`: a story scene's expression (`MoodRequested`, set by `GamePage.ApplySpeaker`) always wins, otherwise the look's mood applies. Party Pip's drifting confetti is switched on with `PipDrawable.Confetti` and shows only where Pip has a running clock (the story stage); Pip has no picture on the menu or the map.
+
 ### Boards and frames added in v1.1
 
 Seven boards (Night Sky 300, Nebula Drift 400, Tide Pool 300, Canyon Strata 300, Ember Forge 400, Blossom Grove 350, Patchwork Quilt 500) and six frames (Starlight 220, Ripple 220, Stone Edge 200, Flame Edge 260, Vine 240, Neon Pulse 300) are sold from the first day. A board's still picture is `GameDrawable.DrawMotifs` (clouds, ripple lines, rock layers and quilt squares are whole-panel pictures; stars, embers and petals are scattered shapes). Five of them also move, through `BoardAmbient` (at most twelve things, placed by a function of the time rounded to 15 steps a second, so nothing is stored or allocated): the page runs a repaint timer for this only while a game is being played, and stops it when the game is paused, after ten seconds with no input, and under Reduced motion (`GamePage.UpdateAmbient`; any input wakes it). The animated frames (Starlight orbiting sparkles, Ripple wobble, Flame flicker, Neon pulse at 0.8 Hz) repaint only while a piece is falling and are still pictures under Reduced motion. The Neon glow is a wide soft line under the sharp one rather than a blurred image.
