@@ -1,3 +1,4 @@
+using PopBlocks.Engine.Audio;
 using PopBlocks.Engine.Services;
 using PopBlocks.Engine.Story;
 
@@ -13,11 +14,16 @@ public partial class SettingsPage : ContentPage
     private readonly CosmeticLoadout _loadout;
     private readonly PlayerIdentity _identity;
     private readonly PersistentSettings _save;
+    private readonly AudioSettings _audio;
+    private readonly GameAudio _gameAudio;
     private bool _loadingSettings;
 
-    public SettingsPage(GameSettings settings, CosmeticLoadout loadout, PlayerIdentity identity, PersistentSettings save)
+    public SettingsPage(GameSettings settings, CosmeticLoadout loadout, PlayerIdentity identity, PersistentSettings save,
+        AudioSettings audio, GameAudio gameAudio)
     {
         InitializeComponent();
+        _audio = audio;
+        _gameAudio = gameAudio;
         _settings = settings;
         _loadout = loadout;
         _identity = identity;
@@ -32,7 +38,8 @@ public partial class SettingsPage : ContentPage
         _loadingSettings = true;
         EffectsSwitch.IsToggled = _settings.BlastEffects;
         MotionSwitch.IsToggled = _settings.ReducedMotion;
-        SoundSwitch.IsToggled = _settings.SoundEffects;
+        SoundSwitch.IsToggled = !_audio.SfxMuted;
+        ShowAudioSettings();
         _loadingSettings = false;
 
         ShowGuideStyle();
@@ -100,8 +107,87 @@ public partial class SettingsPage : ContentPage
 
     private void OnSoundToggled(object? sender, ToggledEventArgs e)
     {
-        if (!_loadingSettings) _settings.SoundEffects = e.Value;
+        if (_loadingSettings) return;
+        _audio.SfxMuted = !e.Value;   // the same "Sound effects" choice the game has always had
+        if (e.Value) _gameAudio.Ui(UiSound.SettingsChange);
     }
+
+    // ------------------------------------------------------------------ music and sound
+
+    private static string Percent(int value) => value + "%";
+
+    /// <summary>Shows the saved audio choices (the caller holds <c>_loadingSettings</c> so none of this is written back).</summary>
+    private void ShowAudioSettings()
+    {
+        MasterSwitch.IsToggled = !_audio.MasterMuted;
+        MusicSwitch.IsToggled = !_audio.MusicMuted;
+        AmbienceSwitch.IsToggled = !_audio.AmbienceMuted;
+        ReducedAudioSwitch.IsToggled = _audio.ReducedAudio;
+
+        MasterSlider.Value = _audio.MasterPercent;
+        MusicSlider.Value = _audio.MusicPercent;
+        SfxSlider.Value = _audio.SfxPercent;
+        AmbienceSlider.Value = _audio.AmbiencePercent;
+        MasterValue.Text = Percent(_audio.MasterPercent);
+        MusicValue.Text = Percent(_audio.MusicPercent);
+        SfxValue.Text = Percent(_audio.SfxPercent);
+        AmbienceValue.Text = Percent(_audio.AmbiencePercent);
+    }
+
+    private void OnMasterToggled(object? sender, ToggledEventArgs e)
+    {
+        if (_loadingSettings) return;
+        _audio.MasterMuted = !e.Value;
+        if (e.Value) _gameAudio.Ui(UiSound.SettingsChange);
+    }
+
+    private void OnMusicToggled(object? sender, ToggledEventArgs e)
+    {
+        if (!_loadingSettings) _audio.MusicMuted = !e.Value;
+    }
+
+    private void OnAmbienceToggled(object? sender, ToggledEventArgs e)
+    {
+        if (!_loadingSettings) _audio.AmbienceMuted = !e.Value;
+    }
+
+    private void OnReducedAudioToggled(object? sender, ToggledEventArgs e)
+    {
+        if (_loadingSettings) return;
+        _audio.ReducedAudio = e.Value;
+        _gameAudio.Ui(UiSound.SettingsChange);
+    }
+
+    private void OnMasterChanged(object? sender, ValueChangedEventArgs e)
+    {
+        int v = (int)Math.Round(e.NewValue);
+        MasterValue.Text = Percent(v);
+        if (!_loadingSettings) _audio.MasterPercent = v;
+    }
+
+    private void OnMusicChanged(object? sender, ValueChangedEventArgs e)
+    {
+        int v = (int)Math.Round(e.NewValue);
+        MusicValue.Text = Percent(v);
+        if (!_loadingSettings) _audio.MusicPercent = v;
+    }
+
+    private void OnSfxChanged(object? sender, ValueChangedEventArgs e)
+    {
+        int v = (int)Math.Round(e.NewValue);
+        SfxValue.Text = Percent(v);
+        if (!_loadingSettings) _audio.SfxPercent = v;
+    }
+
+    private void OnAmbienceChanged(object? sender, ValueChangedEventArgs e)
+    {
+        int v = (int)Math.Round(e.NewValue);
+        AmbienceValue.Text = Percent(v);
+        if (!_loadingSettings) _audio.AmbiencePercent = v;
+    }
+
+    /// <summary>Lets go of the master or effects slider: one short sound at the new level, so the player can judge it.</summary>
+    private void OnVolumeDragCompleted(object? sender, EventArgs e) => _gameAudio.Ui(UiSound.SettingsChange);
 
     // ------------------------------------------------------------------ name
 

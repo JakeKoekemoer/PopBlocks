@@ -41,5 +41,28 @@ public class MainActivity : MauiAppCompatActivity
         {
             Diagnostics.Error("MainActivity.OnPause: save file flush", e);
         }
+
+        // Stop the music while the app is out of sight, and give up audio focus so other apps can have the speaker.
+        try
+        {
+            Microsoft.Maui.IPlatformApplication.Current?.Services.GetService<PopBlocks.Engine.Audio.GameAudio>()?.OnSleep();
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("MainActivity.OnPause: audio sleep", e);
+        }
+    }
+
+    protected override void OnResume()
+    {
+        base.OnResume();
+        try
+        {
+            Microsoft.Maui.IPlatformApplication.Current?.Services.GetService<PopBlocks.Engine.Audio.GameAudio>()?.OnResume();
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("MainActivity.OnResume: audio resume", e);
+        }
     }
 }

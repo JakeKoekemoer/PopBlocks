@@ -51,6 +51,19 @@ public static class MauiProgram
         builder.Services.AddSingleton<ISoundPlayer, NullSoundPlayer>();
 #endif
 
+        // Music and sound. AudioSettings is the player's volumes and mutes; GameAudio is the one object the rest of the app talks to.
+        // The old SoundPool player above is only a fallback now, used if the new audio output cannot start.
+        builder.Services.AddSingleton<AudioSettings>(sp => new AudioSettings(
+            sp.GetRequiredService<ILocalSettings>(), sp.GetRequiredService<GameSettings>()));
+#if ANDROID
+        builder.Services.AddSingleton<IAudioOutput, AndroidAudioOutput>();
+#else
+        builder.Services.AddSingleton<IAudioOutput, NullAudioOutput>();
+#endif
+        builder.Services.AddSingleton<GameAudio>(sp => new GameAudio(
+            sp.GetRequiredService<AudioSettings>(), sp.GetRequiredService<IAudioOutput>(),
+            new LazySoundPlayer(() => sp.GetRequiredService<ISoundPlayer>())));
+
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddTransient<GamePage>();
         builder.Services.AddTransient<GameViewModel>();
@@ -81,6 +94,19 @@ public static class MauiProgram
 
         // Bring the save file up to date shortly after start-up (this also creates it for players who had none).
         persistent.RequestSave();
+
+        // Start the music engine. If the device cannot give us an audio output the game simply stays quiet (or falls back to the
+        // old effects player); it never stops the app from starting.
+        try
+        {
+            var audio = app.Services.GetRequiredService<GameAudio>();
+            audio.Failed += (where, e) => Diagnostics.Error("Audio: " + where, e);
+            audio.Start();
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("MauiProgram: audio start", e);
+        }
         return app;
     }
 }

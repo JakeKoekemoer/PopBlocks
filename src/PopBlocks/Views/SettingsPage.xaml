@@ -76,7 +76,7 @@
                             <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
                                 <VerticalStackLayout VerticalOptions="Center">
                                     <Label Text="Sound effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                                    <Label Text="Beeps for turning, placing, dropping and popping" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                    <Label Text="Sounds for turning, placing, dropping and popping" FontSize="12" TextColor="{StaticResource TextSecondary}" />
                                 </VerticalStackLayout>
                                 <Switch x:Name="SoundSwitch"
                                         Grid.Column="1"
@@ -98,6 +98,109 @@
                                         FontSize="13"
                                         Clicked="OnBoardStyleClicked" />
                             </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Music and sound: nothing here leaves the phone, and the game plays the same with all of it off -->
+                    <Border Style="{StaticResource Glass}" Padding="18,12">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="MUSIC AND SOUND" Style="{StaticResource CaptionLabel}" Margin="0,0,0,2" />
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="All sound" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="The master switch. Off is silent at once." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="MasterSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnMasterToggled" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Master volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="MasterValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="MasterSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnMasterChanged"
+                                        DragCompleted="OnVolumeDragCompleted"
+                                        SemanticProperties.Description="Master volume" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Music" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="The soundtrack that follows the world you are in" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="MusicSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnMusicToggled" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Music volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="MusicValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="MusicSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnMusicChanged"
+                                        SemanticProperties.Description="Music volume" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Effects volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="SfxValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="SfxSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnSfxChanged"
+                                        DragCompleted="OnVolumeDragCompleted"
+                                        SemanticProperties.Description="Sound effects volume" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Ambience" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Soft background sound for each region" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="AmbienceSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnAmbienceToggled" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Ambience volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="AmbienceValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="AmbienceSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnAmbienceChanged"
+                                        SemanticProperties.Description="Ambience volume" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Reduced audio" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Quieter, simpler sound: fewer layers, softer effects, no ambience" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="ReducedAudioSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnReducedAudioToggled" />
+                            </Grid>
+                            <Label Text="Sound effects can be turned off on their own with the switch above. When something else is playing sound on the phone, or a call comes in, PopBlocks gives way and carries on afterwards."
+                                   Style="{StaticResource BodyLabel}" FontSize="12" />
                         </VerticalStackLayout>
                     </Border>
 

@@ -43,6 +43,19 @@ public static class SaveKeys
     /// <summary>Calms animation: no screen shake, flashes or confetti. Off by default.</summary>
     public const string ReducedMotion = "reduced_motion";
 
+    // ---- Audio (AudioSettings). Sound-effects on/off is the existing SoundEffects key above ----
+    /// <summary>Volumes are whole numbers from 0 to 100.</summary>
+    public const string AudioMaster = "audio_master";
+    public const string AudioMusic = "audio_music";
+    public const string AudioSfx = "audio_sfx";
+    public const string AudioAmbience = "audio_ambience";
+    public const string AudioMuteMaster = "audio_mute_master";
+    public const string AudioMuteMusic = "audio_mute_music";
+    public const string AudioMuteAmbience = "audio_mute_ambience";
+
+    /// <summary>A calmer mix: no ambience, fewer music layers, no chain flourishes, softer effects. Off by default.</summary>
+    public const string AudioReduced = "audio_reduced";
+
     // ---- Story (UnlockStore, CosmeticLoadout) ----
     /// <summary>Comma-separated ids: scenes seen, fragments, lore, achievements, cosmetics owned.</summary>
     public const string Unlocks = "unlocks_v1";
@@ -114,7 +127,9 @@ public static class SaveKeys
     public static IReadOnlyList<string> All { get; } = new[]
     {
         SaveVersion, ProgressHighest, Gold, UpgradePreview, UpgradePopFlair, UpgradeExtraMoves, UpgradeColourLens, UpgradeChainSense, UpgradePrismReserve, ConsumableSecondChance, ConsumablePrismShift, BestScore,
-        BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects, Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
+        BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects,
+        AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced,
+        Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
         PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,

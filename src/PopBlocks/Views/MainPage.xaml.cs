@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using PopBlocks.Engine;
+using PopBlocks.Engine.Audio;
 using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
 using PopBlocks.Engine.Story;
@@ -40,6 +41,7 @@ public partial class MainPage : ContentPage
         base.OnAppearing();
         Diagnostics.Crumb("MainPage.OnAppearing");
 
+        _services.GetService<GameAudio>()?.ShowMenu();   // the quiet theme (also when coming back from a game)
         ShowMenu();
         Refresh();
 

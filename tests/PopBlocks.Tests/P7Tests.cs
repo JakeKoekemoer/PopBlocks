@@ -25,6 +25,8 @@ public class P7Tests
         // Seeded levels, rerolls and Classic gold.
         "player_name", "player_salt", "current_level_for", "current_level_seed", "current_level_rerolls", "current_level_failures",
         "first_clear_seeds", "classic_gold_carry",
+        // Audio settings (the soundtrack update). Sound effects on/off stays the older "sound_effects" key.
+        "audio_master", "audio_music", "audio_sfx", "audio_ambience", "audio_mute_master", "audio_mute_music", "audio_mute_ambience", "audio_reduced",
     };
 
     [Fact]

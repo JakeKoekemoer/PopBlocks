@@ -73,9 +73,9 @@ The story the player has unlocked (scenes, characters, fragments, memories, with
 Testing shortcuts from `DevTools`. Shown only when `DevMenu.Enabled` is true (Debug builds, or any build made with `-p:DevMenu=true`). In a normal Release build its button and shortcuts never show.
 
 ### `SettingsPage`
-Opened by SETTINGS on the full menu. Three cards:
+Opened by SETTINGS on the full menu. Four cards:
 
-- **Game**: pop effects, landing guide (off, outline, bold), reduced motion, sound effects, and board style (only once a style has been earned). All of them write straight to `GameSettings` / `CosmeticLoadout`.
+- **Game**: pop effects, landing guide (off, outline, bold), reduced motion, sound effects (the same switch as before; it now mutes the new effects), and board style (only once a style has been earned). All of them write straight to `GameSettings` / `CosmeticLoadout`.
 - **Your name**: shows and renames the in-game name (renaming never changes a level).
 - **Save data**: the state of the save file in words (`PersistentSettings.Status`), BACK UP NOW (writes now, and turns the file back on after it was deleted), FIND MY SAVE FILE (system file picker), the save code controls (COPY MY SAVE CODE, a box with PASTE and RESTORE), and DELETE SAVE DATA. Delete offers two choices, each with its own confirmation: the save file only (progress stays in the game but no longer survives an uninstall), or the file plus all progress. Restoring and erasing both end with a banner telling the player to close and reopen the game, and the page switches itself off, because `PersistentSettings` is then frozen.
 
@@ -91,7 +91,7 @@ Code-behind responsibilities (and only these): wire gestures and buttons, host t
 
 ## 5.4 `GameViewModel`
 
-The single class that drives the engine. Constructed with `(HighScoreService, PlayerProgress, ShopService, GameSettings, ISoundPlayer)`; it creates its own `GameEngine`. It also turns engine events into sound: `Rotated` plays the rotate tick, `PieceLocked` plays the place thud (or the hard-drop whoosh when `HardDropped` came just before it), and `Popped` plays the pop, pitched up one tone per chain step. Moving and soft-dropping are silent on purpose. Nothing plays when `GameSettings.SoundEffects` is off.
+The single class that drives the engine. Constructed with `(HighScoreService, PlayerProgress, ShopService, GameSettings, GameAudio, ...)`; it creates its own `GameEngine`. It also tells `GameAudio` (see [11](11-audio.md)) what the player hears: `Rotated` and `PieceLocked` (hard drop when `HardDropped` came just before it) go to the rotate, place and hard-drop effects, and each `WaveResolved` plays one pop per colour group, tuned to the region's key and climbing with the chain. At the start of every game it picks the music (a region's faded, recovering or restored piece, Classic's Garden, or the menu theme for a lesson). It also passes on pause and resume, level complete and failed, the few-moves-left tension, the story panel (dialogue ducking and stage cues), the region-unlock chime, and the finale once the ending's last picture is on screen. Moving and soft-dropping are silent on purpose. Whether anything is heard is decided inside `GameAudio` from `AudioSettings`.
 
 **Owns:**
 - the dispatcher timer (`Attach(IDispatcher)` creates it once; `Detach()` pauses and stops it);

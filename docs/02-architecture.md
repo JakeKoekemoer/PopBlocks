@@ -61,7 +61,7 @@ Menu pages (`MainPage`, `WorldMapPage`, `WorkshopPage`, `SettingsPage`, `AboutPa
 
 | Lifetime | Types | Reason |
 |---|---|---|
-| Singleton | `ILocalSettings` (the `PersistentSettings` wrapper over `LocalSettingsService`), `ISaveFileStore`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
+| Singleton | `ILocalSettings` (the `PersistentSettings` wrapper over `LocalSettingsService`), `ISaveFileStore`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer` (now only the fallback), `AudioSettings`, `IAudioOutput`, `GameAudio`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
 | Transient | `GamePage`, `GameViewModel`, `WorldMapPage`, `WorkshopPage`, `ShopPanel`, `WardrobePanel`, `TrophiesPanel`, `AchievementsPanel`, `JournalPanel`, `ArchivePage`, `DevMenuPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
 
 Rules to keep:
@@ -132,6 +132,7 @@ Why: save logic (gold, unlocks, purchases) is some of the most important code in
 | `first_clear_seeds` | `SeedStore` (written by `PlayerProgress.Complete`) | Comma-separated `level:seed` pairs, one per cleared level, never overwritten. A cleared level with no entry replays the original (legacy) level. A new save-code field kind, validated pair by pair (level 1 to 100,000, seed 1 to 1,073,741,823, no duplicates, at most 5,000 pairs). |
 | `classic_gold_carry` | `ClassicGold` | Tenths of a gold earned in Classic and not yet paid (0 to 9). |
 | `blast_effects`, `show_ghost`, `landing_guide_style`, `reduced_motion`, `controls_collapsed`, `sound_effects` | `GameSettings` | Options. |
+| `audio_master`, `audio_music`, `audio_sfx`, `audio_ambience` (0 to 100), `audio_mute_master`, `audio_mute_music`, `audio_mute_ambience`, `audio_reduced` | `AudioSettings` | Volumes, mutes and the reduced-audio mode (see [11](11-audio.md)). "Effects off" is the original `sound_effects` key. |
 
 Story state is **derived, not stored twice**: a region's state comes from `PlayerProgress.HighestCleared`, and everything else the story needs is one more id in `UnlockStore`. Rewards are granted through `UnlockStore.Unlock`, which returns true only the first time, so a reward is paid once however often a level is replayed or a scene is skipped.
 
@@ -162,7 +163,7 @@ Changing a key name loses existing players' data. Add new keys; do not rename ol
 1. **Rules live in the engine, never in drawing or XAML.** If you find yourself computing a game rule in `GameDrawable` or `GamePage`, move it into the engine and expose the result as state.
 2. **One home for each constant.** Gameplay numbers: `GameConfig`. Level bands: `StoryConfig`. Colours, sizes and animation timings: `VisualDesign`. Level tuning tables: the bottom of `LevelCatalog`. Shop prices: `ShopService`. Gold amounts: `GoldRewards`.
 3. **Levels are deterministic.** The same level number *and seed* must produce the same pile, pieces, goals and move limit on every device and every run (`LevelCatalog.Get(level, seed)` is a pure function; seed 0 is the original number-based level). Levels are no longer promised to be the same for every player or after every app update: a roll picks a seed per player, and a later retune of the difficulty band changes which seeds a roll would pick, never a level already stored. Never use an unseeded `Random` in level generation, and never `string.GetHashCode()` for a seed (it differs between runs): use `SeedMix`.
-4. **The engine is single-threaded.** It is called from the UI thread only. The exceptions are `LevelCatalog` and `StoryLevels`, which are thread-safe because levels are rolled and generated on background threads (see 2.8).
+4. **The engine is single-threaded.** It is called from the UI thread only. The exceptions are `GameAudio` (it owns one worker thread for sound; its public methods only queue work and return at once, and nothing in the audio code touches the game rules), and `LevelCatalog` and `StoryLevels`, which are thread-safe because levels are rolled and generated on background threads (see 2.8).
 5. **Immutable where it is cheap.** `Piece` is immutable (move and rotate return new pieces). `Board` is mutable for speed, with `Clone` and `CopyFrom`.
 6. **No allocations in the hot drawing path where avoidable.** `GameDrawable` reuses buffers; effects use a fixed set of slots.
 7. **Offline, always.** Do not add a package that needs a network permission.

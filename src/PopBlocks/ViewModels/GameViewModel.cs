@@ -29,7 +29,7 @@ public sealed class GameViewModel : ObservableObject
     private readonly PlayerProgress _progress;
     private readonly ShopService _shop;
     private readonly GameSettings _settings;
-    private readonly ISoundPlayer _sound;
+    private readonly GameAudio _audio;
     private readonly CampaignService _campaign;
     private readonly CosmeticLoadout _loadout;
     private readonly DevTools _dev;
@@ -80,7 +80,7 @@ public sealed class GameViewModel : ObservableObject
     private bool _isNewBest;
     private IReadOnlyList<GoalState> _goals = Array.Empty<GoalState>();
 
-    public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, ISoundPlayer sound,
+    public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, GameAudio audio,
         CampaignService campaign, CosmeticLoadout loadout, DevTools dev, LifetimeStats lifetime, EndingService ending,
         AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial,
         StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks)
@@ -96,7 +96,7 @@ public sealed class GameViewModel : ObservableObject
         _ending = ending;
         _campaign = campaign;
         _loadout = loadout;
-        _sound = sound;
+        _audio = audio;
         _highScores = highScores;
         _progress = progress;
         _shop = shop;
@@ -104,7 +104,11 @@ public sealed class GameViewModel : ObservableObject
 
         _game = new GameEngine(new PieceGenerator());
         _game.Changed += OnEngineChanged;
-        _game.WaveResolved += wave => WaveResolved?.Invoke(wave);
+        _game.WaveResolved += wave =>
+        {
+            _audio.Popped(wave);   // the pops sing in the key of the region, one colour at a time
+            WaveResolved?.Invoke(wave);
+        };
         _game.EventRaised += OnGameEvent;
         _run.Attach(_game);
         _stock.Attach(_game);   // takes one out of stock when the engine says a helper was used
@@ -649,7 +653,99 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(SceneMood));
         OnPropertyChanged(nameof(SceneStage));
         OnPropertyChanged(nameof(CoachVisible));
+        NotifyAudioScene();
         Redraw?.Invoke();
+    }
+
+    // ---------------------------------------------------------------- audio
+
+    private string _audioSceneKey = string.Empty;
+    private float _audioTension = -1f;
+    private bool _finalePending;
+    private int _unlockPending;
+
+    /// <summary>
+    /// Tells the music what the story panel is doing: it ducks under the dialogue, the stage cues (a memory crystal, the colour
+    /// sweeping back, the Warden stepping in) get their one-time sounds, and the end-of-game finale starts once the player is
+    /// looking at the last picture of the ending.
+    /// </summary>
+    private void NotifyAudioScene()
+    {
+        _audio.DialogueChanged(SceneVisible);
+
+        if (SceneStage is { } info)
+        {
+            string key = info.SceneId + ":" + info.Line;
+            bool started = key != _audioSceneKey && info.Cue != StageCue.None && info.Line == info.CueStartLine;
+            _audioSceneKey = key;
+            _audio.StageLine(info.Cue, started, info.RegionNumber, info.SweepTo);
+            if (info.SceneId == "r8_complete" && info.Line >= 1) _finalePending = true;
+        }
+        else _audioSceneKey = string.Empty;
+
+        FlushPendingAudio();
+    }
+
+    /// <summary>The unlock chime and the finale wait until no story scene is on screen (the finale, until the ending has begun).</summary>
+    private void FlushPendingAudio()
+    {
+        if (_finalePending && !(SceneVisible && SceneStage is { SceneId: "r8_complete", Line: < 1 }))
+        {
+            _finalePending = false;
+            _unlockPending = 0;
+            _audio.Finale();
+        }
+        else if (_unlockPending > 0 && !SceneVisible)
+        {
+            int region = _unlockPending;
+            _unlockPending = 0;
+            _audio.RegionUnlocked(region);
+        }
+    }
+
+    /// <summary>The music for the level that has just started: a region's own tune (faded, recovering or restored), Classic's garden, or the menu theme for a lesson.</summary>
+    private void StartMusic()
+    {
+        _finalePending = false;
+        _unlockPending = 0;
+        _audioTension = -1f;
+        _audioSceneKey = string.Empty;
+        _audio.ClearPause();
+        if (_setup.IsLesson)
+        {
+            _audio.ShowMenu();   // a tutorial lesson keeps the quiet theme
+        }
+        else if (_setup.IsStory)
+        {
+            var region = RegionCatalog.For(_setup.Level);
+            if (region is null) _audio.ShowRegion(RegionCatalog.All[^1].Number, RegionState.Restored);   // past the campaign: the Heart, restored
+            else _audio.ShowRegion(region.Number, _campaign.ProgressOf(region).State);
+            _audio.LevelStarted();
+        }
+        else _audio.ShowClassic();
+    }
+
+    /// <summary>Few moves left on a Story level adds a little unease to the music (never more than a hint).</summary>
+    private void UpdateAudioTension()
+    {
+        float level = 0f;
+        if (_setup.IsStory && _game.HasMoveLimit && _game.State == GameState.Playing)
+        {
+            int left = _game.MovesLeft;
+            level = left <= 1 ? 1f : left <= 2 ? 0.7f : left <= 4 ? 0.35f : 0f;
+        }
+        if (Math.Abs(level - _audioTension) < 0.001f) return;
+        _audioTension = level;
+        _audio.Tension(level);
+    }
+
+    /// <summary>The short stings for pausing, finishing and failing a level.</summary>
+    private void AudioStateChanged(GameState from, GameState to)
+    {
+        if (to == GameState.Paused) _audio.GamePaused();
+        else if (to == GameState.LevelComplete) _audio.LevelCompleted();
+        else if (to == GameState.GameOver) _audio.LevelFailed();
+        else if (from == GameState.Paused) _audio.GameResumed();
     }
 
     // ---------------------------------------------------------------- bindable state: coaching
@@ -1068,6 +1164,9 @@ public sealed class GameViewModel : ObservableObject
         _goalSignature = string.Empty;
         _lastState = GameState.Ready;
 
+        // Music first, so that anything the opening scene asks of it (ducking under the dialogue) lands on the right piece.
+        StartMusic();
+
         // The very first Story level asks once whether the player wants the tutorial. Until they answer, the opening scene waits.
         _promptOpen = ShouldOfferTutorial();
 
@@ -1173,12 +1272,12 @@ public sealed class GameViewModel : ObservableObject
     /// </summary>
     private void PlaySound(GameEvent e)
     {
-        if (!_settings.SoundEffects) return;
-
+        // Whether effects are on is decided inside GameAudio (the Sound effects switch and the volumes). Pops are played from
+        // WaveResolved, once per colour group, so they are not repeated here.
         switch (e)
         {
             case GameEvent.Rotated:
-                _sound.Play(SoundEffect.Rotate);
+                _audio.Rotated();
                 break;
 
             case GameEvent.HardDropped:
@@ -1186,12 +1285,8 @@ public sealed class GameViewModel : ObservableObject
                 break;
 
             case GameEvent.PieceLocked:
-                _sound.Play(_droppedHard ? SoundEffect.HardDrop : SoundEffect.Place);
+                _audio.Placed(_droppedHard);
                 _droppedHard = false;
-                break;
-
-            case GameEvent.Popped:
-                _sound.Play(SoundEffect.Pop, ChainPitch(_game.Chain));
                 break;
         }
     }
@@ -1209,6 +1304,7 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(MovesText));
         OnPropertyChanged(nameof(MovesColour));
         UpdateGoals();
+        UpdateAudioTension();
 
         if (!_setup.HasLevel)
         {
@@ -1260,7 +1356,9 @@ public sealed class GameViewModel : ObservableObject
 
         if (_game.State != _lastState)
         {
+            var previousState = _lastState;
             _lastState = _game.State;
+            AudioStateChanged(previousState, _lastState);
             RearmTimer();
         }
 
@@ -1318,6 +1416,14 @@ public sealed class GameViewModel : ObservableObject
         {
             foreach (var scene in _outcome.Scenes) _sceneQueue.Enqueue(scene);
             ShowNextScene();
+        }
+
+        // A restored region plays its unlock chime (or, for the last one, the finale) once the scenes have been seen.
+        if (_outcome.RegionRestored && RegionCatalog.For(_game.Story.Number) is { } restoredRegion)
+        {
+            if (restoredRegion.Number >= RegionCatalog.All[^1].Number) _finalePending = true;
+            else _unlockPending = restoredRegion.Number + 1;
+            FlushPendingAudio();
         }
 
         // An optional objective met on this win uncovers its memory (on a replay too; no gold, no progress).

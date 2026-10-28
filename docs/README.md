@@ -14,6 +14,7 @@ Reference material for anyone working on PopBlocks. It describes **how the game 
 | 8 | [Build, run and release](08-build-and-release.md) | Tooling requirements, running on a phone or emulator, making an APK, the no-internet check, versioning, logs and repository hygiene. |
 | 9 | [Extending the game](09-extending.md) | Step-by-step checklists: add a shape, a goal type, a tier, an upgrade, a tutorial step, a setting, a region rule, a cosmetic, a helper. |
 | 10 | [Campaign and content](10-campaign-and-content.md) | The eight regions and the ending, where the story text lives and how to edit it, what the player is given and when, and the rules that keep the campaign fair. |
+| 11 | [Music and sound](11-audio.md) | The procedural soundtrack: how it is made, how it reacts to play and to the story, the volume settings, how Android's audio focus is handled, and how to change it. |
 
 The original product specification is `PopBlocks_spec.md` in the repository root. The spec says *what was asked for*; these documents say *what exists*. Where they disagree, the code and these documents win. Design notes for the campaign (the story bible, the economy, the helper rules and the playtest checklists) are in [`story/`](story/).
 

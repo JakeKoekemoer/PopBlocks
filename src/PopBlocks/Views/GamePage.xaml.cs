@@ -444,6 +444,7 @@ public partial class GamePage : ContentPage
 
     private void WireButton(Button button, Action action, bool repeat)
     {
+        button.ClassId = "NoTap";   // the controls play their own sounds (the global button tap would double them)
         button.Pressed += (_, _) =>
         {
             action();

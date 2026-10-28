@@ -129,11 +129,11 @@ All balance numbers (speed curve, level step, points, chain cap, board size) are
 
 ## Not built
 
-Haptics (would need the VIBRATE permission), music, Burst Charge, online features of any kind, other platforms. Trail effects, a chain celebration and victory effects were planned for the looks and cut; challenge levels outside the 200 are an optional later addition.
+Haptics (would need the VIBRATE permission), Burst Charge, online features of any kind, other platforms. Trail effects, a chain celebration and victory effects were planned for the looks and cut; challenge levels outside the 200 are an optional later addition.
 
 ## Sound
 
-Four short single-voice (mono-tone) effects: **rotate** (high tick), **place** (low thud), **hard drop** (falling whoosh ending in the thud) and **pop** (falling bloop, one tone higher for each step of a chain). They are generated in code (`PopBlocks.Engine/Audio/ToneSynth.cs`), so there are no audio files, and played through Android's `SoundPool` (`Platforms/Android/AndroidSoundPlayer.cs`). A **Sound effects** switch on the menu turns them off. No permission is needed.
+A procedural soundtrack, **The Shattered Spectrum**: a quiet theme for the menu and map, the Garden for Classic, and one piece for each of the eight regions that fades, recovers and is restored along with the region, plus a scripted finale. The effects (rotate, place, hard drop, and a pop per colour that sings in the region's key) are played by the same mixer. Everything is computed on the phone as you play (`PopBlocks.Engine/Audio/`), so there are no audio files, and the sound reaches the speaker through Android's `AudioTrack` (`Platforms/Android/AndroidAudioOutput.cs`). **Settings, Music and sound** has master, music, effects and ambience volumes, switches, and a reduced-audio mode; the game plays the same with all of it off. The older `ToneSynth` and `SoundPool` player remain only as a fallback if the new output cannot start. No permission is needed. Details: [`docs/11-audio.md`](docs/11-audio.md).
 
 ## License
 

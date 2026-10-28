@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Maui.Layouts;
 using PopBlocks.Engine;
+using PopBlocks.Engine.Audio;
 using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
 using PopBlocks.Engine.Story;
@@ -62,6 +63,7 @@ public partial class WorldMapPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        _services.GetService<GameAudio>()?.ShowMenu();   // the map shares the menu's quiet theme
         _selected = _progress.NextLevel;
         _open = KeyOf(_selected);
         _beyondLast = Math.Max(RegionCatalog.LastCampaignLevel + BeyondFirstWindow, _progress.NextLevel + Lookahead);
@@ -219,6 +221,7 @@ public partial class WorldMapPage : ContentPage
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) =>
             {
+                _services.GetService<GameAudio>()?.Ui(UiSound.Tap);
                 // Tapping the open region closes it; tapping another opens that one instead.
                 if (_open == key) CloseSection(key);
                 else OpenSection(key, scroll: true);
@@ -403,6 +406,7 @@ public partial class WorldMapPage : ContentPage
         var tap = new TapGestureRecognizer();
         tap.Tapped += async (_, _) =>
         {
+            _services.GetService<GameAudio>()?.Ui(unlocked ? UiSound.Tap : UiSound.Locked);
             if (_selected == level && unlocked)
             {
                 await PlayAsync(level);
