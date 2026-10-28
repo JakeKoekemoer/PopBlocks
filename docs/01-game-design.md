@@ -109,6 +109,10 @@ Two levels in each region (offsets 11 and 17 into it, never a finale) carry an *
 - **Flipped board.** The picture is turned 180 degrees so pieces enter from the bottom of the screen. The rules are unchanged; only drawing and input are mirrored. See [Graphics](06-graphics.md#66-the-upside-down-view).
 - **No-pop penalty.** When a piece locks and pops nothing, points are removed (never below zero). Because the penalty is about score, a penalty level always has a Score goal.
 
+### Tall boards (v1.1)
+
+With a board height of 20 to 32 rows in the player's own rules, the board is taller than the screen and the view follows the stack: the top of the stack is kept in the middle of the screen, the view drops back as the stack is cleared, and a piece always appears at the top of what you can see. Losing is still a block that reaches the very top of the board, or a piece that has no room to appear. Taller boards are easier, so they pay half gold.
+
 ### Your own rules (v1.1)
 
 Settings, GAME tab: fall speed (0.5× to 2× for the piece in your hand), which of the five colours appear (three at least, each with its own symbol), which piece shapes appear (three at least, one with four blocks or more), how many blocks make a burst (3 to 6), how often a solid piece stays solid, and later board height, cracking and Orbs. The rules always apply to Endless (a run on custom rules never sets the best score). They apply to the Story only with "Use my rules in Story", and never to tutorial lessons or a region's finale. The Story's own promises -- that every level was solved before you saw it -- hold for the normal rules only, so the "there is always a way through" note is hidden while custom rules are on in the Story; goals that name a colour you switched off become any-colour goals. Any rule that is easier than normal pays **half gold everywhere**, first-clear and consolation included; the HUD shows "Custom rules · half gold". See `GameRules` and `GameRulesStore`.

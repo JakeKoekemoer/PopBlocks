@@ -69,6 +69,10 @@ The board does not repaint on a fixed schedule. `GamePage` repaints when the vie
 
 `GameDrawable.Clock` is a replaceable `Func<long>` (default: `Environment.TickCount64`). Replace it to render a specific animation moment deterministically.
 
+### Tall boards (v1.1)
+
+The board can be taller than the screen (16 to 32 rows, chosen in the player's own rules). The engine owns the camera (`GameEngine.CameraBottom`, `ViewTopRow`, `CameraFor`): the top of the stack sits in the middle of the screen, between the floor and `Rows - 16`, and it is worked out only when the board has settled, just before a piece spawns, so it never moves while a piece falls; on the standard 16-row board it never leaves the floor. Pieces spawn one row above the top of the screen. Drawing keeps `BoardSpace.ViewTop` (the board row at the top of the screen); `GameDrawable` eases it between camera positions over 300 ms (instantly under Reduced motion) and every effect that maps a board row to the screen (bursts, floating gold, particles) reads it. Only the rows on the screen are drawn. When rows are below the screen the bottom edge fades and says "â–¼ n rows below", and a 4-wide gauge down the right edge shows the whole board, a bracket for the screen and a fill up to the top of the stack.
+
 ### Pip looks added in v1.1
 
 Six looks for Pip are sold from the first day (Daisy 150, Nerdy Glasses 180, Sunglasses 200, Sporty Pip 220, Shy Pip 220, Party Pip 260), drawn by `PipDrawable.DrawAccessory` at the same anchors as the earned ones. Shy and Party Pip also set a mood of their own: `PipMood.Shy` (eyes down and to the side, a small wavy mouth, and a peek up every six seconds while a clock runs) and `PipMood.Party`. The rule is `PipDrawable.EffectiveMood`: a story scene's expression (`MoodRequested`, set by `GamePage.ApplySpeaker`) always wins, otherwise the look's mood applies. Party Pip's drifting confetti is switched on with `PipDrawable.Confetti` and shows only where Pip has a running clock (the story stage); Pip has no picture on the menu or the map.

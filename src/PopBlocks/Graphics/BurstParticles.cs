@@ -68,9 +68,9 @@ public static class BurstParticles
             for (int g = 0; g < wave.Gold.Count; g++)
             {
                 var gg = wave.Gold[g];
-                if (gg.CentreY - GameConfig.HiddenRows < 0) continue;
+                if (gg.CentreY - BoardSpace.ViewTop < 0) continue;
                 float rx = originX + (flip ? GameConfig.Columns - gg.CentreX : gg.CentreX) * cell;
-                float ry = originY + (flip ? GameConfig.VisibleRows - (gg.CentreY - GameConfig.HiddenRows) : gg.CentreY - GameConfig.HiddenRows) * cell;
+                float ry = originY + (flip ? GameConfig.VisibleRows - (gg.CentreY - BoardSpace.ViewTop) : gg.CentreY - BoardSpace.ViewTop) * cell;
                 float radius = cell * 1.2f * k;
                 canvas.Alpha = 0.35f * (1f - k);
                 canvas.StrokeColor = Lighten(VisualDesign.BaseColour(gg.Colour), 0.35f);
@@ -83,7 +83,7 @@ public static class BurstParticles
         foreach (var c in wave.ClearedCells)
         {
             index++;
-            if (c.Y < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(c.Y)) continue;
             float cx = BoardSpace.ScreenX(c.X, flip, originX, cell) + cell / 2f;
             float cy = BoardSpace.ScreenY(c.Y, flip, originY, cell) + cell / 2f;
             var face = Lighten(VisualDesign.BaseColour(c.Colour), 0.35f);
@@ -130,7 +130,7 @@ public static class BurstParticles
         foreach (var c in wave.ClearedCells)
         {
             index++;
-            if (c.Y < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(c.Y)) continue;
             float px = BoardSpace.ScreenX(c.X, flip, originX, cell);
             float py = BoardSpace.ScreenY(c.Y, flip, originY, cell);
             float cx = px + cell / 2f;
@@ -204,7 +204,7 @@ public static class BurstParticles
 
         foreach (var c in wave.ClearedCells)
         {
-            if (c.Y < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(c.Y)) continue;
             float px = BoardSpace.ScreenX(c.X, flip, originX, cell);
             float py = BoardSpace.ScreenY(c.Y, flip, originY, cell);
             canvas.Alpha = (style == BurstStyle.Petals ? 0.7f : 0.9f) * alpha;

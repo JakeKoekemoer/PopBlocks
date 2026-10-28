@@ -62,7 +62,7 @@ public sealed record GameRules
     public double SolidPieceChance { get; init; } = GameConfig.SolidPieceChance;
 
     /// <summary>Board height in rows. Only the standard height is played until the tall board arrives.</summary>
-    public int BoardRows { get; init; } = GameConfig.VisibleRows;
+    public int BoardRows { get; init; } = GameConfig.DefaultBoardRows;
 
     /// <summary>Blocks crack when a pop hits them from two sides (see Phase 13). Only matters where the Story would have it.</summary>
     public bool Fracture { get; init; } = true;

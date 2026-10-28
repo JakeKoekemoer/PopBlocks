@@ -30,7 +30,7 @@ public sealed class BlastEffects
         public float CentreX, CentreY;      // centroid of the cleared cells, in board cells
         public CellColour Dominant;
         /// <summary>Rows each cell fell, indexed [y * Columns + x] by its final position.</summary>
-        public int[] Drop = new int[GameConfig.Columns * GameConfig.TotalRows];
+        public int[] Drop = new int[GameConfig.Columns * (GameConfig.MaxBoardRows + GameConfig.HiddenRows)];
     }
 
     private const int SlotCount = 4;
@@ -287,7 +287,7 @@ public sealed class BlastEffects
         foreach (var c in particles ? NoCells : wave.ClearedCells)
         {
             index++;
-            if (c.Y < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(c.Y)) continue;
 
             float px = BoardSpace.ScreenX(c.X, flip, originX, cell);
             float py = BoardSpace.ScreenY(c.Y, flip, originY, cell);
@@ -360,7 +360,7 @@ public sealed class BlastEffects
             for (int i = 0; i < pieces; i++)
             {
                 var source = wave.ClearedCells[i % wave.ClearedCells.Count];
-                if (source.Y < GameConfig.HiddenRows) continue;
+                if (BoardSpace.AboveView(source.Y)) continue;
 
                 float ox = BoardSpace.ScreenX(source.X, flip, originX, cell) + cell / 2f;
                 float oy = BoardSpace.ScreenY(source.Y, flip, originY, cell) + cell / 2f;
@@ -384,7 +384,7 @@ public sealed class BlastEffects
         }
 
         // Score tag rising from the pop.
-        if (wave.Points > 0 && burst.CentreY >= GameConfig.HiddenRows - 1)
+        if (wave.Points > 0 && burst.CentreY >= BoardSpace.ViewTop - 1)
         {
             float life = age / (float)burst.DurationMs;
             float alpha = life < 0.12f ? life / 0.12f : MathF.Max(0f, 1f - (life - 0.12f) / 0.88f);

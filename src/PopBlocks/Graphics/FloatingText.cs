@@ -112,7 +112,7 @@ public sealed class FloatingText
             }
 
             // The group's centre in screen space (the board may be drawn upside down), then up by the rise.
-            float row = s.CellY - GameConfig.HiddenRows;
+            float row = s.CellY - BoardSpace.ViewTop;
             float x = originX + (flip ? GameConfig.Columns - s.CellX : s.CellX) * cell;
             float y = originY + (flip ? GameConfig.VisibleRows - row : row) * cell;
             y -= flip ? -rise : rise;

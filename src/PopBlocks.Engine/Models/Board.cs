@@ -63,6 +63,23 @@ public sealed class Board
         Array.Clear(_dormant);
     }
 
+    /// <summary>
+    /// Fills this (taller or equal) board from another one, bottom to bottom: the other board's floor is this board's floor and
+    /// the extra rows above stay empty. This is how a level's starting pile is put on a taller board.
+    /// </summary>
+    public void CopyBottomFrom(Board other)
+    {
+        if (other.Width != Width) throw new ArgumentException("Boards must be the same width.", nameof(other));
+        Clear();
+        int rows = Math.Min(other.Height, Height);
+        for (int r = 0; r < rows; r++)
+        {
+            int from = (other.Height - 1 - r) * Width, to = (Height - 1 - r) * Width;
+            Array.Copy(other._cells, from, _cells, to, Width);
+            Array.Copy(other._dormant, from, _dormant, to, Width);
+        }
+    }
+
     /// <summary>Overwrites this board's cells with another board's. Both must be the same size.</summary>
     public void CopyFrom(Board other)
     {

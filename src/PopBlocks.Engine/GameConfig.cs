@@ -12,6 +12,20 @@ public static class GameConfig
     public const int HiddenRows = 2;
     public const int TotalRows = VisibleRows + HiddenRows;
 
+    // ---- Tall boards (v1.1): the board can be taller than the screen; the camera follows the stack ----
+    /// <summary>Rows the screen shows at once.</summary>
+    public const int ViewportRows = VisibleRows;
+
+    /// <summary>The standard board height and the shortest and tallest a player can ask for (rows, not counting the hidden spawn rows).</summary>
+    public const int MinBoardRows = 16;
+    public const int MaxBoardRows = 32;
+
+    /// <summary>
+    /// Board height when the player has not chosen one. The solved Story levels were built and verified for this height, so it
+    /// is the standard 16 (nothing scrolls). Taller boards come from the player's own rules.
+    /// </summary>
+    public const int DefaultBoardRows = VisibleRows;
+
     // ---- Matching ----
     public const int MinGroupSize = 4;
     public const int ColourFamilies = 5;

@@ -8,7 +8,7 @@ namespace PopBlocks.Engine.Models;
 public static class RuleFeatures
 {
     /// <summary>The board can be taller than the standard 16 rows (the camera follows the stack).</summary>
-    public static bool TallBoards => false;
+    public static bool TallBoards => true;
 
     /// <summary>Blocks crack when a pop hits them from two sides.</summary>
     public static bool Fracture => false;

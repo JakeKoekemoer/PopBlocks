@@ -1356,7 +1356,7 @@ public sealed class GameViewModel : ObservableObject
         var piece = _game.CurrentPiece;
         if (piece is null) return true;
         foreach (var cell in piece.BoardCells())
-            if (cell.Y < PopBlocks.Engine.GameConfig.HiddenRows) return false;
+            if (cell.Y < _game.ViewTopRow) return false;
         return true;
     }
 

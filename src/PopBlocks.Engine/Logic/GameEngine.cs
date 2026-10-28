@@ -49,7 +49,47 @@ public sealed class GameEngine
         State = GameState.Ready;
     }
 
-    public Board Board { get; }
+    public Board Board { get; private set; }
+
+    // ---- The camera (tall boards) ----
+    // The screen shows ViewportRows of the board. The camera sits so that the top of the stack is in the middle of the
+    // screen, between the floor and the highest it can go. It is worked out only when the board has settled, just before a
+    // piece spawns, never while a piece falls, and it depends on nothing but the board. On the standard 16-row board it is
+    // always at the floor, so nothing ever scrolls.
+
+    /// <summary>Playable rows of this board (the hidden spawn rows are extra).</summary>
+    public int BoardRows => Board.Height - GameConfig.HiddenRows;
+
+    /// <summary>How high the stack reaches, in rows up from the floor (0 for an empty board).</summary>
+    public int StackTop
+    {
+        get
+        {
+            for (int y = 0; y < Board.Height; y++)
+                for (int x = 0; x < Board.Width; x++)
+                    if (Board[x, y] != CellColour.Empty) return Board.Height - y;
+            return 0;
+        }
+    }
+
+    /// <summary>Rows between the floor and the bottom of the screen (0 when the screen is at the floor).</summary>
+    public int CameraBottom { get; private set; }
+
+    /// <summary>The highest the camera has been this game: above 0 means the board has scrolled.</summary>
+    public int HighestCamera { get; private set; }
+
+    /// <summary>The board row (y) at the top of the screen. Pieces spawn just above it.</summary>
+    public int ViewTopRow => Board.Height - CameraBottom - GameConfig.ViewportRows;
+
+    /// <summary>Camera rule: <c>clamp(stackTop - ViewportRows / 2, 0, Rows - ViewportRows)</c>.</summary>
+    public static int CameraFor(int stackTop, int boardRows) =>
+        Math.Clamp(stackTop - GameConfig.ViewportRows / 2, 0, Math.Max(0, boardRows - GameConfig.ViewportRows));
+
+    private void UpdateCamera()
+    {
+        CameraBottom = CameraFor(StackTop, BoardRows);
+        if (CameraBottom > HighestCamera) HighestCamera = CameraBottom;
+    }
     public GameState State { get; private set; }
 
     /// <summary>The mode (and Story level) of the current game. Classic until a Story game is started.</summary>
@@ -264,7 +304,11 @@ public sealed class GameEngine
     private void StartCore(GameSetup setup, LevelDefinition? level)
     {
         Setup = setup;
+        int wantedHeight = setup.Rules.BoardRows + GameConfig.HiddenRows;
+        if (Board.Height != wantedHeight && RuleFeatures.TallBoards) Board = new Board(Board.Width, wantedHeight);
         Board.Clear();
+        CameraBottom = 0;
+        HighestCamera = 0;
         Story = level;
         _goals = null;
 
@@ -274,7 +318,8 @@ public sealed class GameEngine
             if (setup.Rules.RemapsColours && level.Goals.Any(g => g.Colour != CellColour.Empty && !setup.Rules.Allows(g.Colour)))
                 level = level with { Goals = level.Goals.Select(g => g.Colour != CellColour.Empty && !setup.Rules.Allows(g.Colour) ? g with { Colour = CellColour.Empty } : g).ToList() };
             Story = level;
-            Board.CopyFrom(level.CreateBoard());
+            var pile = level.CreateBoard();
+            if (pile.Height == Board.Height) Board.CopyFrom(pile); else Board.CopyBottomFrom(pile);
             _rewindable = new RewindableGenerator(level.CreateGenerator(setup.Rules));
             _goals = new GoalTracker(level.Goals, Board.CountOccupied());
         }
@@ -633,10 +678,13 @@ public sealed class GameEngine
 
     private void SpawnNext()
     {
+        UpdateCamera();   // the board has settled: decide what the screen shows before the next piece appears
         var piece = _queue[0];
         _queue.RemoveAt(0);
         FillQueue();
         NextPiece = _queue[0];
+        int lift = ViewTopRow - GameConfig.HiddenRows;   // 0 on a standard board; on a tall one the piece appears at the top of the screen
+        if (lift > 0) piece = piece.Moved(0, lift);
 
         if (!CollisionDetector.IsValid(Board, piece))
         {
@@ -717,6 +765,7 @@ public sealed class GameEngine
 
         var snap = _beforeLast!;
         Board.CopyFrom(snap.Board);
+        UpdateCamera();
         _queue.Clear();
         _queue.AddRange(snap.Queue);
         NextPiece = _queue[0];

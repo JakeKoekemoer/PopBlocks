@@ -18,7 +18,41 @@ public sealed class GameDrawable : IDrawable
 {
     private IReadOnlyList<ColourGroup>? _lastPending;
     private long _pendingStartMs;
-    private readonly bool[] _pendingMask = new bool[GameConfig.Columns * GameConfig.TotalRows];
+    private bool[] _pendingMask = new bool[GameConfig.Columns * (GameConfig.MaxBoardRows + GameConfig.HiddenRows)];
+
+    // ---- The camera (tall boards). The engine decides where it is; the picture eases there over 300 ms. ----
+    private const int CameraEaseMs = 300;
+    private float _shownTop = GameConfig.HiddenRows, _fromTop = GameConfig.HiddenRows, _toTop = GameConfig.HiddenRows;
+    private long _tweenStartMs;
+
+    /// <summary>Puts the camera straight where the engine says it is (a new game), with no easing.</summary>
+    public void ResetCamera()
+    {
+        _shownTop = _fromTop = _toTop = Game?.ViewTopRow ?? GameConfig.HiddenRows;
+        BoardSpace.ViewTop = _shownTop;
+    }
+
+    /// <summary>The camera is still easing to a new place, so the page keeps repainting.</summary>
+    public bool CameraMoving(long nowMs) => nowMs - _tweenStartMs < CameraEaseMs && MathF.Abs(_shownTop - _toTop) > 0.001f;
+
+    private void StepCamera(long now)
+    {
+        float target = Game?.ViewTopRow ?? GameConfig.HiddenRows;
+        if (target != _toTop)
+        {
+            _fromTop = _shownTop;
+            _toTop = target;
+            _tweenStartMs = now;
+            if (ReducedMotion) _shownTop = _fromTop = target;   // Reduced motion: the camera just jumps
+        }
+        if (_shownTop != _toTop)
+        {
+            float t = Math.Clamp((now - _tweenStartMs) / (float)CameraEaseMs, 0f, 1f);
+            _shownTop = _fromTop + (_toTop - _fromTop) * (t * t * (3f - 2f * t));   // ease in and out
+            if (t >= 1f) _shownTop = _toTop;
+        }
+        BoardSpace.ViewTop = _shownTop;
+    }
 
     public GameEngine? Game { get; set; }
     public BlastEffects Effects { get; } = new();
@@ -87,12 +121,12 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>True while something on the board is animating, so the page keeps repainting.</summary>
     public bool NeedsAnimation(long nowMs) =>
-        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || HintColumn >= 0;
+        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || HintColumn >= 0 || CameraMoving(nowMs);
 
     /// <summary>The slow movement (board ambience, frame animation) is all that is running: a gentle repaint is enough.</summary>
     public bool OnlyAmbientRunning(long nowMs) =>
         (NeedsAmbient || FrameAnimates)
-        && !(Game is { PendingGroups.Count: > 0 }) && !Effects.IsActive(nowMs) && !Floaters.IsActive(nowMs) && HintColumn < 0;
+        && !(Game is { PendingGroups.Count: > 0 }) && !Effects.IsActive(nowMs) && !Floaters.IsActive(nowMs) && HintColumn < 0 && !CameraMoving(nowMs);
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -113,6 +147,7 @@ public sealed class GameDrawable : IDrawable
         float originX = dirtyRect.X + (dirtyRect.Width - boardW) / 2f;
         float originY = dirtyRect.Y + (dirtyRect.Height - boardH) / 2f;
 
+        StepCamera(now);   // where the screen is on a tall board (always the floor on the standard one)
         var (shakeX, shakeY) = Effects.ShakeOffset(cell, now);
         canvas.Translate(shakeX, shakeY);
 
@@ -141,6 +176,7 @@ public sealed class GameDrawable : IDrawable
             if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell, now);
             Effects.Draw(canvas, originX, originY, cell, boardW, Flip, now);
             Floaters.Draw(canvas, originX, originY, cell, Flip, now);
+            DrawCameraHints(canvas, game, originX, originY, boardW, boardH, cell);
 
             if (TopRowFlash > 0f)
             {
@@ -274,8 +310,11 @@ public sealed class GameDrawable : IDrawable
 
     private void DrawLockedCells(ICanvas canvas, CellRenderer.BlockLayer layer, Board board, float originX, float originY, float cell, long now)
     {
-        for (int y = GameConfig.HiddenRows; y < board.Height; y++)
+        // Only the rows on (or one row either side of) the screen are drawn.
+        int firstRow = Math.Max(GameConfig.HiddenRows, (int)MathF.Floor(BoardSpace.ViewTop));
+        for (int y = firstRow; y < board.Height; y++)
         {
+            if (BoardSpace.BelowView(y)) break;
             for (int x = 0; x < board.Width; x++)
             {
                 var colour = board[x, y];
@@ -351,12 +390,12 @@ public sealed class GameDrawable : IDrawable
             {
                 foreach (var c in group.Cells)
                 {
-                    if (c.Y < GameConfig.HiddenRows) continue;
+                    if (BoardSpace.AboveView(c.Y)) continue;
 
                     bool Same(int dx, int dy)
                     {
                         int nx = c.X + dx, ny = c.Y + dy;
-                        return nx >= 0 && nx < GameConfig.Columns && ny >= 0 && ny < GameConfig.TotalRows
+                        return nx >= 0 && nx < GameConfig.Columns && ny >= 0 && ny < game.Board.Height
                                && _pendingMask[ny * GameConfig.Columns + nx]
                                && game.Board[nx, ny] == group.Colour;
                     }
@@ -388,7 +427,7 @@ public sealed class GameDrawable : IDrawable
         for (int i = 0; i < cells.Count; i++)
         {
             int by = piece.Y + cells[i].Y;
-            if (by < GameConfig.HiddenRows) continue;   // still in the hidden spawn rows
+            if (BoardSpace.AboveView(by)) continue;   // still in the hidden spawn rows
 
             int bx = piece.X + cells[i].X;
             var links = CellRenderer.LinksForPiece(cells, i);
@@ -421,7 +460,7 @@ public sealed class GameDrawable : IDrawable
         for (int i = 0; i < cells.Count; i++)
         {
             int by = piece.Y + cells[i].Y;
-            if (by < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(by)) continue;
             int bx = piece.X + cells[i].X;
 
             canvas.StrokeColor = Frame switch
@@ -454,7 +493,7 @@ public sealed class GameDrawable : IDrawable
         for (int i = 0; i < cells.Count; i++)
         {
             int by = piece.Y + cells[i].Y;
-            if (by < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(by)) continue;
             int bx = piece.X + cells[i].X;
             float cx = BoardSpace.ScreenX(bx, Flip, originX, cell) + inset;
             float cy = BoardSpace.ScreenY(by, Flip, originY, cell) + inset;
@@ -551,6 +590,50 @@ public sealed class GameDrawable : IDrawable
             canvas.FillEllipse(maxX - leaf * 0.6f, minY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
             canvas.FillEllipse(minX - leaf * 0.6f, maxY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
         }
+    }
+
+    private int _belowShown = -1;
+    private string _belowText = string.Empty;
+
+    /// <summary>
+    /// On a tall board: a fade and "â–¼ n rows below" when part of the board is under the screen, and a thin gauge down the
+    /// right-hand edge: the whole board's height, a bracket for what the screen shows, filled up to the top of the stack.
+    /// </summary>
+    private void DrawCameraHints(ICanvas canvas, GameEngine game, float originX, float originY, float boardW, float boardH, float cell)
+    {
+        int rows = game.BoardRows;
+        if (rows <= GameConfig.ViewportRows) return;
+
+        int below = game.CameraBottom;
+        if (below > 0)
+        {
+            float fade = cell * 1.3f, bottom = originY + boardH;
+            for (int i = 0; i < 5; i++)
+            {
+                canvas.FillColor = Theme.Bottom.WithAlpha(0.18f * (i + 1));
+                canvas.FillRectangle(originX, bottom - fade + fade * i / 5f, boardW, fade / 5f + 1f);
+            }
+            if (below != _belowShown)
+            {
+                _belowShown = below;
+                _belowText = below == 1 ? "â–¼ 1 row below" : $"â–¼ {below} rows below";
+            }
+            canvas.FontColor = Colors.White.WithAlpha(0.9f);
+            canvas.FontSize = cell * 0.40f;
+            canvas.DrawString(_belowText, originX, bottom - cell * 0.95f, boardW, cell * 0.8f, HorizontalAlignment.Center, VerticalAlignment.Center);
+        }
+
+        float gx = originX + boardW + 0.5f, gw = 4f;
+        float perRow = boardH / rows;
+        canvas.FillColor = Theme.Grid.WithAlpha(0.55f);
+        canvas.FillRectangle(gx, originY, gw, boardH);
+        float filled = MathF.Min(rows, game.StackTop) * perRow;
+        canvas.FillColor = Theme.Rim.WithAlpha(0.85f);
+        canvas.FillRectangle(gx, originY + boardH - filled, gw, filled);
+        float barBottom = originY + boardH - below * perRow, barTop = barBottom - GameConfig.ViewportRows * perRow;
+        canvas.StrokeColor = Colors.White.WithAlpha(0.9f);
+        canvas.StrokeSize = 1.2f;
+        canvas.DrawRectangle(gx - 0.5f, barTop, gw + 1f, barBottom - barTop);
     }
 
     private static readonly PathF MotifDiamond = BuildMotifDiamond();
@@ -737,7 +820,7 @@ public sealed class GameDrawable : IDrawable
 
             foreach (var c in group.Cells)
             {
-                if (c.Y < GameConfig.HiddenRows) continue;
+                if (BoardSpace.AboveView(c.Y)) continue;
                 float x0 = BoardSpace.ScreenX(c.X, Flip, originX, cell);
                 float y0 = BoardSpace.ScreenY(c.Y, Flip, originY, cell);
 
@@ -804,7 +887,7 @@ public sealed class GameDrawable : IDrawable
         for (int i = 0; i < cells.Count; i++)
         {
             int by = piece.Y + cells[i].Y + distance;
-            if (by < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(by)) continue;
             int bx = piece.X + cells[i].X;
 
             float x = BoardSpace.ScreenX(bx, Flip, originX, cell) + inset;

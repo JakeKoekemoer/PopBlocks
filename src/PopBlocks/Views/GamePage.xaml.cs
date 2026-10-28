@@ -115,6 +115,7 @@ public partial class GamePage : ContentPage
         base.OnDisappearing();
         _board.AmbientOn = false;
         _ambientCheck?.Stop();
+        BoardSpace.ViewTop = PopBlocks.Engine.GameConfig.HiddenRows;   // other pages draw with the standard camera
         StopRepeat();
         StopAnimation();
         StopStage();
@@ -194,6 +195,7 @@ public partial class GamePage : ContentPage
         _board.Effects.Flair = _shop.FlairLevel;
         _board.Floaters.ReducedMotion = _settings.ReducedMotion;
         _board.Floaters.Clear();
+        _board.ResetCamera();
         this.AbortAnimation("GoldCountUp");
         this.AbortAnimation("CoinFly");
         CoinFlyView.IsVisible = false;

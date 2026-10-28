@@ -39,7 +39,10 @@ public sealed class BurstPreviewDrawable : IDrawable
 
         canvas.SaveState();
         canvas.ClipRectangle(dirtyRect);
+        float viewTop = BoardSpace.ViewTop;   // this little board does not scroll, whatever the last game's camera was
+        BoardSpace.ViewTop = GameConfig.HiddenRows;
         _effects.Draw(canvas, originX, originY, cell, cell * GameConfig.Columns, flip: false, now);
+        BoardSpace.ViewTop = viewTop;
         canvas.RestoreState();
     }
 

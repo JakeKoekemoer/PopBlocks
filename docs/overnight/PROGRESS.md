@@ -13,8 +13,8 @@
 | 9a Block sets | done | 1254745 |
 | 9b Boards and frames | done | 9cb5fd4 |
 | 9c Pip looks | done | 461620f |
-| 10 Story Book | done | PENDING10 |
-| 11 Tall scrolling board | pending | |
+| 10 Story Book | done | 01a16eb |
+| 11 Tall scrolling board | done (default height not flipped, see Unfinished) | PENDING11 |
 | 12 Pip's Insight | pending | |
 | 13 Fracture | pending | |
 | 14 The Orb | pending | |
@@ -23,4 +23,4 @@
 | 17 Wrap-up | pending | |
 
 ## Unfinished
-(none yet)
+- Phase 11: the default board height is still 16 rows. Tall boards (20-32) work through the player's own rules; making 24 the default needs the solver and the level snapshot set regenerated for it (see DECISIONS).
