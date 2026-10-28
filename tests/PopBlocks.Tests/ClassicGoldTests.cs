@@ -147,6 +147,8 @@ public class ClassicGoldEngineTests
         var engine = new GameEngine(new PieceGenerator(new Random(7)));
         engine.Start(GameSetup.Classic);
         var random = new Random(3);
+        int orbBreaks = 0;
+        engine.WaveResolved += w => { if (w.OrbBroke) orbBreaks++; };
 
         int guard = 0;
         while (engine.State is GameState.Playing or GameState.ResolvingBursts && guard++ < 4000)
@@ -158,8 +160,9 @@ public class ClassicGoldEngineTests
         }
 
         Assert.True(engine.TotalPopped > 0);
-        Assert.InRange(engine.ClassicGoldTenths, engine.TotalPopped, engine.TotalPopped * SeedingConfig.ClassicMaxTenths);
-        if (engine.Level == 1) Assert.Equal(engine.TotalPopped, engine.ClassicGoldTenths);
+        // Cracked blocks pay a half to three quarters, and each broken Orb adds its 25 gold bonus on top.
+        int bonus = orbBreaks * OrbSystem.BreakBonusGold * 10;
+        Assert.InRange(engine.ClassicGoldTenths, engine.TotalPopped / 2, engine.TotalPopped * SeedingConfig.ClassicMaxTenths + bonus);
     }
 
     [Fact]

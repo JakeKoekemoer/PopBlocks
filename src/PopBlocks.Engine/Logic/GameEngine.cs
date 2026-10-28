@@ -304,6 +304,9 @@ public sealed class GameEngine
     private void StartCore(GameSetup setup, LevelDefinition? level)
     {
         Setup = setup;
+        _orbTimer = _piecesSinceOrb = _orbRolls = 0;
+        _orbEver = _orbBrokeThisResolution = false;
+        _orbSeed = Levels.SeedMix.Mix32(level?.PieceSeed ?? setup.ClassicSeed ?? 0, 0x0B0B);
         int wantedHeight = setup.Rules.BoardRows + GameConfig.HiddenRows;
         if (Board.Height != wantedHeight && RuleFeatures.TallBoards) Board = new Board(Board.Width, wantedHeight);
         Board.Clear();
@@ -499,8 +502,16 @@ public sealed class GameEngine
         LastPenalty = 0;
         Raise(GameEvent.PieceLocked);
 
+        // An Orb counts pieces down; at zero it cracks the blocks round it.
+        _orbBrokeThisResolution = false;
+        if (OrbsActive)
+        {
+            _piecesSinceOrb++;
+            if (OrbSystem.Find(Board) is not null && --_orbTimer <= 0) CorruptOrb();
+        }
+
         var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
-        if (groups.Count == 0)
+        if (groups.Count == 0 && !(FractureActive && Board.AnyBroken()))
         {
             ApplyPenalty();
             FinishResolution();
@@ -521,6 +532,13 @@ public sealed class GameEngine
                 FinishResolution();
             }
         }
+        else if (groups.Count == 0)
+        {
+            // Nothing to highlight: only blocks that broke (an Orb's corruption). They go at once.
+            ApplyWave(groups);
+            if (MoreWaves()) { _phase = Phase.Settle; State = GameState.ResolvingBursts; }
+            else FinishResolution();
+        }
         else
         {
             BeginHighlight(groups);
@@ -532,6 +550,108 @@ public sealed class GameEngine
         PendingGroups = groups;
         _phase = Phase.Highlight;
         State = GameState.ResolvingBursts;
+    }
+
+    // ---- The Orb ----
+
+    private int _orbTimer, _piecesSinceOrb, _orbRolls, _orbSeed;
+    private bool _orbEver, _orbBrokeThisResolution;
+
+    /// <summary>
+    /// Orbs can appear in this game: Endless always (unless the rules say Never), the Story from level 40 once
+    /// <see cref="RuleFeatures.OrbsInStory"/> is on, or on any level but a lesson when the rules say Always.
+    /// </summary>
+    public bool OrbsActive =>
+        RuleFeatures.Orbs && Rules.Orbs != OrbMode.Never
+        && (Rules.Orbs == OrbMode.Always
+            ? Story is not { IsTutorial: true }
+            : Story is null || (RuleFeatures.OrbsInStory && !Story.IsTutorial && Story.Number >= RegionRules.OrbIntro));
+
+    /// <summary>The top-left cell of the Orb on the board, or null.</summary>
+    public (int X, int Y)? OrbAt => OrbSystem.Find(Board);
+
+    /// <summary>Pieces left before the Orb on the board cracks the blocks round it (0 when there is none).</summary>
+    public int OrbTimerLeft => OrbSystem.Find(Board) is null ? 0 : _orbTimer;
+
+    private bool NextOrbRoll()
+    {
+        double u = (Levels.SeedMix.Mix32(_orbSeed, ++_orbRolls) & 0xFFFFFF) / 16777216.0;
+        return u < OrbSystem.SpawnChance;
+    }
+
+    /// <summary>
+    /// Once per settle, before the next piece: an Orb may appear. It needs no Orb on the board and four pieces since the last
+    /// one left (or since the level began); then a screen window with enough blocks, colours and lonely blocks; then a roll of
+    /// 35% (always, when the rules say so). If none has appeared by the eighth piece, the next settle puts one at the best
+    /// spot there is, thresholds or not. The roll comes from the engine's own seeded stream, never from the piece stream.
+    /// </summary>
+    private void MaybeSpawnOrb()
+    {
+        if (!OrbsActive || _orbBrokeThisResolution || OrbSystem.Find(Board) is not null) return;
+        bool guarantee = !_orbEver && PiecesPlaced >= OrbSystem.GuaranteeByPiece;
+        if (!guarantee && _piecesSinceOrb < OrbSystem.PiecesBetween) return;
+
+        UpdateCamera();
+        var spots = OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: false);
+        if (!guarantee)
+        {
+            if (spots.Count == 0) return;
+            if (Rules.Orbs != OrbMode.Always && !NextOrbRoll()) return;
+        }
+
+        bool placed = false;
+        foreach (var (x, y) in spots)
+            if (placed = OrbSystem.TryPlace(Board, x, y)) break;
+        if (!placed && guarantee)
+            foreach (var (x, y) in OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: true))
+                if (placed = OrbSystem.TryPlace(Board, x, y)) break;
+        if (!placed) return;
+
+        GravityResolver.Apply(Board);   // what was pushed up settles on the Orb
+        _orbTimer = Rules.OrbTimer;
+        _orbEver = true;
+        _piecesSinceOrb = 0;
+        Raise(GameEvent.OrbSpawned);
+    }
+
+    /// <summary>
+    /// Puts an Orb with its top-left cell at (x, y) right now, whatever the cooldown, the windows and the roll say (development
+    /// tools and tests). Blocks are pushed up to make room, as for a real spawn. False if there is no room.
+    /// </summary>
+    public bool PlaceOrb(int x, int y, int? timer = null)
+    {
+        if (OrbSystem.Find(Board) is not null || !OrbSystem.TryPlace(Board, x, y)) return false;
+        GravityResolver.Apply(Board);
+        _orbTimer = timer ?? Rules.OrbTimer;
+        _orbEver = true;
+        _piecesSinceOrb = 0;
+        Raise(GameEvent.OrbSpawned);
+        Notify();
+        return true;
+    }
+
+    /// <summary>Puts an Orb at the best spot there is, ignoring every condition (development tools).</summary>
+    public bool SpawnOrbNow()
+    {
+        UpdateCamera();
+        foreach (var (x, y) in OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: true))
+            if (PlaceOrb(x, y)) return true;
+        return false;
+    }
+
+    /// <summary>The timer ran out: the twelve cells round the Orb take a crack each (they break at the third), the Orb goes, no gold.</summary>
+    private void CorruptOrb()
+    {
+        if (OrbSystem.Find(Board) is not { } o) return;
+        OrbSystem.Remove(Board, o.X, o.Y);
+        if (FractureActive)
+            foreach (var (x, y) in OrbSystem.Ring(o.X, o.Y))
+                if (Board.IsInside(x, y) && Board[x, y] is not (CellColour.Empty or CellColour.Orb))
+                    Board.SetFracture(x, y, Math.Min(Models.Board.Broken, Board.FractureAt(x, y) + 1));
+        GravityResolver.Apply(Board);
+        _piecesSinceOrb = 0;
+        _orbBrokeThisResolution = true;
+        Raise(GameEvent.OrbCorrupted);
     }
 
     /// <summary>Blocks crack in this game: the rules and the feature allow it, and (in the Story) the level is far enough in. Never in a lesson.</summary>
@@ -638,13 +758,47 @@ public sealed class GameEngine
             ClassicGoldTenths += payouts[^1].GoldTenths;
         }
 
+        // An Orb touched by a pop (a group, or a block that broke) breaks: it takes every block in its two rows and two columns.
+        var orbPopped = new List<BlockCell>();
+        (int X, int Y)? orbAt = OrbSystem.Find(Board);
+        if (orbAt is { } o && cleared.Any(c => (c.X >= o.X - 1 && c.X <= o.X + 2 && c.Y >= o.Y && c.Y <= o.Y + 1) || (c.Y >= o.Y - 1 && c.Y <= o.Y + 2 && c.X >= o.X && c.X <= o.X + 1)))
+        {
+            var already = new HashSet<(int, int)>(cleared.Select(c => (c.X, c.Y)));
+            foreach (var c in OrbSystem.CrossCells(Board, o.X, o.Y))
+                if (!already.Contains((c.X, c.Y))) orbPopped.Add(c);
+            cleared.AddRange(orbPopped);
+        }
+        else
+        {
+            orbAt = null;
+        }
+        if (orbAt is { } hit)
+        {
+            double weight = 0;
+            float ox = 0, oy = 0;
+            foreach (var c in orbPopped) { weight += fracture ? CrackGoldFactor(Board.FractureAt(c.X, c.Y)) : 1.0; ox += c.X; oy += c.Y; }
+            int tenths = (int)Math.Round(weight * rate, MidpointRounding.AwayFromZero) + (rate > 0 ? OrbSystem.BreakBonusGold * 10 : 0);   // the bonus pays whatever the rate
+            float cxm = orbPopped.Count > 0 ? ox / orbPopped.Count + 0.5f : hit.X + 1f, cym = orbPopped.Count > 0 ? oy / orbPopped.Count + 0.5f : hit.Y + 1f;
+            var list = payouts.ToList();
+            list.Add(new GroupGold(cxm, cym, orbPopped.Count, multiplier, scaled ? Rules.ScaleTenths(tenths) : tenths, orbPopped.Count > 0 ? orbPopped[0].Colour : CellColour.Cyan));
+            payouts = list.ToArray();
+            ClassicGoldTenths += payouts[^1].GoldTenths;
+        }
+
         GravityResolver.Clear(Board, cleared);
+        if (orbAt is { } gone)
+        {
+            OrbSystem.Remove(Board, gone.X, gone.Y);
+            _piecesSinceOrb = 0;
+            _orbBrokeThisResolution = true;   // no new Orb in the resolution that broke one
+        }
         var cracked = fracture ? CrackNeighbours(Board, cleared) : (IReadOnlyList<BlockCell>)Array.Empty<BlockCell>();
         var moves = GravityResolver.Apply(Board);
         Score += points;
         _poppedClassic += cleared.Count;
 
-        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts, Broken = broken, Cracked = cracked };
+        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts, Broken = broken, Cracked = cracked, OrbPopped = orbPopped, OrbBroke = orbAt is not null, OrbAt = orbAt };
+        if (orbAt is not null) Raise(GameEvent.OrbBroken);
         LastWave = wave;
         _goals?.OnWave(wave);
         WaveResolved?.Invoke(wave);
@@ -667,7 +821,7 @@ public sealed class GameEngine
         for (int y = 0; y < board.Height; y++)
             for (int x = 0; x < w; x++)
             {
-                if (gone[y * w + x] || board[x, y] == CellColour.Empty) continue;
+                if (gone[y * w + x] || board[x, y] is CellColour.Empty or CellColour.Orb) continue;
                 int sides = 0;
                 if (x > 0 && gone[y * w + x - 1]) sides++;
                 if (x < w - 1 && gone[y * w + x + 1]) sides++;
@@ -722,6 +876,7 @@ public sealed class GameEngine
             return;
         }
 
+        MaybeSpawnOrb();
         SpawnNext();
     }
 
@@ -783,7 +938,8 @@ public sealed class GameEngine
 
     private EngineSnapshot Capture(Piece piece) => new(
         Board.Clone(), piece, _queue.ToArray(), Score, PiecesPlaced, _poppedClassic,
-        LastChain, LastPenalty, LastWave, _goals?.Clone(), _rewindable?.Position ?? 0, ClassicGoldTenths);
+        LastChain, LastPenalty, LastWave, _goals?.Clone(), _rewindable?.Position ?? 0, ClassicGoldTenths,
+        _orbTimer, _piecesSinceOrb, _orbRolls, _orbEver);
 
     // ------------------------------------------------------------------ helpers
 
@@ -865,6 +1021,11 @@ public sealed class GameEngine
         PiecesPlaced = snap.PiecesPlaced;
         _poppedClassic = snap.PoppedBlocks;
         ClassicGoldTenths = snap.GoldTenths;   // a rewound pop pays nothing, so undoing and popping again cannot farm gold
+        _orbTimer = snap.OrbTimer;
+        _piecesSinceOrb = snap.PiecesSinceOrb;
+        _orbRolls = snap.OrbRolls;
+        _orbEver = snap.OrbEver;
+        _orbBrokeThisResolution = false;
         Chain = 0;
         LastChain = snap.LastChain;
         LastPenalty = snap.LastPenalty;

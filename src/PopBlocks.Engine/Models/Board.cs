@@ -151,7 +151,7 @@ public sealed class Board
     public int CountOccupied()
     {
         int n = 0;
-        foreach (var c in _cells) if (c != CellColour.Empty) n++;
+        foreach (var c in _cells) if (c != CellColour.Empty && c != CellColour.Orb) n++;   // an Orb is not one of the level's blocks
         return n;
     }
 

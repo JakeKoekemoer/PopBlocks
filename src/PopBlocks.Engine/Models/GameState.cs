@@ -47,6 +47,15 @@ public enum GameEvent
 
     /// <summary>Moves were bought after running out: the level goes on.</summary>
     Continued,
+
+    /// <summary>An Orb appeared on the board.</summary>
+    OrbSpawned,
+
+    /// <summary>An Orb was broken by a pop next to it and cleared its rows and columns.</summary>
+    OrbBroken,
+
+    /// <summary>An Orb's timer ran out and it cracked the blocks around it.</summary>
+    OrbCorrupted,
 }
 
 /// <summary>Whether a helper (Second Chance, Prism Shift) can be used right now, and if not, why.</summary>

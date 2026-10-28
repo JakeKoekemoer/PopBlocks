@@ -79,6 +79,13 @@ public sealed class GameSettings
         _colourAssist = settings.GetBool(SaveKeys.ColourAssist, false);
     }
 
+    /// <summary>The first Orb has been explained (once, ever).</summary>
+    public bool SeenOrbIntro
+    {
+        get => _settings.GetBool(SaveKeys.SeenOrbIntro, false);
+        set => _settings.SetBool(SaveKeys.SeenOrbIntro, value);
+    }
+
     private bool _showHanging;
     /// <summary>The faint column and arrow under blocks that hang over a gap. On by default.</summary>
     public bool ShowHanging

@@ -277,7 +277,7 @@ public partial class GamePage : ContentPage
         // When only the board's slow movement is running, repaint at about 15 frames a second instead of 60.
         if (_board.OnlyAmbientRunning(now) && (_ambientSkip++ & 3) != 0) return;
         BoardView.Invalidate();
-        if (!_board.NeedsAnimation(now) && !_board.NeedsAmbient && !_board.FrameAnimates)
+        if (!_board.NeedsAnimation(now) && !_board.WantsSlowRepaint)
             StopAnimation();
     }
 
@@ -292,7 +292,7 @@ public partial class GamePage : ContentPage
     {
         bool idle = Environment.TickCount64 - _lastInputMs > 10_000;
         _board.AmbientOn = !_settings.ReducedMotion && !idle && _vm.IsPlaying && !_vm.IsOverlayVisible;
-        if (_board.NeedsAmbient || _board.FrameAnimates) StartAnimation();
+        if (_board.WantsSlowRepaint) StartAnimation();
         else if (!_board.NeedsAnimation(Environment.TickCount64)) StopAnimation();
 
         // While the movement is on, look again once a second to notice that the player has gone idle.

@@ -69,6 +69,10 @@ The board does not repaint on a fixed schedule. `GamePage` repaints when the vie
 
 `GameDrawable.Clock` is a replaceable `Func<long>` (default: `Environment.TickCount64`). Replace it to render a specific animation moment deterministically.
 
+### The Orb (v1.1)
+
+`Graphics/OrbDrawable.cs` draws it over its four cells: a sphere in three round steps from `#2B1E6E` to `#8C7CFF` to `#F4F7FF`, a swirl of the five block colours at 35% turning once in six seconds, a white highlight, a 4-wide timer ring that empties (white, amber at 3, red at 1) with the number of pieces left drawn bold in the middle, and from two pieces left a small shiver and dark veins. Under Reduced motion nothing turns or shivers. `GameDrawable` repaints for it (at about 15 fps with the other slow movement) only while a game is being played. The blocks it clears pop with the normal burst; there are no sweeping beams and no spawn animation yet, and no Orb sounds.
+
 ### Cracked blocks (v1.1)
 
 `CellRenderer.DrawLayer` takes the block's crack level (`Board.FractureAt`): one crack is a three-segment dark line from the top-left corner with a one-pixel light edge, two cracks add a second line from the opposite corner that meets it and darken the face by a tenth. A block that has just cracked gets a 120 ms white tick and two specks of dust (`BlastEffects.DrawCracking`); a block that breaks splits into three grey-tinted chunks over 400 ms. Under Reduced motion only the tick remains.

@@ -36,6 +36,13 @@ public sealed record BurstWave(
     /// <summary>Blocks that broke in this wave because a third crack reached them (they are also in <see cref="ClearedCells"/>, not in <see cref="Groups"/>).</summary>
     public IReadOnlyList<BlockCell> Broken { get; init; } = Array.Empty<BlockCell>();
 
+    /// <summary>Blocks cleared because an Orb broke in this wave (also in <see cref="ClearedCells"/>, not in <see cref="Groups"/>).</summary>
+    public IReadOnlyList<BlockCell> OrbPopped { get; init; } = Array.Empty<BlockCell>();
+
+    /// <summary>An Orb broke in this wave. Its top-left cell is <see cref="OrbAt"/>.</summary>
+    public bool OrbBroke { get; init; }
+    public (int X, int Y)? OrbAt { get; init; }
+
     /// <summary>Blocks that survived this wave with a new crack (positions as they were when the wave popped).</summary>
     public IReadOnlyList<BlockCell> Cracked { get; init; } = Array.Empty<BlockCell>();
 

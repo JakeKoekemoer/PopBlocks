@@ -14,5 +14,12 @@ public static class RuleFeatures
     public static bool Fracture => true;
 
     /// <summary>Orbs appear.</summary>
-    public static bool Orbs => false;
+    public static bool Orbs => true;
+
+    /// <summary>
+    /// Orbs appear on their own in every Story level from <c>RegionRules.OrbIntro</c>. Off: the level solver does not yet play
+    /// Orbs (spawn, timer, break, corruption), so a Story level that could have one could no longer be promised solvable.
+    /// Orbs still come in Endless, and in the Story when the player's own rules ask for them (Always).
+    /// </summary>
+    public static bool OrbsInStory => false;
 }

@@ -51,6 +51,10 @@ On top of that:
 A player who finishes the campaign has earned about **14,000** gold from the Story alone; Classic is extra, and is
 what a stuck player can turn to for the price of a reroll.
 
+## Orbs (v1.1)
+
+Breaking an Orb pays a 25 gold bonus on top of the pop gold for the blocks it clears (the crack weights apply), and the bonus is halved by easier rules. A timer that runs out pays nothing. Orbs appear in Endless, so this is Endless income; the Story has none until Orbs are played by the solver.
+
 ## Pip's Insight (v1.1)
 
 Shop item `insight` (key `upgrade_insight`), Gameplay, no requirement: level 1 costs 250 (a button below the board, 3 uses per level), level 2 450 more (6 uses), level 3 800 more (unlimited, and an Always on switch, key `insight_always_on`, off by default): **1,500** in all. Like the new looks it is a long-term sink financed by pop gold and Endless income, so it is left out of the story-paced budget that `P7Tests` checks (level and region gold alone still buy every other upgrade and original look). It is off in lessons and on finales, and an Endless run that used it never sets the best score. It shows where the piece in hand does the most good and never plays the move.

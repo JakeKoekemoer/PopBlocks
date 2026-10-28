@@ -22,7 +22,7 @@ public static class ColourMatcher
             {
                 int start = y * width + x;
                 var colour = board[x, y];
-                if (colour == CellColour.Empty || visited[start]) continue;
+                if (colour == CellColour.Empty || colour == CellColour.Orb || visited[start]) continue;
 
                 var cells = new List<BlockCell>();
                 bool live = false;   // true once the group has a block that is not dormant

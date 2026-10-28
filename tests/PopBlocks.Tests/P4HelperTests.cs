@@ -76,7 +76,7 @@ public class ChainSenseTests
                 if (rng.Next(3) == 0) engine.Rotate();
 
                 var piece = engine.CurrentPiece!;
-                int predicted = PlacementPreview.CountWaves(engine.Board, piece);
+                int predicted = PlacementPreview.CountWaves(engine.Board, piece, orbTimerLeft: engine.OrbTimerLeft == 0 ? int.MaxValue : engine.OrbTimerLeft);
 
                 int waves = 0;
                 void Count(BurstWave w) => waves++;

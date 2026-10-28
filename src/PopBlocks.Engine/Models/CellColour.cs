@@ -9,4 +9,7 @@ public enum CellColour : byte
     Yellow = 3,
     Purple = 4,
     Lime = 5,
+
+    /// <summary>One cell of an Orb (a 2x2 unit, see OrbSystem). Not a colour: it never joins a group and never falls on its own.</summary>
+    Orb = 6,
 }

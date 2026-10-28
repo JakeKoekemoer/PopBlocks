@@ -31,7 +31,7 @@ public class P7Tests
         "stat_rerolls", "stat_continues", "level_losses", "eased_levels", "consolation_paid",
         "rule_fall_speed", "rule_colour_count", "rule_colours", "rule_shapes", "rule_min_group", "rule_solid_chance", "rule_board_rows",
         "rule_fracture", "rule_orbs", "rule_orb_timer", "rule_use_in_story", "settings_tab", "show_hanging", "colour_assist",
-        "cosmetic_mix_cyan", "cosmetic_mix_coral", "cosmetic_mix_yellow", "cosmetic_mix_purple", "cosmetic_mix_lime", "cosmetic_seen", "storybook_tab", "upgrade_insight", "insight_always_on",
+        "cosmetic_mix_cyan", "cosmetic_mix_coral", "cosmetic_mix_yellow", "cosmetic_mix_purple", "cosmetic_mix_lime", "cosmetic_seen", "storybook_tab", "upgrade_insight", "insight_always_on", "seen_orb_intro",
     };
 
     [Fact]

@@ -137,6 +137,9 @@ public sealed class GameDrawable : IDrawable
     /// <summary>The board's movement (stars, clouds, ripples, embers, petals) wants repainting.</summary>
     public bool NeedsAmbient => AmbientOn && !ReducedMotion && BoardAmbient.Animates(Theme.Motif);
 
+    /// <summary>Any slow movement (board ambience, an animated frame, an Orb) wants a gentle repaint.</summary>
+    public bool WantsSlowRepaint => NeedsAmbient || FrameAnimates || OrbAnimates;
+
     /// <summary>The frame in use moves while a piece falls, so it wants repainting too.</summary>
     public bool FrameAnimates =>
         !ReducedMotion && Frame is FrameStyle.Starlight or FrameStyle.Ripple or FrameStyle.Flame or FrameStyle.Neon
@@ -148,7 +151,7 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>The slow movement (board ambience, frame animation) is all that is running: a gentle repaint is enough.</summary>
     public bool OnlyAmbientRunning(long nowMs) =>
-        (NeedsAmbient || FrameAnimates)
+        WantsSlowRepaint
         && !(Game is { PendingGroups.Count: > 0 }) && !Effects.IsActive(nowMs) && !Floaters.IsActive(nowMs) && HintColumn < 0 && !CameraMoving(nowMs);
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
@@ -188,6 +191,7 @@ public sealed class GameDrawable : IDrawable
 
             for (int pass = 0; pass < 3; pass++)
                 DrawLockedCells(canvas, (CellRenderer.BlockLayer)pass, game.Board, originX, originY, cell, now);
+            DrawOrb(canvas, game, originX, originY, cell, now);
 
             if (LensLevel > 0) DrawLens(canvas, game, originX, originY, cell);
 
@@ -342,7 +346,7 @@ public sealed class GameDrawable : IDrawable
             for (int x = 0; x < board.Width; x++)
             {
                 var colour = board[x, y];
-                if (colour == CellColour.Empty) continue;
+                if (colour is CellColour.Empty or CellColour.Orb) continue;   // an Orb is drawn as a whole, below
 
                 var links = LinksAt(board, x, y, colour);
                 float fall = Effects.FallOffsetCells(x, y, now);
@@ -659,6 +663,19 @@ public sealed class GameDrawable : IDrawable
         }
     }
 
+    /// <summary>The Orb, if there is one, drawn over its four cells.</summary>
+    private void DrawOrb(ICanvas canvas, GameEngine game, float originX, float originY, float cell, long now)
+    {
+        if (game.OrbAt is not { } orb) return;
+        if (BoardSpace.AboveView(orb.Y) && BoardSpace.AboveView(orb.Y + 1)) return;
+        float x0 = MathF.Min(BoardSpace.ScreenX(orb.X, Flip, originX, cell), BoardSpace.ScreenX(orb.X + 1, Flip, originX, cell));
+        float y0 = MathF.Min(BoardSpace.ScreenY(orb.Y, Flip, originY, cell), BoardSpace.ScreenY(orb.Y + 1, Flip, originY, cell));
+        OrbDrawable.Draw(canvas, x0, y0, cell * 2f, game.OrbTimerLeft, game.Rules.OrbTimer, now, ReducedMotion, AmbientOn);
+    }
+
+    /// <summary>The Orb's swirl and shiver move while it is on the board.</summary>
+    public bool OrbAnimates => AmbientOn && !ReducedMotion && Game is { OrbAt: not null };
+
     private int _belowShown = -1;
     private string _belowText = string.Empty;
 
@@ -922,7 +939,7 @@ public sealed class GameDrawable : IDrawable
             {
                 _glowPiece = piece;
                 _glowPlaced = game.PiecesPlaced;
-                _glowChain = PlacementPreview.StartsChain(game.Board, piece, game.Rules.MinGroupSize, game.FractureActive);
+                _glowChain = PlacementPreview.StartsChain(game.Board, piece, game.Rules.MinGroupSize, game.FractureActive, game.OrbTimerLeft == 0 ? int.MaxValue : game.OrbTimerLeft);
             }
             chain = _glowChain;
         }

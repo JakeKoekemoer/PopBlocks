@@ -16,11 +16,12 @@
 | 10 Story Book | done | 01a16eb |
 | 11 Tall scrolling board | done (default height not flipped, see Unfinished) | 713b187 |
 | 12 Pip's Insight | done | cfb2750 |
-| 13 Fracture | done | PENDING13 |
-| 14 The Orb | pending | |
+| 13 Fracture | done | a5a6cbd |
+| 14 The Orb | done (Endless and Always rule; Story auto-orbs off, see Unfinished) | PENDING14 |
 | 15 Achievements | pending | |
 | 16 Performance | pending | |
 | 17 Wrap-up | pending | |
 
 ## Unfinished
 - Phase 11: the default board height is still 16 rows. Tall boards (20-32) work through the player's own rules; making 24 the default needs the solver and the level snapshot set regenerated for it (see DECISIONS).
+- Phase 14: Orbs appear in Endless and where the player's rules say Always. Orbs on their own in the Story from level 40 are off (`RuleFeatures.OrbsInStory`) because the level solver does not play them. No Orb sounds, spawn/break/corruption animations beyond the normal burst and crack effects, and Insight does not value breaking an Orb.

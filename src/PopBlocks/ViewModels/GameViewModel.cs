@@ -1710,6 +1710,11 @@ public sealed class GameViewModel : ObservableObject
                 _audio.Rotated();
                 break;
 
+            case GameEvent.OrbSpawned when !_settings.SeenOrbIntro:
+                _settings.SeenOrbIntro = true;
+                Toast?.Invoke("An Orb! Pop a block touching it to break it and clear its rows and columns for a big gold bonus. If its timer runs out, it cracks the blocks around it.");
+                break;
+
             case GameEvent.HardDropped:
                 _droppedHard = true;   // the engine raises PieceLocked straight after this
                 break;

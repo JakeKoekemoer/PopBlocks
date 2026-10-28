@@ -40,6 +40,29 @@ public static class GravityResolver
     public static IReadOnlyList<CellMove> Apply(Board board)
     {
         var moves = new List<CellMove>();
+        // Blocks fall; an Orb is a floor for what is above it, and falls (as one 2x2 unit) when both cells under it are
+        // empty; then what was resting on it falls with it. Repeat until nothing moves.
+        do Compact(board, moves);
+        while (DropOrb(board));
+        return moves;
+    }
+
+    /// <summary>The Orb, if both cells under it are empty, drops one row. True if it did.</summary>
+    private static bool DropOrb(Board board)
+    {
+        var orb = OrbSystem.Find(board);
+        if (orb is not { } o) return false;
+        int below = o.Y + 2;
+        if (below >= board.Height || board[o.X, below] != CellColour.Empty || board[o.X + 1, below] != CellColour.Empty) return false;
+        OrbSystem.Remove(board, o.X, o.Y);
+        for (int cy = o.Y + 1; cy <= o.Y + 2; cy++)
+            for (int cx = o.X; cx <= o.X + 1; cx++)
+                board[cx, cy] = CellColour.Orb;
+        return true;
+    }
+
+    private static void Compact(Board board, List<CellMove> moves)
+    {
         for (int x = 0; x < board.Width; x++)
         {
             int writeY = board.Height - 1;
@@ -47,6 +70,11 @@ public static class GravityResolver
             {
                 var colour = board[x, y];
                 if (colour == CellColour.Empty) continue;
+                if (colour == CellColour.Orb)
+                {
+                    writeY = y - 1;   // blocks above rest on the Orb; the Orb itself does not move here
+                    continue;
+                }
 
                 if (y != writeY)
                 {
@@ -61,6 +89,5 @@ public static class GravityResolver
                 writeY--;
             }
         }
-        return moves;
     }
 }
