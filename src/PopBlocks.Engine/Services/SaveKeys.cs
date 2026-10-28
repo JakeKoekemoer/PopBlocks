@@ -91,7 +91,7 @@ public static class SaveKeys
     /// <summary>Rerolls used on the current level. Not reset by a reroll; reset when the level is cleared.</summary>
     public const string CurrentLevelRerolls = "current_level_rerolls";
 
-    /// <summary>Failures on the current level. Not reset by a reroll; reset when the level is cleared.</summary>
+    /// <summary>Failures on the current level. Back to 0 on a successful reroll (v1.1) and when the level is cleared. The never-resetting count of losses is the level-losses key.</summary>
     public const string CurrentLevelFailures = "current_level_failures";
 
     /// <summary>Comma-separated <c>level:seed</c> pairs: the seed each cleared level was first cleared with.</summary>
@@ -112,6 +112,9 @@ public static class SaveKeys
     public const string StatLevelsWon = "stat_levels_won";
     public const string StatMostGoals = "stat_most_goals";
 
+    /// <summary>Levels rerolled, in total (v1.1).</summary>
+    public const string StatRerolls = "stat_rerolls";
+
     /// <summary>Levels played in one region (the journal's per-region count): <c>stat_plays_r1</c> to <c>stat_plays_r8</c>.</summary>
     public static string StatRegionPlays(int region) => "stat_plays_r" + region;
 
@@ -121,6 +124,7 @@ public static class SaveKeys
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
+        StatRerolls,
     };
 
     // Not listed here on purpose: PersistentSettings.EnabledKey ("save_file_enabled"). It records whether this phone keeps a
@@ -138,6 +142,7 @@ public static class SaveKeys
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
+        StatRerolls,
     };
 }
 

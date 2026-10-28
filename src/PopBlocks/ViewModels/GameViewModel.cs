@@ -328,7 +328,7 @@ public sealed class GameViewModel : ObservableObject
     public string ChainText { get => _chainText; private set { if (SetProperty(ref _chainText, value)) OnPropertyChanged(nameof(HasChain)); } }
     public bool HasChain => _chainText.Length > 0;
 
-    public bool HasMoves => _game.HasMoveLimit;
+    public bool HasMoves => _game.HasMoveLimit && !_isLoading;
     public string MovesText => _game.MovesLeft.ToString();
 
     public Color MovesColour => !_game.HasMoveLimit ? Colors.White
@@ -341,7 +341,7 @@ public sealed class GameViewModel : ObservableObject
 
     // ---------------------------------------------------------------- bindable state: optional memory objective
 
-    private BonusObjective? Bonus => _game.Story?.Bonus;
+    private BonusObjective? Bonus => _isLoading ? null : _game.Story?.Bonus;
 
     /// <summary>This level carries an optional objective that uncovers a memory.</summary>
     public bool HasBonus => Bonus is not null;
@@ -1012,6 +1012,8 @@ public sealed class GameViewModel : ObservableObject
             return;
         }
 
+        _lifetime.AddReroll();
+
         // Abandoning the run to reroll is the player's choice, not another failure.
         _failureCounted = true;
         _seedPinned = false;
@@ -1081,6 +1083,7 @@ public sealed class GameViewModel : ObservableObject
         _isLoading = true;
         _recap = PopBlocks.Engine.Story.LoadingRecap.Build(_unlocks);
         RaiseLoading();
+        LoadLevelState();   // the old level's goals, moves and objective must not stay up while the new level is found
 
         try
         {
@@ -1358,13 +1361,29 @@ public sealed class GameViewModel : ObservableObject
 
         _game.Start(_setup);
 
-        RaiseHeader();
-        UpdateOverlay();
-        RaiseBonus();
-        RaiseChoice();
-        RaiseHelpers();
+        LoadLevelState();
         PrefetchNextLevel();
         GameStarted?.Invoke();
+    }
+
+    /// <summary>
+    /// The one place that makes every level-dependent binding match the engine: goals (rebuilt from scratch, never diffed
+    /// against the previous level), the optional objective, the move counter, the header, the result card, the choice panel
+    /// and the helper buttons. A new game, a reroll and the loading card all go through it, so none of them can leave the
+    /// previous level's goal bar behind.
+    /// </summary>
+    private void LoadLevelState()
+    {
+        _goalSignature = string.Empty;
+        UpdateGoals();
+        RaiseBonus();
+        OnPropertyChanged(nameof(HasMoves));
+        OnPropertyChanged(nameof(MovesText));
+        OnPropertyChanged(nameof(MovesColour));
+        RaiseHeader();
+        UpdateOverlay();
+        RaiseChoice();
+        RaiseHelpers();
     }
 
     public void GoToNextLevel()
@@ -1530,7 +1549,7 @@ public sealed class GameViewModel : ObservableObject
 
     private void UpdateGoals()
     {
-        var goals = _game.Goals;
+        IReadOnlyList<GoalState> goals = _isLoading ? Array.Empty<GoalState>() : _game.Goals;
         string signature = string.Join(",", goals.Select(g => g.Current));
         if (signature == _goalSignature && goals.Count == _goals.Count) return;
         _goalSignature = signature;

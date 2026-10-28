@@ -23,6 +23,7 @@ public sealed class LifetimeStats
         CellsPopped = Read(SaveKeys.StatCellsPopped);
         LevelsWon = Read(SaveKeys.StatLevelsWon);
         MostGoalsOnClearedLevel = Read(SaveKeys.StatMostGoals);
+        Rerolls = Read(SaveKeys.StatRerolls);
     }
 
     public int LargestGroup { get; private set; }
@@ -41,6 +42,16 @@ public sealed class LifetimeStats
 
     /// <summary>The most goals a level you cleared asked for at once.</summary>
     public int MostGoalsOnClearedLevel { get; private set; }
+
+    /// <summary>Levels rerolled, in total (free rerolls of cleared levels count too).</summary>
+    public int Rerolls { get; private set; }
+
+    /// <summary>One more level has been rerolled.</summary>
+    public void AddReroll()
+    {
+        Rerolls = Grow(SaveKeys.StatRerolls, Rerolls, 1);
+        Changed?.Invoke();
+    }
 
     /// <summary>Story levels played (started and at least one piece placed) in a region, 1 to 8.</summary>
     public int PlaysInRegion(int region) =>
@@ -83,7 +94,7 @@ public sealed class LifetimeStats
     {
         foreach (var key in SaveKeys.StatKeys) _settings.SetInt(key, 0);
         LargestGroup = LongestChain = MostClearedByOnePiece = MostMovesLeft = 0;
-        AbilitiesUsed = BoardsCleared = CellsPopped = LevelsWon = MostGoalsOnClearedLevel = 0;
+        AbilitiesUsed = BoardsCleared = CellsPopped = LevelsWon = MostGoalsOnClearedLevel = Rerolls = 0;
         Changed?.Invoke();
     }
 

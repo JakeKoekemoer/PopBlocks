@@ -54,6 +54,7 @@ public partial class JournalPanel : ContentView, IWorkshopPanel
         {
             ("Blocks popped", $"{_stats.CellsPopped:N0}"),
             ("Helpers used", Show(_stats.AbilitiesUsed)),
+            ("Levels rerolled", Show(_stats.Rerolls)),
         });
 
         var plays = new List<(string, string)>();

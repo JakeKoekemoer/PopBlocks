@@ -119,7 +119,8 @@ public sealed class StoryLevels
         // player gets the reroll for free; the other order could take gold and give nothing. Roll is deterministic for a
         // given reroll count, so after a restart the player gets the same new level.
         var state = Current;
-        SeedStore.WriteCurrent(_settings, state with { Seed = 0, Rerolls = state.Rerolls + 1 });
+        // The failure count starts again with the new level (the lifetime count of losses lives in its own key).
+        SeedStore.WriteCurrent(_settings, state with { Seed = 0, Rerolls = state.Rerolls + 1, Failures = 0 });
         if (price > 0) _progress.TrySpend(price);
         Changed?.Invoke();
         return true;
