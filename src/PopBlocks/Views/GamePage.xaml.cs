@@ -159,6 +159,15 @@ public partial class GamePage : ContentPage
         await Navigation.PopAsync();
     }
 
+    /// <summary>The pause screen's song list: automatic, then every song earned so far.</summary>
+    private async void OnTrackListTapped(object? sender, TappedEventArgs e)
+    {
+        var choices = _vm.TrackChoices();
+        string picked = await DisplayActionSheet("Soundtrack", "Close", null, choices.Select(c => c.Label).ToArray());
+        foreach (var (number, label) in choices)
+            if (label == picked) { _vm.ChooseTrack(number); return; }
+    }
+
     // ------------------------------------------------------------------ a new game or level begins
 
     private void OnGameStarted()

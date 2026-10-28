@@ -70,6 +70,7 @@ public static class SaveCode
             new(SaveKeys.AudioMuteMusic, Kind.Bool),
             new(SaveKeys.AudioMuteAmbience, Kind.Bool),
             new(SaveKeys.AudioReduced, Kind.Bool),
+            new(SaveKeys.AudioTrack, Kind.Int, 0, Audio.Soundtrack.TrackCount),
             new(SaveKeys.PlayerName, Kind.Name),
             new(SaveKeys.PlayerSalt, Kind.Int, 0, int.MaxValue),
             new(SaveKeys.CurrentLevelFor, Kind.Int, 0, 100_000),

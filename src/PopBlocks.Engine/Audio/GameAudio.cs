@@ -216,6 +216,7 @@ public sealed class GameAudio : IDisposable
     {
         ApplyGains(immediate: false);
         Director.SettingsChanged();
+        if (_scene is Scene.Classic or Scene.Region && _settings.SelectedTrack != _appliedTrack) ApplyScene();   // a new song was picked
     });
 
     /// <summary>Pushes the volumes and mutes to the engine. A mute is a very short ramp (immediate to the ear, no click).</summary>
@@ -233,14 +234,46 @@ public sealed class GameAudio : IDisposable
 
     // ---------------------------------------------------------------------------------------------------- music
 
-    public void ShowMenu() => Post(() => { Wake(); Director.ShowMenu(); });
-    public void ShowClassic() => Post(() => { Wake(); Director.ShowClassic(); });
+    public void ShowMenu() => Post(() => { _scene = Scene.Menu; ApplyScene(); });
+    public void ShowClassic() => Post(() => { _scene = Scene.Classic; ApplyScene(); });
 
     /// <summary>A Story level or scene in this region (1 to 8), in the state the region is in.</summary>
     public void ShowRegion(int regionNumber, RegionState state) =>
-        Post(() => { Wake(); Director.ShowRegion(ScoreLibrary.FromNumber(regionNumber), state); });
+        Post(() => { _scene = Scene.Region; _sceneRegion = regionNumber; _sceneState = state; ApplyScene(); });
 
-    public void StopMusic() => Post(() => Director.Stop());
+    public void StopMusic() => Post(() => { _scene = Scene.None; Director.Stop(); });
+
+    // The music of the place the game is in (the "scene") and the song the player may have chosen instead. A chosen song plays
+    // during games (Classic, Story and lessons); the menu and the map always keep the Spectrum theme.
+    private enum Scene { None, Menu, Classic, Region }
+    private Scene _scene;
+    private int _sceneRegion;
+    private RegionState _sceneState;
+    private int _appliedTrack;      // the chosen song in force right now (0 = automatic)
+
+    /// <summary>Plays what the scene calls for: the chosen song during a game, otherwise the music of the place.</summary>
+    private void ApplyScene()
+    {
+        if (_scene == Scene.None) return;
+        Wake();
+
+        var chosen = _scene is Scene.Classic or Scene.Region ? Soundtrack.Get(_settings.SelectedTrack) : null;
+        _appliedTrack = chosen?.Number ?? 0;
+
+        if (chosen is not null)
+        {
+            if (chosen.Region == RegionId.Menu) Director.ShowMenu();
+            else Director.ShowRegion(chosen.Region, chosen.State);
+            return;
+        }
+
+        switch (_scene)
+        {
+            case Scene.Menu: Director.ShowMenu(); break;
+            case Scene.Classic: Director.ShowClassic(); break;
+            default: Director.ShowRegion(ScoreLibrary.FromNumber(_sceneRegion), _sceneState); break;
+        }
+    }
 
     /// <summary>The story panel opened (true) or closed (false).</summary>
     public void DialogueChanged(bool visible) => Post(() => Director.SetDialogue(visible));
@@ -375,7 +408,8 @@ public sealed class GameAudio : IDisposable
         if ((cue & StageCue.RestoreSweep) != 0)
         {
             Play(cues.Restoration);
-            if (Director.Region == region) Director.Restore(sweepTo);
+            if (_scene == Scene.Region && _sceneRegion == regionNumber) _sceneState = sweepTo;
+            if (_appliedTrack == 0 && Director.Region == region) Director.Restore(sweepTo);   // a song the player chose stays as it is
         }
         if ((cue & StageCue.MemoryCrystal) != 0) Play(cues.MemoryCrystal);
 

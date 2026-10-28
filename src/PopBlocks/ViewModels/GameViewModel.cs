@@ -30,6 +30,7 @@ public sealed class GameViewModel : ObservableObject
     private readonly ShopService _shop;
     private readonly GameSettings _settings;
     private readonly GameAudio _audio;
+    private readonly AudioSettings _audioSettings;
     private readonly CampaignService _campaign;
     private readonly CosmeticLoadout _loadout;
     private readonly DevTools _dev;
@@ -80,7 +81,7 @@ public sealed class GameViewModel : ObservableObject
     private bool _isNewBest;
     private IReadOnlyList<GoalState> _goals = Array.Empty<GoalState>();
 
-    public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, GameAudio audio,
+    public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, GameAudio audio, AudioSettings audioSettings,
         CampaignService campaign, CosmeticLoadout loadout, DevTools dev, LifetimeStats lifetime, EndingService ending,
         AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial,
         StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks)
@@ -97,6 +98,7 @@ public sealed class GameViewModel : ObservableObject
         _campaign = campaign;
         _loadout = loadout;
         _audio = audio;
+        _audioSettings = audioSettings;
         _highScores = highScores;
         _progress = progress;
         _shop = shop;
@@ -115,6 +117,8 @@ public sealed class GameViewModel : ObservableObject
         _stock.Changed += RaiseHelpers;
 
         PauseCommand = new Command(Pause);
+        PreviousTrackCommand = new Command(() => StepTrack(-1));
+        NextTrackCommand = new Command(() => StepTrack(+1));
         ResumeCommand = new Command(Resume);
         RestartCommand = new Command(NewGame);
         NextLevelCommand = new Command(GoToNextLevel);
@@ -174,6 +178,8 @@ public sealed class GameViewModel : ObservableObject
     public event Action<string>? Toast;
 
     public ICommand PauseCommand { get; }
+    public ICommand PreviousTrackCommand { get; }
+    public ICommand NextTrackCommand { get; }
     public ICommand ResumeCommand { get; }
     public ICommand RestartCommand { get; }
     public ICommand NextLevelCommand { get; }
@@ -711,18 +717,94 @@ public sealed class GameViewModel : ObservableObject
         _audioTension = -1f;
         _audioSceneKey = string.Empty;
         _audio.ClearPause();
+
+        // A chosen song that is no longer earned (a restored or reset save) goes back to automatic.
+        if (Soundtrack.Get(_audioSettings.SelectedTrack) is { } chosen && !Soundtrack.IsUnlocked(chosen, _progress.HighestCleared))
+            _audioSettings.SelectedTrack = 0;
+
         if (_setup.IsLesson)
         {
+            _naturalTrack = Soundtrack.All[0].Number;
             _audio.ShowMenu();   // a tutorial lesson keeps the quiet theme
         }
         else if (_setup.IsStory)
         {
             var region = RegionCatalog.For(_setup.Level);
-            if (region is null) _audio.ShowRegion(RegionCatalog.All[^1].Number, RegionState.Restored);   // past the campaign: the Heart, restored
-            else _audio.ShowRegion(region.Number, _campaign.ProgressOf(region).State);
+            if (region is null)
+            {
+                _naturalTrack = Soundtrack.For(RegionCatalog.All[^1].Number, RegionState.Restored).Number;
+                _audio.ShowRegion(RegionCatalog.All[^1].Number, RegionState.Restored);   // past the campaign: the Heart, restored
+            }
+            else
+            {
+                var state = _campaign.ProgressOf(region).State;
+                _naturalTrack = Soundtrack.For(region.Number, state).Number;
+                _audio.ShowRegion(region.Number, state);
+            }
             _audio.LevelStarted();
         }
-        else _audio.ShowClassic();
+        else
+        {
+            _naturalTrack = Soundtrack.For(1, RegionState.Restored).Number;   // Classic: the Garden, restored
+            _audio.ShowClassic();
+        }
+        RaiseTrack();
+    }
+
+    // ---------------------------------------------------------------- the song picker on the pause screen
+
+    private int _naturalTrack = 1;
+
+    private bool TrackChosen => Soundtrack.Get(_audioSettings.SelectedTrack) is not null;
+    private Track? PlayingTrack => Soundtrack.Get(_audioSettings.SelectedTrack) ?? Soundtrack.Get(_naturalTrack);
+
+    public string TrackCaption => TrackChosen ? "NOW PLAYING · YOUR CHOICE" : "NOW PLAYING · AUTOMATIC";
+    public string TrackTitle => PlayingTrack?.Title ?? string.Empty;
+    public string TrackDetail => PlayingTrack?.Detail ?? string.Empty;
+    public string TrackHint => $"{Soundtrack.Unlocked(_progress.HighestCleared).Count} of {Soundtrack.TrackCount} songs found · tap to choose";
+
+    private void RaiseTrack()
+    {
+        OnPropertyChanged(nameof(TrackCaption));
+        OnPropertyChanged(nameof(TrackTitle));
+        OnPropertyChanged(nameof(TrackDetail));
+        OnPropertyChanged(nameof(TrackHint));
+    }
+
+    /// <summary>The choices in order: automatic first, then every song earned so far.</summary>
+    private List<int> TrackOrder()
+    {
+        var order = new List<int> { 0 };
+        order.AddRange(Soundtrack.Unlocked(_progress.HighestCleared).Select(t => t.Number));
+        return order;
+    }
+
+    /// <summary>The previous or next song earned (wrapping round, with automatic as one of the stops).</summary>
+    private void StepTrack(int direction)
+    {
+        var order = TrackOrder();
+        int at = Math.Max(0, order.IndexOf(_audioSettings.SelectedTrack));
+        ChooseTrack(order[(at + direction + order.Count) % order.Count]);
+    }
+
+    /// <summary>Plays this song from now on (0 is automatic). Songs that are not earned are ignored.</summary>
+    public void ChooseTrack(int number)
+    {
+        if (number != 0 && !TrackOrder().Contains(number)) return;
+        _audioSettings.SelectedTrack = number;   // GameAudio notices and switches the music at once
+        RaiseTrack();
+    }
+
+    /// <summary>The list shown when the player taps the song: automatic, then each song earned. The current one is marked.</summary>
+    public IReadOnlyList<(int Number, string Label)> TrackChoices()
+    {
+        var list = new List<(int, string)>
+        {
+            (0, (TrackChosen ? "" : "♪ ") + "Automatic (the music of the place)"),
+        };
+        foreach (var t in Soundtrack.Unlocked(_progress.HighestCleared))
+            list.Add((t.Number, (t.Number == _audioSettings.SelectedTrack ? "♪ " : "") + $"{t.Title}  ·  {t.Detail}"));
+        return list;
     }
 
     /// <summary>Few moves left on a Story level adds a little unease to the music (never more than a hint).</summary>

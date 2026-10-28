@@ -6,6 +6,7 @@ PopBlocks has a procedural soundtrack: every note is computed on the phone while
 
 - One piece of music per place: the menu and map share a quiet theme built on the Spectrum motif; Classic plays the Forgotten Garden in its restored form; each of the eight regions has its own piece. Lessons use the menu theme.
 - A region's piece has three states, **faded**, **recovering** and **restored**, and they are the *same piece*. Restoring a region brings in more notes and a warmer harmony on the next bar; the music never restarts.
+- The player can listen to any song they have earned and pick one to play during games: see 11.5.
 - The sound effects (rotate, place, hard drop, pop) are played by the same mixer and are tuned to the region's scale, so they never clash with the music. Each colour pops with its own instrument.
 - The old SoundPool player (`AndroidSoundPlayer`, `ToneSynth`) is kept as a **fallback**. It is used only if the new audio output cannot start on a phone.
 
@@ -29,7 +30,7 @@ Engine files, in the order the sound travels:
 | `Ambience.cs` | A very quiet, dark bed of filtered noise that swells in occasional gusts (never a steady hiss), plus a few sparse events per region (a high bell, a glass tone, a gliding tone, a clock tick) at random gaps. No loops and no samples. |
 | `MusicDirector.cs` | Decides which layers are on (see 11.4). |
 | `FinaleScript.cs` | The scripted ending cue. |
-| `AudioSettings.cs` | Volumes and mutes (see 11.6). |
+| `AudioSettings.cs` | Volumes and mutes (see 11.7). |
 | `IAudioOutput.cs` | What the engine needs from a phone: start, pause, resume, and interruptions. `NullAudioOutput` is used in tests and on non-Android builds. |
 | `GameAudio.cs` | **The only class the app talks to.** Owns a worker thread (below normal priority) that runs a 10 Hz tick, so a call from the UI never waits for audio. |
 | `LazySoundPlayer.cs` | Creates the fallback `ISoundPlayer` only if it is ever needed. |
@@ -70,14 +71,37 @@ The tempos are inside the ranges the spec gives; `RegionProfiles.ValidateAll()` 
 
 Also: **pause** dips the music to 55 %; a **Warden scene** hushes everything to a low tone and a few isolated motif notes; and with **few moves left** on a Story level a quiet low pulse rises (the Tension layer, at most 70 %, off in reduced-audio mode).
 
-## 11.5 Sound effects
+## 11.5 The songs and the song picker
+
+`Soundtrack.cs` lists 25 songs: the **Spectrum** theme, and for each region its **faded**, **recovering** and **restored** songs (the same piece in its three states). The faded and restored titles are the ones in the region's music profile (`FadedThemeId`, `RestoredThemeId`); the recovering titles are in `Soundtrack.cs`.
+
+| Song | Unlocked when |
+|---|---|
+| Spectrum | from the start |
+| A region's faded song | the region opens (its first level is reachable) |
+| A region's recovering song | the mid-region discovery has been passed |
+| A region's restored song | the region is restored |
+
+The rule is `Soundtrack.IsUnlocked(track, highestCleared)`, derived from the player's progress; nothing extra is saved about which songs are unlocked.
+
+**On the pause screen** a "now playing" row shows the song, with arrows that step through *automatic* and every song earned, and a tap on the title opens the full list. Choosing a song switches the music at once (the pause dip stays on) and the choice is saved (`audio_track`; 0 is automatic).
+
+- A chosen song plays during **games** (Classic, Story and lessons). The menu and world map always keep the Spectrum theme.
+- Pops and effects follow the chosen song's key, because the effects take their key from the music that is playing.
+- While a song is chosen the restoration sweep does not change it. On *automatic* the music follows the place as before.
+- A choice that is no longer earned (a reset or restored save) falls back to automatic at the next game.
+- The finale always plays when the Heart is restored, whatever was chosen.
+
+Code: `GameAudio` remembers the scene the game asked for (menu, Classic, or a region and state) and `ApplyScene()` plays either that or the chosen song; changing `AudioSettings.SelectedTrack` re-applies it. The view model (`GameViewModel`, "song picker") exposes the row and `ChooseTrack`; `GamePage.xaml` has the row in the pause card.
+
+## 11.6 Sound effects
 
 - **Rotate, place, hard drop** are short cues pitched to the region's scale (`SfxLibrary.Rotate` and friends are authored in C and shifted by `RegionCues.KeyOffset`).
 - **Pops** are played once per colour group, from `GameViewModel`'s `WaveResolved` handler, not once per block. Each colour has its own timbre (Cyan bright pluck, Coral round bell, Yellow wood note, Purple glass chime, Lime wooden marimba). The pitch comes from `SfxLibrary.PopSemitones`, which snaps to the scale; a chain climbs six steps, then hovers on the top two so it never runs out of range. Loudness is equalised per timbre (`PopGain`) so no colour is louder than another.
-- **Menu sounds**: a button tap is added to every `Button` automatically by a handler mapping in `MauiProgram.HookButtonTaps`; set `ClassId="NoTap"` on a button to opt out (the five game controls do). The world map plays a different sound on a locked level.
+- **Menu sounds**: `GameAudio.Ui(UiSound.Tap)` and friends exist, but there is no automatic tap on every button: a global hook on the native click listener made buttons stop working and was removed. The world map plays a tap on a tile or region and a different sound on a locked level, and Settings plays a sound when a slider is let go or a switch is flipped. To add a tap elsewhere, call `Ui` from that button's own `Clicked` handler. (The five game-control buttons carry `ClassId="NoTap"`, which nothing reads at the moment.)
 - Effects that arrive while the app is in the background, or during an interruption, are **dropped**, not queued.
 
-## 11.6 Settings
+## 11.7 Settings
 
 Settings, then **Music and sound**. All values are saved locally through `ILocalSettings` (so they travel in the save file and save code).
 
@@ -89,12 +113,13 @@ Settings, then **Music and sound**. All values are saved locally through `ILocal
 | Sound effects switch | `sound_effects` (the original key, so older saves keep their choice) | on |
 | Ambience volume, and Ambience switch | `audio_ambience`, `audio_mute_ambience` | 60, on |
 | Reduced audio | `audio_reduced` | off |
+| Chosen song (pause screen) | `audio_track` | 0 (automatic) |
 
 Volumes are squared before they reach the mixer, which feels more even than a straight line. **Muting is immediate and click-free:** the bus gain ramps to zero in about 30 ms and the reverb tail is cut with it (a test checks the music is below audibility within 50 ms).
 
 **Reduced audio** plays a simpler mix: no Counter, no Pulse, no Tension, no combo flourish, no ambience, a quieter Accent layer, and effects at 70 %. The game plays the same. With all sound off, nothing about the game changes.
 
-## 11.7 Phone behaviour (Android)
+## 11.8 Phone behaviour (Android)
 
 - **Lifecycle.** `MainActivity.OnPause` calls `GameAudio.OnSleep()` (pauses the output and gives up audio focus); `OnResume` calls `OnResume()`, which also clears any "interrupted" flag so a missed focus-gain callback can never leave the game silent.
 - **Audio focus.** The game asks for `AudioFocus.Gain` (exclusive). While PopBlocks is in the foreground, other music apps pause. A phone call or an assistant takes focus away: the music pauses and comes back when focus returns. A "can duck" request (a navigation prompt) lowers the volume instead. If you would rather let other apps keep playing underneath, change the request in `AndroidAudioOutput` to `AudioFocus.GainTransientMayDuck` or skip the request. That is a product choice, not a technical one.
@@ -102,7 +127,7 @@ Volumes are squared before they reach the mixer, which feels more even than a st
 - **Output.** `AudioTrack`, float stereo, 44.1 kHz, a 512-frame buffer written from a dedicated thread; low-latency mode on Android 8 and up. A write error rebuilds the track; if the output cannot start at all, `GameAudio.Failed` is raised, the app logs it, and the old SoundPool player takes over the effects.
 - **No permissions.** `AudioTrack`, audio focus and the noisy-route broadcast need none. `scripts/Check-Permissions.ps1` should still pass on a Release APK. **No packages were added.**
 
-## 11.8 Changing the music
+## 11.9 Changing the music
 
 - **Tune a region** (tempo, scale, chords, instruments, busyness): edit its profile in `RegionProfiles.cs`. Keep the tempo in the spec's range (`ValidateAll`).
 - **Change a sound effect:** `SfxLibrary.cs` (the cues are lists of notes and noise bursts). The tests check that every cue is finite, below a peak, and starts and ends in silence.
@@ -110,20 +135,21 @@ Volumes are squared before they reach the mixer, which feels more even than a st
 - **Add a new cue to the game:** add the cue to `SfxLibrary` or `RegionCues`, add a method to `GameAudio` that plays it, and call that method from the view model.
 - **Remember** the engine must stay free of MAUI and network references. `The_audio_code_uses_no_network_and_no_platform_ui_libraries` fails if that changes.
 
-## 11.9 Tests
+## 11.10 Tests
 
 `AudioMusicTests.cs` (the composer, scores, motif, profiles, effects) and `AudioSystemTests.cs` (settings, mixer, director, `GameAudio`, mute, interruptions, lifecycle). They run on a PC with `NullAudioOutput`, a fake clock and no worker thread. They cannot judge how the music *sounds*; that needs ears. The Android output class is not covered by tests, because it needs a device.
 
-## 11.10 Checking it on a phone
+## 11.11 Checking it on a phone
 
 The Android output (`AndroidAudioOutput`) and the hooks in the pages were written without a device, so run this once on a real phone (Release or Debug) before trusting them:
 
 1. Start the game: the menu theme should fade in quietly within a second or two. Open Settings, move the sliders, and flip each switch; mute must silence the music at once with no click.
 2. Play a Classic game and a Story level in two or three different regions. Pops should sound in key with the music; a long chain should add the chain layer and stay pleasant.
 3. Open a story scene: the music ducks. Finish a region: the colour sweep gets its swell, then the unlock chime. Finish the Heart (the dev menu can jump levels): the finale.
-4. Press Home, then come back: music stops while away and returns. Take a phone call or start another music app: PopBlocks yields and comes back (see the focus note in 11.7).
-5. Unplug headphones while playing: the music pauses and returns on your next tap.
-6. Turn **Reduced audio** on and **All sound** off in turn; the game must stay fully playable.
-7. Run `scripts/Check-Permissions.ps1` on the Release APK: it must still pass.
+4. Pause a game: the "now playing" row should show a song. Step with the arrows and tap the title for the list; the music should change at once and stay quiet while paused, and the choice should still be there in the next game. Locked songs must not appear.
+5. Press Home, then come back: music stops while away and returns. Take a phone call or start another music app: PopBlocks yields and comes back (see the focus note in 11.8).
+6. Unplug headphones while playing: the music pauses and returns on your next tap.
+7. Turn **Reduced audio** on and **All sound** off in turn; the game must stay fully playable.
+8. Run `scripts/Check-Permissions.ps1` on the Release APK: it must still pass.
 
 What a PC cannot tell you, and you must judge by ear: whether each piece feels like its region, whether the restored versions feel like a reward, the loudness balance between music and effects at the default volumes, and whether any note is harsh on a phone speaker. Every number for that is in `RegionProfiles.cs`, `SfxLibrary.cs` and `AudioSettings.cs` (defaults), so tuning needs no structural change.

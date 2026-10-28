@@ -49,6 +49,7 @@ public sealed class MusicDirector
     public bool IsLoaded => _loaded;
     public bool InFinale => _finale;
     public bool InDialogue => _dialogue;
+    public bool IsPaused => _paused;
     public int ChainLevel => _chain;
 
     // ---- choosing the music ------------------------------------------------------------------------------------------------
@@ -103,8 +104,10 @@ public sealed class MusicDirector
 
     private void ResetTransient()
     {
-        _dialogue = false; _hush = false; _paused = false; _tension = 0f;
-        _engine.SetMusicDuck(1f, 0.4f);
+        // The pause dip survives a change of song: the player picks a song from the pause screen and it must stay quiet there.
+        // (A new game clears the pause itself, see GameAudio.ClearPause.)
+        _dialogue = false; _hush = false; _tension = 0f;
+        _engine.SetMusicDuck(_paused ? 0.55f : 1f, 0.4f);
         _engine.SetAmbienceDuck(1f, 0.4f);
     }
 

@@ -56,6 +56,9 @@ public static class SaveKeys
     /// <summary>A calmer mix: no ambience, fewer music layers, no chain flourishes, softer effects. Off by default.</summary>
     public const string AudioReduced = "audio_reduced";
 
+    /// <summary>The song the player chose in the pause screen (1 to 25, see Soundtrack). 0 means automatic: the music of the place.</summary>
+    public const string AudioTrack = "audio_track";
+
     // ---- Story (UnlockStore, CosmeticLoadout) ----
     /// <summary>Comma-separated ids: scenes seen, fragments, lore, achievements, cosmetics owned.</summary>
     public const string Unlocks = "unlocks_v1";
@@ -128,7 +131,7 @@ public static class SaveKeys
     {
         SaveVersion, ProgressHighest, Gold, UpgradePreview, UpgradePopFlair, UpgradeExtraMoves, UpgradeColourLens, UpgradeChainSense, UpgradePrismReserve, ConsumableSecondChance, ConsumablePrismShift, BestScore,
         BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects,
-        AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced,
+        AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced, AudioTrack,
         Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
         PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,

@@ -725,6 +725,206 @@ public class AudioSystemTests
         Assert.True(Rms(after) > Rms(dipped) * 1.05, "the dip should be gone after a restart");
     }
 
+    // ---------------------------------------------------------------------------------------------- the soundtrack and the song picker
+
+    [Fact]
+    public void The_soundtrack_has_25_songs_numbered_in_order_with_their_own_titles()
+    {
+        Assert.Equal(Soundtrack.TrackCount, Soundtrack.All.Count);
+        for (int i = 0; i < Soundtrack.All.Count; i++) Assert.Equal(i + 1, Soundtrack.All[i].Number);
+        Assert.Equal(Soundtrack.All.Count, Soundtrack.All.Select(t => t.Title).Distinct().Count());
+        Assert.All(Soundtrack.All, t => Assert.False(string.IsNullOrWhiteSpace(t.Title)));
+        Assert.Equal(RegionId.Menu, Soundtrack.All[0].Region);
+        Assert.Null(Soundtrack.Get(0));
+        Assert.Null(Soundtrack.Get(26));
+    }
+
+    [Fact]
+    public void Each_region_has_a_faded_a_recovering_and_a_restored_song_and_For_finds_them()
+    {
+        for (int r = 1; r <= 8; r++)
+            foreach (RegionState state in new[] { RegionState.Faded, RegionState.Recovering, RegionState.Restored })
+            {
+                var t = Soundtrack.For(r, state);
+                Assert.Equal((RegionId)r, t.Region);
+                Assert.Equal(state, t.State);
+            }
+        Assert.Equal(RegionProfiles.Get(RegionId.SunkenCity).FadedThemeId, Soundtrack.For(4, RegionState.Faded).Title);
+        Assert.Equal(RegionProfiles.Get(RegionId.SunkenCity).RestoredThemeId, Soundtrack.For(4, RegionState.Restored).Title);
+        Assert.Equal(RegionId.Menu, Soundtrack.For(0, RegionState.Faded).Region);
+    }
+
+    [Fact]
+    public void A_new_player_has_the_Spectrum_theme_and_the_first_regions_opening_song()
+    {
+        var open = Soundtrack.Unlocked(0);
+        Assert.Equal(new[] { 1, 2 }, open.Select(t => t.Number).ToArray());
+    }
+
+    [Fact]
+    public void Songs_unlock_when_the_region_opens_when_it_starts_to_recover_and_when_it_is_restored()
+    {
+        foreach (var region in RegionCatalog.All)
+        {
+            var faded = Soundtrack.For(region.Number, RegionState.Faded);
+            var recovering = Soundtrack.For(region.Number, RegionState.Recovering);
+            var restored = Soundtrack.For(region.Number, RegionState.Restored);
+
+            Assert.False(Soundtrack.IsUnlocked(faded, region.FirstLevel - 2), $"{faded.Title} opens too early");
+            Assert.True(Soundtrack.IsUnlocked(faded, region.FirstLevel - 1), $"{faded.Title} should open with the region");
+
+            Assert.False(Soundtrack.IsUnlocked(recovering, region.MidLevel - 1), $"{recovering.Title} opens too early");
+            Assert.True(Soundtrack.IsUnlocked(recovering, region.MidLevel), $"{recovering.Title} should open at the discovery");
+
+            Assert.False(Soundtrack.IsUnlocked(restored, region.LastLevel - 1), $"{restored.Title} opens too early");
+            Assert.True(Soundtrack.IsUnlocked(restored, region.LastLevel), $"{restored.Title} should open when restored");
+        }
+    }
+
+    [Fact]
+    public void Everything_is_unlocked_once_the_story_is_finished_and_nothing_is_lost_by_playing_on()
+    {
+        Assert.Equal(Soundtrack.TrackCount, Soundtrack.Unlocked(RegionCatalog.LastCampaignLevel).Count);
+        Assert.Equal(Soundtrack.TrackCount, Soundtrack.Unlocked(RegionCatalog.LastCampaignLevel + 500).Count);
+        int previous = 0;
+        for (int cleared = 0; cleared <= RegionCatalog.LastCampaignLevel; cleared++)
+        {
+            int now = Soundtrack.Unlocked(cleared).Count;
+            Assert.True(now >= previous, $"songs were lost at level {cleared}");
+            previous = now;
+        }
+    }
+
+    [Fact]
+    public void The_chosen_song_plays_in_games_and_automatic_goes_back_to_the_places_own_music()
+    {
+        var h = new Harness();
+        h.Sound.ShowRegion(1, RegionState.Faded);
+        Assert.Equal(RegionId.ForgottenGarden, h.Sound.Director.Region);
+        Assert.Equal(StateMask.Faded, h.Sound.Director.State);
+
+        var pick = Soundtrack.For(3, RegionState.Restored);
+        h.Audio.SelectedTrack = pick.Number;
+        Assert.Equal(RegionId.VerdantWilds, h.Sound.Director.Region);
+        Assert.Equal(StateMask.Restored, h.Sound.Director.State);
+
+        // The next game starts: the choice still holds, whatever region it is in.
+        h.Sound.ShowRegion(2, RegionState.Faded);
+        Assert.Equal(RegionId.VerdantWilds, h.Sound.Director.Region);
+        h.Sound.ShowClassic();
+        Assert.Equal(RegionId.VerdantWilds, h.Sound.Director.Region);
+
+        h.Audio.SelectedTrack = 0;
+        Assert.Equal(RegionId.ForgottenGarden, h.Sound.Director.Region);   // Classic's own music
+        Assert.Equal(StateMask.Restored, h.Sound.Director.State);
+        h.Sound.ShowRegion(2, RegionState.Recovering);
+        Assert.Equal(RegionId.CrystalCaves, h.Sound.Director.Region);
+        Assert.Equal(StateMask.Recovering, h.Sound.Director.State);
+    }
+
+    [Fact]
+    public void Every_song_can_be_chosen_and_loads()
+    {
+        var h = new Harness();
+        h.Sound.ShowRegion(1, RegionState.Faded);
+        foreach (var t in Soundtrack.All)
+        {
+            h.Audio.SelectedTrack = t.Number;
+            Assert.Equal(t.Region, h.Sound.Director.Region);
+            Assert.Equal(DirectorMask(t.State), h.Sound.Director.State);
+            Assert.True(h.Sound.Director.IsLoaded);
+            var pcm = OfflineRenderer.Render(h.Sound.Engine, 0.5);
+            Assert.All(pcm, f => Assert.True(float.IsFinite(f)));
+        }
+    }
+
+    private static StateMask DirectorMask(RegionState s) => MusicDirector.ToMask(s);
+
+    [Fact]
+    public void The_menu_and_the_map_keep_the_Spectrum_theme_whatever_song_is_chosen()
+    {
+        var h = new Harness();
+        h.Audio.SelectedTrack = Soundtrack.For(5, RegionState.Restored).Number;
+        h.Sound.ShowMenu();
+        Assert.Equal(RegionId.Menu, h.Sound.Director.Region);
+        h.Sound.ShowRegion(1, RegionState.Faded);
+        Assert.Equal(RegionId.ClockworkWastes, h.Sound.Director.Region);
+        h.Sound.ShowMenu();
+        Assert.Equal(RegionId.Menu, h.Sound.Director.Region);
+    }
+
+    [Fact]
+    public void The_Spectrum_theme_can_be_chosen_for_games_too()
+    {
+        var h = new Harness();
+        h.Sound.ShowRegion(4, RegionState.Faded);
+        h.Audio.SelectedTrack = 1;
+        Assert.Equal(RegionId.Menu, h.Sound.Director.Region);
+    }
+
+    [Fact]
+    public void A_restoration_sweep_does_not_change_a_song_the_player_chose()
+    {
+        var h = new Harness();
+        h.Sound.ShowRegion(1, RegionState.Faded);
+        h.Audio.SelectedTrack = Soundtrack.For(1, RegionState.Faded).Number;
+        h.Sound.StageLine(StageCue.RestoreSweep, true, 1, RegionState.Restored);
+        Assert.Equal(StateMask.Faded, h.Sound.Director.State);
+
+        // On automatic the same sweep moves the region to its new state, as before.
+        h.Audio.SelectedTrack = 0;
+        h.Sound.StageLine(StageCue.RestoreSweep, true, 1, RegionState.Restored);
+        Assert.Equal(StateMask.Restored, h.Sound.Director.State);
+    }
+
+    [Fact]
+    public void Choosing_a_song_from_the_pause_screen_keeps_the_pause_dip_and_a_new_game_lifts_it()
+    {
+        var h = new Harness();
+        h.Sound.ShowRegion(1, RegionState.Faded);
+        h.Sound.GamePaused();
+        Assert.True(h.Sound.Director.IsPaused);
+
+        h.Audio.SelectedTrack = Soundtrack.For(4, RegionState.Faded).Number;   // another region: a new piece loads
+        Assert.Equal(RegionId.SunkenCity, h.Sound.Director.Region);
+        Assert.True(h.Sound.Director.IsPaused);
+
+        h.Sound.ClearPause();
+        h.Sound.ShowRegion(1, RegionState.Faded);
+        Assert.False(h.Sound.Director.IsPaused);
+    }
+
+    [Fact]
+    public void The_chosen_song_is_saved_clamped_and_restored()
+    {
+        var store = new InMemorySettings();
+        var game = new GameSettings(store);
+        var settings = new AudioSettings(store, game);
+        Assert.Equal(0, settings.SelectedTrack);
+        settings.SelectedTrack = 7;
+        Assert.Equal(7, new AudioSettings(store, game).SelectedTrack);
+
+        settings.SelectedTrack = 999;
+        Assert.Equal(Soundtrack.TrackCount, settings.SelectedTrack);
+        settings.SelectedTrack = -3;
+        Assert.Equal(0, settings.SelectedTrack);
+
+        store.SetInt(SaveKeys.AudioTrack, 77);
+        Assert.Equal(Soundtrack.TrackCount, new AudioSettings(store, game).SelectedTrack);
+    }
+
+    [Fact]
+    public void The_chosen_song_travels_in_the_save_code()
+    {
+        var store = new InMemorySettings();
+        store.SetInt(SaveKeys.AudioTrack, 13);
+        string code = SaveCode.Export(store);
+
+        var fresh = new InMemorySettings();
+        Assert.True(SaveCode.Import(code, fresh).Ok);
+        Assert.Equal(13, fresh.GetInt(SaveKeys.AudioTrack, 0));
+    }
+
     [Fact]
     public void An_error_in_the_sound_system_never_reaches_the_game()
     {

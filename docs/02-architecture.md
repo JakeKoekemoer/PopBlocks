@@ -132,7 +132,7 @@ Why: save logic (gold, unlocks, purchases) is some of the most important code in
 | `first_clear_seeds` | `SeedStore` (written by `PlayerProgress.Complete`) | Comma-separated `level:seed` pairs, one per cleared level, never overwritten. A cleared level with no entry replays the original (legacy) level. A new save-code field kind, validated pair by pair (level 1 to 100,000, seed 1 to 1,073,741,823, no duplicates, at most 5,000 pairs). |
 | `classic_gold_carry` | `ClassicGold` | Tenths of a gold earned in Classic and not yet paid (0 to 9). |
 | `blast_effects`, `show_ghost`, `landing_guide_style`, `reduced_motion`, `controls_collapsed`, `sound_effects` | `GameSettings` | Options. |
-| `audio_master`, `audio_music`, `audio_sfx`, `audio_ambience` (0 to 100), `audio_mute_master`, `audio_mute_music`, `audio_mute_ambience`, `audio_reduced` | `AudioSettings` | Volumes, mutes and the reduced-audio mode (see [11](11-audio.md)). "Effects off" is the original `sound_effects` key. |
+| `audio_master`, `audio_music`, `audio_sfx`, `audio_ambience` (0 to 100), `audio_mute_master`, `audio_mute_music`, `audio_mute_ambience`, `audio_reduced`, `audio_track` (0 to 25: the song chosen on the pause screen, 0 is automatic) | `AudioSettings` | Volumes, mutes and the reduced-audio mode (see [11](11-audio.md)). "Effects off" is the original `sound_effects` key. |
 
 Story state is **derived, not stored twice**: a region's state comes from `PlayerProgress.HighestCleared`, and everything else the story needs is one more id in `UnlockStore`. Rewards are granted through `UnlockStore.Unlock`, which returns true only the first time, so a reward is paid once however often a level is replayed or a scene is skipped.
 

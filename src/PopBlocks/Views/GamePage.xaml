@@ -360,6 +360,54 @@
                            FontSize="13"
                            HorizontalTextAlignment="Center" />
 
+                    <!-- Pause screen: what is playing, with the songs earned so far. Arrows step through them; tapping the title lists them. -->
+                    <Border IsVisible="{Binding IsPaused}"
+                            BackgroundColor="#1AFFFFFF"
+                            Stroke="Transparent"
+                            Padding="6,8"
+                            StrokeShape="RoundRectangle 16">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
+                            <Button Grid.Column="0"
+                                    Text="‹"
+                                    Style="{StaticResource RoundButton}"
+                                    FontSize="22"
+                                    Command="{Binding PreviousTrackCommand}"
+                                    SemanticProperties.Description="Previous song" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center"
+                                                 SemanticProperties.Hint="Tap to choose a song">
+                                <VerticalStackLayout.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnTrackListTapped" />
+                                </VerticalStackLayout.GestureRecognizers>
+                                <Label Text="{Binding TrackCaption}"
+                                       Style="{StaticResource CaptionLabel}"
+                                       FontSize="10"
+                                       HorizontalTextAlignment="Center" />
+                                <Label Text="{Binding TrackTitle}"
+                                       FontSize="16"
+                                       FontAttributes="Bold"
+                                       TextColor="{StaticResource TextPrimary}"
+                                       HorizontalTextAlignment="Center"
+                                       LineBreakMode="TailTruncation"
+                                       MaxLines="2" />
+                                <Label Text="{Binding TrackDetail}"
+                                       FontSize="12"
+                                       TextColor="{StaticResource TextSecondary}"
+                                       HorizontalTextAlignment="Center" />
+                                <Label Text="{Binding TrackHint}"
+                                       FontSize="11"
+                                       TextColor="{StaticResource TextSecondary}"
+                                       Opacity="0.7"
+                                       HorizontalTextAlignment="Center" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="2"
+                                    Text="›"
+                                    Style="{StaticResource RoundButton}"
+                                    FontSize="22"
+                                    Command="{Binding NextTrackCommand}"
+                                    SemanticProperties.Description="Next song" />
+                        </Grid>
+                    </Border>
+
                     <Button Text="RESUME"
                             Style="{StaticResource PrimaryButton}"
                             IsVisible="{Binding IsPaused}"

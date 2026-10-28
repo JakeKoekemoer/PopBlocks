@@ -67,7 +67,7 @@ The product promise is that the game never touches the network. Release APKs mus
 ./scripts/Check-Permissions.ps1 -Apk path\to\the.apk
 ```
 
-It locates `aapt2` in the Android SDK, dumps the APK's permissions and **fails (exit code 1)** if `INTERNET` is present. Debug builds get `INTERNET` added by the Android tooling so the debugger can attach, so only check Release builds. The manifest in the repository declares no permissions at all; if the check ever fails on a Release build, something (a new package, a manifest edit) added one, and that change must be reversed. The music and sound system adds no permission and no package (it uses `AudioTrack`, which needs none); its on-device checklist is in [11.10](11-audio.md).
+It locates `aapt2` in the Android SDK, dumps the APK's permissions and **fails (exit code 1)** if `INTERNET` is present. Debug builds get `INTERNET` added by the Android tooling so the debugger can attach, so only check Release builds. The manifest in the repository declares no permissions at all; if the check ever fails on a Release build, something (a new package, a manifest edit) added one, and that change must be reversed. The music and sound system adds no permission and no package (it uses `AudioTrack`, which needs none); its on-device checklist is in [11.11](11-audio.md).
 
 ## 8.6 Versioning
 

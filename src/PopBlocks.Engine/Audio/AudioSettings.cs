@@ -20,7 +20,7 @@ public sealed class AudioSettings
     private readonly ILocalSettings _store;
     private readonly GameSettings _game;
 
-    private int _master, _music, _sfx, _ambience;
+    private int _master, _music, _sfx, _ambience, _track;
     private bool _muteMaster, _muteMusic, _muteAmbience, _reduced;
 
     public AudioSettings(ILocalSettings store, GameSettings game)
@@ -31,6 +31,7 @@ public sealed class AudioSettings
         _music = Clamp(store.GetInt(SaveKeys.AudioMusic, DefaultMusic));
         _sfx = Clamp(store.GetInt(SaveKeys.AudioSfx, DefaultSfx));
         _ambience = Clamp(store.GetInt(SaveKeys.AudioAmbience, DefaultAmbience));
+        _track = Math.Clamp(store.GetInt(SaveKeys.AudioTrack, 0), 0, Soundtrack.TrackCount);
         _muteMaster = store.GetBool(SaveKeys.AudioMuteMaster, false);
         _muteMusic = store.GetBool(SaveKeys.AudioMuteMusic, false);
         _muteAmbience = store.GetBool(SaveKeys.AudioMuteAmbience, false);
@@ -63,6 +64,9 @@ public sealed class AudioSettings
     public int MusicPercent { get => _music; set => Set(ref _music, SaveKeys.AudioMusic, value); }
     public int SfxPercent { get => _sfx; set => Set(ref _sfx, SaveKeys.AudioSfx, value); }
     public int AmbiencePercent { get => _ambience; set => Set(ref _ambience, SaveKeys.AudioAmbience, value); }
+
+    /// <summary>The song chosen in the pause screen, 1 to <see cref="Soundtrack.TrackCount"/>; 0 is automatic (the music of the place).</summary>
+    public int SelectedTrack { get => _track; set => Set(ref _track, SaveKeys.AudioTrack, Math.Clamp(value, 0, Soundtrack.TrackCount)); }
 
     public bool MasterMuted { get => _muteMaster; set => Set(ref _muteMaster, SaveKeys.AudioMuteMaster, value); }
     public bool MusicMuted { get => _muteMusic; set => Set(ref _muteMusic, SaveKeys.AudioMuteMusic, value); }
