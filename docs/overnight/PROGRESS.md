@@ -10,8 +10,8 @@
 | 6 Continues | done | 729e940 |
 | 7 Settings tabs and custom rules | done | 6e9e29d |
 | 8 Petals vs Shards | done | 3524659 |
-| 9a Block sets | done | PENDING9A |
-| 9b Boards and frames | pending | |
+| 9a Block sets | done | 1254745 |
+| 9b Boards and frames | done | PENDING9B |
 | 9c Pip looks | pending | |
 | 10 Story Book | pending | |
 | 11 Tall scrolling board | pending | |

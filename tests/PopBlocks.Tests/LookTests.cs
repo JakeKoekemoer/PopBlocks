@@ -157,6 +157,69 @@ public class LookTests
         Assert.False(again.IsUnseen(solid));   // it survives a restart
     }
 
+    // ------------------------------------------------------------------ boards and frames (9b)
+
+    [Fact]
+    public void The_new_boards_and_frames_are_sold_from_the_first_day_at_the_planned_prices_and_colours()
+    {
+        var boards = new Dictionary<string, (int Price, BoardMotif Motif, string Top, string Bottom, string Rim)>
+        {
+            ["board_nightsky"] = (300, BoardMotif.Stars, "#0E1433", "#03050F", "#9DB4FF"),
+            ["board_nebula"] = (400, BoardMotif.Nebula, "#2A1446", "#070B1F", "#E08CFF"),
+            ["board_tidepool"] = (300, BoardMotif.Waves, "#0D4257", "#041A26", "#62E3F0"),
+            ["board_canyon"] = (300, BoardMotif.Strata, "#4A2A1C", "#1E100A", "#E8A26A"),
+            ["board_forge"] = (400, BoardMotif.Embers, "#3A1410", "#120504", "#FF8A3D"),
+            ["board_blossom"] = (350, BoardMotif.Petals, "#3B2236", "#160C16", "#FFB3CF"),
+            ["board_quilt"] = (500, BoardMotif.Patchwork, "#242036", "#100E1C", "#F5D07A"),
+        };
+        foreach (var (id, want) in boards)
+        {
+            var c = CosmeticCatalog.Find(id)!;
+            Assert.Equal(want.Price, c.Price);
+            Assert.Equal(RequirementKind.None, c.Discover.Kind);
+            var spec = CosmeticCatalog.BoardOf(id);
+            Assert.Equal(want.Motif, spec.Motif);
+            Assert.Equal(want.Top, spec.Top);
+            Assert.Equal(want.Bottom, spec.Bottom);
+            Assert.Equal(want.Rim, spec.Rim);
+            Assert.True(CosmeticCatalog.IsNew(c));
+        }
+
+        var frames = new Dictionary<string, (int Price, FrameStyle Style)>
+        {
+            ["frame_starlight"] = (220, FrameStyle.Starlight), ["frame_ripple"] = (220, FrameStyle.Ripple),
+            ["frame_stone"] = (200, FrameStyle.Stone), ["frame_flame"] = (260, FrameStyle.Flame),
+            ["frame_vine"] = (240, FrameStyle.Vine), ["frame_neon"] = (300, FrameStyle.Neon),
+        };
+        foreach (var (id, want) in frames)
+        {
+            var c = CosmeticCatalog.Find(id)!;
+            Assert.Equal(want.Price, c.Price);
+            Assert.Equal(CosmeticSlot.Frame, c.Slot);
+            Assert.Equal(RequirementKind.None, c.Discover.Kind);
+            Assert.Equal(want.Style, CosmeticCatalog.FrameOf(id));
+        }
+
+        var (l, shop, progress, _, _) = Make(gold: 10_000);   // a brand new player can buy and wear them all
+        foreach (var id in boards.Keys.Concat(frames.Keys))
+        {
+            Assert.True(shop.TryBuy(id), id);
+            Assert.True(shop.Equip(id), id);
+        }
+        Assert.Equal("frame_neon", l.Selected(CosmeticSlot.Frame).Length > 0 ? "frame_neon" : "");
+        Assert.Equal(10_000 - boards.Values.Sum(b => b.Price) - frames.Values.Sum(f => f.Price), progress.Gold);
+    }
+
+    [Fact]
+    public void The_new_boards_are_choosable_in_the_settings_board_list_once_owned()
+    {
+        var (l, shop, _, _, _) = Make(gold: 1_000);
+        Assert.False(l.IsAvailable("board_nightsky"));
+        Assert.True(shop.TryBuy("board_nightsky"));
+        Assert.True(l.IsAvailable("board_nightsky"));
+        Assert.Contains(CosmeticLoadout.Themes, t => t.Id == "board_nightsky");
+    }
+
     [Fact]
     public void Resetting_the_wardrobe_clears_the_mix_too()
     {

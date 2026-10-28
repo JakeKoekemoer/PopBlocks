@@ -113,6 +113,8 @@ public partial class GamePage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+        _board.AmbientOn = false;
+        _ambientCheck?.Stop();
         StopRepeat();
         StopAnimation();
         StopStage();
@@ -236,6 +238,7 @@ public partial class GamePage : ContentPage
 
         if (_board.NeedsAnimation(Environment.TickCount64))
             StartAnimation();
+        UpdateAmbient();
     }
 
     private void OnWaveResolved(BurstWave wave)
@@ -261,9 +264,51 @@ public partial class GamePage : ContentPage
 
     private void OnAnimationTick(object? sender, EventArgs e)
     {
+        long now = Environment.TickCount64;
+        // When only the board's slow movement is running, repaint at about 15 frames a second instead of 60.
+        if (_board.OnlyAmbientRunning(now) && (_ambientSkip++ & 3) != 0) return;
         BoardView.Invalidate();
-        if (!_board.NeedsAnimation(Environment.TickCount64))
+        if (!_board.NeedsAnimation(now) && !_board.NeedsAmbient && !_board.FrameAnimates)
             StopAnimation();
+    }
+
+    private int _ambientSkip;
+    private long _lastInputMs = Environment.TickCount64;
+
+    /// <summary>
+    /// The board's own movement and the animated frames run only while a game is being played: not while paused, not after ten
+    /// seconds with no input, and never under Reduced motion. Any input wakes them again.
+    /// </summary>
+    private void UpdateAmbient()
+    {
+        bool idle = Environment.TickCount64 - _lastInputMs > 10_000;
+        _board.AmbientOn = !_settings.ReducedMotion && !idle && _vm.IsPlaying && !_vm.IsOverlayVisible;
+        if (_board.NeedsAmbient || _board.FrameAnimates) StartAnimation();
+        else if (!_board.NeedsAnimation(Environment.TickCount64)) StopAnimation();
+
+        // While the movement is on, look again once a second to notice that the player has gone idle.
+        if (_board.AmbientOn)
+        {
+            if (_ambientCheck is null)
+            {
+                _ambientCheck = Dispatcher.CreateTimer();
+                _ambientCheck.Interval = TimeSpan.FromSeconds(1);
+                _ambientCheck.Tick += (_, _) => UpdateAmbient();
+            }
+            if (!_ambientCheck.IsRunning) _ambientCheck.Start();
+        }
+        else
+        {
+            _ambientCheck?.Stop();
+        }
+    }
+
+    private IDispatcherTimer? _ambientCheck;
+
+    private void NoteInput()
+    {
+        _lastInputMs = Environment.TickCount64;
+        if (!_board.AmbientOn) UpdateAmbient();
     }
 
     private void StopAnimation()
@@ -760,6 +805,7 @@ public partial class GamePage : ContentPage
     private void OnTouchStart(object? sender, TouchEventArgs e)
     {
         _vm.SkipEndBeat();   // a tap ends the hold after the last pop
+        NoteInput();
         if (e.Touches.Length == 0) return;
         var p = e.Touches[0];
         _touchStartX = _anchorX = p.X;

@@ -74,9 +74,25 @@ public sealed class GameDrawable : IDrawable
     /// <summary>Cell edge length from the most recent draw, in the same units as touch coordinates.</summary>
     public float CellSize { get; private set; } = 24f;
 
+    /// <summary>The page lets the board's own movement run (a game in play, not paused, not idle, not Reduced motion).</summary>
+    public bool AmbientOn { get; set; }
+
+    /// <summary>The board's movement (stars, clouds, ripples, embers, petals) wants repainting.</summary>
+    public bool NeedsAmbient => AmbientOn && !ReducedMotion && BoardAmbient.Animates(Theme.Motif);
+
+    /// <summary>The frame in use moves while a piece falls, so it wants repainting too.</summary>
+    public bool FrameAnimates =>
+        !ReducedMotion && Frame is FrameStyle.Starlight or FrameStyle.Ripple or FrameStyle.Flame or FrameStyle.Neon
+        && Game is { State: GameState.Playing, CurrentPiece: not null };
+
     /// <summary>True while something on the board is animating, so the page keeps repainting.</summary>
     public bool NeedsAnimation(long nowMs) =>
         (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || HintColumn >= 0;
+
+    /// <summary>The slow movement (board ambience, frame animation) is all that is running: a gentle repaint is enough.</summary>
+    public bool OnlyAmbientRunning(long nowMs) =>
+        (NeedsAmbient || FrameAnimates)
+        && !(Game is { PendingGroups.Count: > 0 }) && !Effects.IsActive(nowMs) && !Floaters.IsActive(nowMs) && HintColumn < 0;
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -122,7 +138,7 @@ public sealed class GameDrawable : IDrawable
             if (ShowGhost || ChainGlow) DrawGhost(canvas, game, originX, originY, cell);
             for (int pass = 0; pass < 3; pass++)
                 DrawActivePiece(canvas, (CellRenderer.BlockLayer)pass, game.CurrentPiece, originX, originY, cell);
-            if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell);
+            if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell, now);
             Effects.Draw(canvas, originX, originY, cell, boardW, Flip, now);
             Floaters.Draw(canvas, originX, originY, cell, Flip, now);
 
@@ -174,6 +190,7 @@ public sealed class GameDrawable : IDrawable
         // The board's decoration sits behind the grid and the blocks, faint enough that nothing is hard to read.
         if (Theme.Motif != BoardMotif.None && Theme.MotifAlpha > 0f)
             DrawMotifs(canvas, Theme, x, y, w, h, cell, flip);
+        if (NeedsAmbient) BoardAmbient.Draw(canvas, Theme.Motif, Theme.Rim, Theme.MotifAlpha, x, y, w, h, cell, Clock());
         canvas.RestoreState();
 
         canvas.StrokeColor = rim.WithAlpha(0.35f);
@@ -389,9 +406,14 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>Faint outline showing where the active piece will land.</summary>
     /// <summary>An outline around the piece in play. Drawn on top of the blocks; it never hides a symbol.</summary>
-    private void DrawFrame(ICanvas canvas, Piece? piece, float originX, float originY, float cell)
+    private void DrawFrame(ICanvas canvas, Piece? piece, float originX, float originY, float cell, long now)
     {
         if (piece is null) return;
+        if (Frame >= FrameStyle.Starlight)
+        {
+            DrawSoldFrame(canvas, piece, originX, originY, cell, ReducedMotion ? 0f : (now / 33 * 33) / 1000f);
+            return;
+        }
         var cells = piece.Cells;
         float inset = cell * VisualDesign.CellInset * 0.5f;
         canvas.StrokeSize = MathF.Max(1.5f, cell * 0.06f);
@@ -414,6 +436,120 @@ public sealed class GameDrawable : IDrawable
                 cell - 2f * inset,
                 cell - 2f * inset,
                 cell * VisualDesign.Corner);
+        }
+    }
+
+    // ---- the six frames sold in v1.1. Time is 0 under Reduced motion, so they are still pictures there. ----
+
+    private void DrawSoldFrame(ICanvas canvas, Piece piece, float originX, float originY, float cell, float t)
+    {
+        var cells = piece.Cells;
+        float inset = cell * VisualDesign.CellInset * 0.5f;
+        float line = Math.Clamp(cell * 0.07f, 2f, 3f);
+        float corner = cell * VisualDesign.Corner;
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        canvas.StrokeSize = line;
+        canvas.StrokeLineCap = LineCap.Round;
+
+        for (int i = 0; i < cells.Count; i++)
+        {
+            int by = piece.Y + cells[i].Y;
+            if (by < GameConfig.HiddenRows) continue;
+            int bx = piece.X + cells[i].X;
+            float cx = BoardSpace.ScreenX(bx, Flip, originX, cell) + inset;
+            float cy = BoardSpace.ScreenY(by, Flip, originY, cell) + inset;
+            float side = cell - 2f * inset;
+            minX = MathF.Min(minX, cx); minY = MathF.Min(minY, cy);
+            maxX = MathF.Max(maxX, cx + side); maxY = MathF.Max(maxY, cy + side);
+
+            switch (Frame)
+            {
+                case FrameStyle.Starlight:
+                    canvas.StrokeColor = Color.FromArgb("#BFD3FF");
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    break;
+
+                case FrameStyle.Ripple:
+                {
+                    float wobble = MathF.Sin(t * 5f + i * 1.3f) * 1f;   // plus or minus one unit
+                    canvas.StrokeColor = Color.FromArgb("#7EE7F5");
+                    canvas.DrawRoundedRectangle(cx - wobble, cy - wobble, side + 2f * wobble, side + 2f * wobble, corner);
+                    break;
+                }
+
+                case FrameStyle.Stone:
+                {
+                    // A 3 unit bevel: light along the top and left, dark along the bottom and right.
+                    canvas.StrokeSize = 3f;
+                    canvas.StrokeColor = Color.FromArgb("#B8B2A8");
+                    canvas.DrawLine(cx + 1.5f, cy + 1.5f, cx + side - 1.5f, cy + 1.5f);
+                    canvas.DrawLine(cx + 1.5f, cy + 1.5f, cx + 1.5f, cy + side - 1.5f);
+                    canvas.StrokeColor = Color.FromArgb("#6B655C");
+                    canvas.DrawLine(cx + 1.5f, cy + side - 1.5f, cx + side - 1.5f, cy + side - 1.5f);
+                    canvas.DrawLine(cx + side - 1.5f, cy + 1.5f, cx + side - 1.5f, cy + side - 1.5f);
+                    break;
+                }
+
+                case FrameStyle.Flame:
+                {
+                    float mix = cells.Count <= 1 ? 0f : i / (float)(cells.Count - 1);
+                    canvas.StrokeColor = new Color(1f, 0.416f + 0.17f * mix, 0.169f + 0.31f * mix);   // #FF6A2B towards #FFD23F
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    // Two flickering tips on the top edge.
+                    for (int k = 0; k < 2; k++)
+                    {
+                        float flick = 0.5f + 0.5f * MathF.Sin(t * 14f + i * 2.1f + k * 1.7f);
+                        float tx = cx + side * (0.3f + 0.4f * k);
+                        canvas.DrawLine(tx, cy, tx + (k == 0 ? -1f : 1f), cy - cell * (0.08f + 0.12f * flick));
+                    }
+                    break;
+                }
+
+                case FrameStyle.Vine:
+                    canvas.StrokeColor = Color.FromArgb("#5FBF4A");
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    break;
+
+                case FrameStyle.Neon:
+                {
+                    float pulse = 0.8f + 0.2f * MathF.Sin(t * MathF.Tau * 0.8f);   // 0.6 to 1.0 at 0.8 Hz
+                    var neon = Color.FromArgb("#FF4FD8");
+                    canvas.StrokeSize = line + 4f;
+                    canvas.StrokeColor = neon.WithAlpha(0.22f * pulse);   // the glow: a wide soft line under the sharp one
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    canvas.StrokeSize = line;
+                    canvas.StrokeColor = neon.WithAlpha(pulse);
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    break;
+                }
+            }
+        }
+
+        if (minX > maxX) return;
+
+        if (Frame == FrameStyle.Starlight)
+        {
+            // Four sparkles circling slowly round the piece.
+            float cxm = (minX + maxX) / 2f, cym = (minY + maxY) / 2f;
+            float rx = (maxX - minX) / 2f + cell * 0.25f, ry = (maxY - minY) / 2f + cell * 0.25f;
+            canvas.StrokeSize = 1.5f;
+            canvas.StrokeColor = Colors.White.WithAlpha(0.9f);
+            for (int k = 0; k < 4; k++)
+            {
+                float a = t * 0.7f + k * MathF.PI / 2f;
+                float sx = cxm + MathF.Cos(a) * rx, sy = cym + MathF.Sin(a) * ry, arm = cell * 0.09f;
+                canvas.DrawLine(sx - arm, sy, sx + arm, sy);
+                canvas.DrawLine(sx, sy - arm, sx, sy + arm);
+            }
+        }
+        else if (Frame == FrameStyle.Vine)
+        {
+            // A small leaf on three of the four corners.
+            canvas.FillColor = Color.FromArgb("#5FBF4A");
+            float leaf = cell * 0.16f;
+            canvas.FillEllipse(minX - leaf * 0.6f, minY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
+            canvas.FillEllipse(maxX - leaf * 0.6f, minY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
+            canvas.FillEllipse(minX - leaf * 0.6f, maxY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
         }
     }
 
@@ -461,6 +597,53 @@ public sealed class GameDrawable : IDrawable
             for (float bx = x + cell * 0.2f; bx < x + w - bw; bx += bw * 2f)
                 canvas.FillRectangle(bx, top, bw, bw * 1.4f);
             return;
+        }
+
+        // Wide, still pictures: clouds, ripple lines, rock layers and quilt squares.
+        switch (theme.Motif)
+        {
+            case BoardMotif.Nebula:
+                for (int i = 0; i < 4; i++)
+                {
+                    float rx = cell * (2.4f + 0.7f * i), ry = cell * (1.1f + 0.3f * i);
+                    canvas.FillEllipse(x + w * (0.1f + 0.8f * BoardSpace.Noise(i, 31)) - rx, y + h * (0.12f + 0.24f * i) - ry, rx * 2f, ry * 2f);
+                }
+                return;
+
+            case BoardMotif.Waves:
+                for (int i = 0; i < 6; i++)
+                {
+                    float wy = y + h * (0.08f + 0.16f * i);
+                    float px = x, py = wy;
+                    for (int k = 1; k <= 16; k++)
+                    {
+                        float nx = x + w * k / 16f, ny = wy + MathF.Sin(k * 0.9f + i) * cell * 0.12f;
+                        canvas.DrawLine(px, py, nx, ny);
+                        px = nx;
+                        py = ny;
+                    }
+                }
+                return;
+
+            case BoardMotif.Strata:
+                for (int i = 0; i < 6; i++)
+                {
+                    float sy = y + h * (0.05f + 0.16f * i + 0.03f * BoardSpace.Noise(i, 37));
+                    canvas.FillRectangle(x, sy, w, cell * (0.18f + 0.22f * BoardSpace.Noise(i, 39)));
+                }
+                return;
+
+            case BoardMotif.Patchwork:
+            {
+                float sq = cell * 2f;
+                for (int gy = 0; gy * sq < h; gy++)
+                    for (int gx = 0; gx * sq < w; gx++)
+                    {
+                        if ((gx + gy) % 2 == 0) canvas.FillRectangle(x + gx * sq + 2f, y + gy * sq + 2f, sq - 4f, sq - 4f);
+                        else canvas.DrawRectangle(x + gx * sq + 3f, y + gy * sq + 3f, sq - 6f, sq - 6f);
+                    }
+                return;
+            }
         }
 
         const int count = 16;
@@ -515,6 +698,20 @@ public sealed class GameDrawable : IDrawable
                 case BoardMotif.Meadow:
                     canvas.DrawLine(0f, s * 0.5f, 0f, -s * 0.5f);
                     canvas.FillEllipse(-s * 0.18f, -s * 0.68f, s * 0.36f, s * 0.36f);
+                    break;
+
+                case BoardMotif.Stars:
+                    canvas.DrawLine(-s * 0.35f, 0f, s * 0.35f, 0f);
+                    canvas.DrawLine(0f, -s * 0.35f, 0f, s * 0.35f);
+                    break;
+
+                case BoardMotif.Embers:
+                    canvas.FillEllipse(-s * 0.18f, -s * 0.18f, s * 0.36f, s * 0.36f);
+                    break;
+
+                case BoardMotif.Petals:
+                    canvas.Rotate(spin);
+                    canvas.FillEllipse(-s * 0.55f, -s * 0.25f, s * 1.1f, s * 0.5f);
                     break;
             }
             canvas.RestoreState();

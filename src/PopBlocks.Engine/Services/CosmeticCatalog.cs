@@ -27,9 +27,9 @@ public enum SkinPattern { None, Lines, Dots, Grain, Stars, Waves, Rock, Flame, F
 
 public enum BurstStyle { Classic, Petals, Shards, Bubbles, Cogs, Frost, Starburst }
 
-public enum BoardMotif { None, Leaves, Crystals, Bubbles, Gears, Snowflakes, Battlements, Lanterns, Aurora, Meadow }
+public enum BoardMotif { None, Leaves, Crystals, Bubbles, Gears, Snowflakes, Battlements, Lanterns, Aurora, Meadow, Stars, Nebula, Waves, Strata, Embers, Petals, Patchwork }
 
-public enum FrameStyle { None, Soft, Gold, Prism }
+public enum FrameStyle { None, Soft, Gold, Prism, Starlight, Ripple, Stone, Flame, Vine, Neon }
 
 public enum AccessoryStyle { None, Bow, Cap, Antenna, Lantern }
 
@@ -180,6 +180,15 @@ public static class CosmeticCatalog
         new BoardSpec("board_ice", "Frozen Pane", "#1E3B52", "#0C1D2E", "#C6F1FF", "#4A7391", 0.35, BoardMotif.Snowflakes, 0.12),
         new BoardSpec("board_citadel", "Citadel Hall", "#2B2547", "#130F26", "#C4A6FF", "#4C4378", 0.38, BoardMotif.Battlements, 0.10),
 
+        // ---- v1.1 boards: open from the first day ----
+        new BoardSpec("board_nightsky", "Night Sky", "#0E1433", "#03050F", "#9DB4FF", "#24305E", 0.30, BoardMotif.Stars, 0.14),
+        new BoardSpec("board_nebula", "Nebula Drift", "#2A1446", "#070B1F", "#E08CFF", "#3D2A66", 0.30, BoardMotif.Nebula, 0.16),
+        new BoardSpec("board_tidepool", "Tide Pool", "#0D4257", "#041A26", "#62E3F0", "#1F6178", 0.32, BoardMotif.Waves, 0.12),
+        new BoardSpec("board_canyon", "Canyon Strata", "#4A2A1C", "#1E100A", "#E8A26A", "#6E4330", 0.36, BoardMotif.Strata, 0.12),
+        new BoardSpec("board_forge", "Ember Forge", "#3A1410", "#120504", "#FF8A3D", "#5E2418", 0.34, BoardMotif.Embers, 0.16),
+        new BoardSpec("board_blossom", "Blossom Grove", "#3B2236", "#160C16", "#FFB3CF", "#5E3955", 0.32, BoardMotif.Petals, 0.12),
+        new BoardSpec("board_quilt", "Patchwork Quilt", "#242036", "#100E1C", "#F5D07A", "#3E3858", 0.34, BoardMotif.Patchwork, 0.10),
+
         // Looks chosen after the ending. All three are open once the campaign is finished.
         new BoardSpec("lanterns", "Many Lanterns", "#3A2414", "#1A0F08", "#FFB45E", "#6A4A2B", 0.35, BoardMotif.Lanterns, 0.12),
         new BoardSpec("aurora", "Aurora Tide", "#122A3F", "#08121F", "#7CF5C8", "#2C5D6E", 0.35, BoardMotif.Aurora, 0.12),
@@ -253,11 +262,28 @@ public static class CosmeticCatalog
             Reward("meadow", "Open Meadow", CosmeticSlot.Board, "Sunlit grass, once the campaign is finished.", Requirement.CampaignComplete),
             Default("board_contrast", "High Contrast", CosmeticSlot.Board, "Black board, white grid. Always available."),
 
+            // v1.1 boards: open from the first day, bought with gold.
+            Open("board_nightsky", "Night Sky", CosmeticSlot.Board, "A deep night with faint twinkling stars.", 300),
+            Open("board_nebula", "Nebula Drift", CosmeticSlot.Board, "Slow violet clouds drifting through space.", 400),
+            Open("board_tidepool", "Tide Pool", CosmeticSlot.Board, "Clear shallow water with gentle ripples.", 300),
+            Open("board_canyon", "Canyon Strata", CosmeticSlot.Board, "Layers of warm rock, laid down over ages.", 300),
+            Open("board_forge", "Ember Forge", CosmeticSlot.Board, "A dark forge with sparks drifting upwards.", 400),
+            Open("board_blossom", "Blossom Grove", CosmeticSlot.Board, "Pink petals falling through a soft evening.", 350),
+            Open("board_quilt", "Patchwork Quilt", CosmeticSlot.Board, "Stitched squares in warm colours.", 500),
+
             // ---- Piece frames: earned, never sold ----
             Default(DefaultFrame, "None", CosmeticSlot.Frame, "No outline."),
             Reward("frame_soft", "Soft Glow", CosmeticSlot.Frame, "A pale glow around your piece.", Requirement.Achievement("aftershock")),
             Reward("frame_gold", "Gold Edge", CosmeticSlot.Frame, "A gold line around your piece.", Requirement.Achievement("restorer")),
             Reward("frame_prism", "Prism Edge", CosmeticSlot.Frame, "A line in each block's own colour.", Requirement.Achievement("spectrum_seeker")),
+
+            // v1.1 frames: open from the first day, bought with gold.
+            Open("frame_starlight", "Starlight", CosmeticSlot.Frame, "A pale line with four sparkles circling slowly.", 220),
+            Open("frame_ripple", "Ripple", CosmeticSlot.Frame, "A cool line that wobbles like water.", 220),
+            Open("frame_stone", "Stone Edge", CosmeticSlot.Frame, "A chunky bevel, light on top and dark below.", 200),
+            Open("frame_flame", "Flame Edge", CosmeticSlot.Frame, "An orange-to-gold line with flickering tips.", 260),
+            Open("frame_vine", "Vine", CosmeticSlot.Frame, "A green line with a leaf on three corners.", 240),
+            Open("frame_neon", "Neon Pulse", CosmeticSlot.Frame, "A glowing magenta line that pulses softly.", 300),
 
             // ---- Pip's things: earned, never sold ----
             Default(DefaultAccessory, "Nothing", CosmeticSlot.Accessory, "Just Pip."),
@@ -295,6 +321,12 @@ public static class CosmeticCatalog
         "frame_soft" => FrameStyle.Soft,
         "frame_gold" => FrameStyle.Gold,
         "frame_prism" => FrameStyle.Prism,
+        "frame_starlight" => FrameStyle.Starlight,
+        "frame_ripple" => FrameStyle.Ripple,
+        "frame_stone" => FrameStyle.Stone,
+        "frame_flame" => FrameStyle.Flame,
+        "frame_vine" => FrameStyle.Vine,
+        "frame_neon" => FrameStyle.Neon,
         _ => FrameStyle.None,
     };
 
@@ -314,6 +346,8 @@ public static class CosmeticCatalog
     public static IReadOnlySet<string> NewIds { get; } = new HashSet<string>
     {
         "skin_solid", "skin_starfield", "skin_tidepool", "skin_granite", "skin_ember", "skin_blossom", PatchworkSkin,
+        "board_nightsky", "board_nebula", "board_tidepool", "board_canyon", "board_forge", "board_blossom", "board_quilt",
+        "frame_starlight", "frame_ripple", "frame_stone", "frame_flame", "frame_vine", "frame_neon",
     };
 
     public static bool IsNew(Cosmetic c) => NewIds.Contains(c.Id);
