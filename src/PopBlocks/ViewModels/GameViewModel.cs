@@ -47,6 +47,10 @@ public sealed class GameViewModel : ObservableObject
     private bool _checkAchievements;
 
     private IDispatcherTimer? _timer;
+    private IDispatcher? _dispatcher;
+    private IDispatcherTimer? _beatTimer;   // the hold after the last pop, before the result card fades in
+    private bool _endBeat;                  // true while the board is being held
+    private bool _beatStarted;              // the hold for this finish has begun (it runs once per finish)
     private bool _droppedHard;   // the lock that follows a hard drop gets the whoosh instead of the plain thud
     private GameState _lastState = GameState.Ready;
     private int _bestAtStart;
@@ -139,6 +143,8 @@ public sealed class GameViewModel : ObservableObject
         ToggleRerollHintCommand = new Command(() => { RerollHintOpen = !RerollHintOpen; });
         DismissLoadingCommand = new Command(DismissLoading);
         CopySeedCommand = new Command(CopySeed);
+        ShopCommand = new Command(() => ShopRequested?.Invoke());
+        ShareCommand = new Command(() => ShareRequested?.Invoke(ShareMessage));
 
         _levels.Changed += RaiseReroll;
         _progress.Changed += RaiseReroll;
@@ -200,6 +206,17 @@ public sealed class GameViewModel : ObservableObject
     public ICommand ToggleRerollHintCommand { get; }
     public ICommand DismissLoadingCommand { get; }
     public ICommand CopySeedCommand { get; }
+    public ICommand ShopCommand { get; }
+    public ICommand ShareCommand { get; }
+
+    /// <summary>The player asked for the workshop from a result card. The page decides how to get there.</summary>
+    public event Action? ShopRequested;
+
+    /// <summary>The player asked to share a result. Carries the text for the system share sheet.</summary>
+    public event Action<string>? ShareRequested;
+
+    /// <summary>The board is being held after the last pop. The page pulses the move counter (or flashes the top row).</summary>
+    public event Action<EndBeatKind>? EndBeatStarted;
 
     // ---------------------------------------------------------------- helpers (Second Chance, Prism Shift)
     // A button shows only when the level allows helpers and the player brought one in. It is switched off, with a short
@@ -364,10 +381,12 @@ public sealed class GameViewModel : ObservableObject
     public string RetryText => _isFailed ? "TRY AGAIN" : "PLAY AGAIN";
 
     public bool IsPlaying => _game.State is GameState.Playing or GameState.ResolvingBursts;
-    public bool IsOverlayVisible => _isPaused || _isFailed || _isComplete || _isClassicOver;
+    public bool IsOverlayVisible => !_endBeat && (_isPaused || _isFailed || _isComplete || _isClassicOver);
 
-    public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : "LEVEL COMPLETE")
-        : _isFailed ? (_game.FailReason == FailReason.OutOfMoves ? "OUT OF MOVES" : "BOARD FULL")
+    public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : $"LEVEL {_setup.Level} COMPLETE")
+        : _isFailed ? (_game.FailReason == FailReason.OutOfMoves
+            ? (_setup.IsLesson ? "OUT OF MOVES" : $"LEVEL {_setup.Level} â€” OUT OF MOVES")
+            : (_setup.IsLesson ? "BOARD FULL" : $"LEVEL {_setup.Level} â€” STACK REACHED THE TOP"))
         : _isClassicOver ? "GAME OVER"
         : "PAUSED";
 
@@ -385,6 +404,18 @@ public sealed class GameViewModel : ObservableObject
             return _setup.IsStory ? "Take a breather." : "Take a breather.";
         }
     }
+
+    /// <summary>SHOP beside NEXT LEVEL on a cleared level, under TRY AGAIN on a failed one. Lessons have no shop button.</summary>
+    public bool ShowShop => _isComplete && !_setup.IsLesson;
+    public bool ShowShopOnFailed => _isFailed && !_setup.IsLesson;
+
+    /// <summary>The share button: on a cleared Story level and on the Endless game-over card.</summary>
+    public bool ShowShare => (_isComplete && _setup.IsStory) || _isClassicOver;
+
+    private string ShareMessage => _isClassicOver
+        ? ShareText.Build(new ShareContext(ShareKind.Endless, Score: _score, BestChain: _run.LongestChain))
+        : ShareText.Build(new ShareContext(ShareKind.StoryWin, Level: _setup.Level,
+            Region: RegionCatalog.For(_setup.Level)?.Title ?? string.Empty, MovesLeft: _game.MovesLeft));
 
     /// <summary>"+25 gold", shown when a level is cleared for the first time.</summary>
     public bool HasGoldReward => _isComplete && _result.GoldAwarded > 0;
@@ -406,6 +437,9 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(NextText));
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(RetryText));
+        OnPropertyChanged(nameof(ShowShop));
+        OnPropertyChanged(nameof(ShowShopOnFailed));
+        OnPropertyChanged(nameof(ShowShare));
         OnPropertyChanged(nameof(HasGoldReward));
         OnPropertyChanged(nameof(GoldRewardText));
         OnPropertyChanged(nameof(GoldNote));
@@ -1152,6 +1186,7 @@ public sealed class GameViewModel : ObservableObject
     public void Attach(IDispatcher dispatcher)
     {
         if (_timer is not null) return;
+        _dispatcher = dispatcher;
         _timer = dispatcher.CreateTimer();
         _timer.IsRepeating = true;
         _timer.Tick += (_, _) =>
@@ -1179,9 +1214,47 @@ public sealed class GameViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// After the last pop of a level or run the board is held for a beat (the move counter pulses; an overflow flashes the
+    /// top row) before the result card fades in. Input is already closed because the game is over; a tap skips the wait.
+    /// </summary>
+    private void BeginEndBeat()
+    {
+        _beatStarted = true;
+        if (_dispatcher is null) return;
+
+        bool overflow = _game.State == GameState.GameOver && _game.FailReason == FailReason.StackOverflow;
+        bool reduced = _settings.ReducedMotion;
+        var kind = reduced ? EndBeatKind.Still
+            : overflow ? EndBeatKind.Overflow
+            : _game.State == GameState.LevelComplete ? EndBeatKind.Win : EndBeatKind.OutOfMoves;
+
+        _beatTimer ??= _dispatcher.CreateTimer();
+        _beatTimer.IsRepeating = false;
+        _beatTimer.Interval = TimeSpan.FromMilliseconds(EndBeat.HoldMs(overflow, reduced));
+        _beatTimer.Tick -= OnEndBeatTick;
+        _beatTimer.Tick += OnEndBeatTick;
+        _endBeat = true;
+        _beatTimer.Start();
+        EndBeatStarted?.Invoke(kind);
+    }
+
+    private void OnEndBeatTick(object? sender, EventArgs e) => SkipEndBeat();
+
+    /// <summary>Ends the hold now (its time is up, or the player tapped). The result card shows.</summary>
+    public void SkipEndBeat()
+    {
+        _beatTimer?.Stop();
+        if (!_endBeat) return;
+        _endBeat = false;
+        UpdateOverlay();
+    }
+
     /// <summary>Stops the timer and pauses. Safe to call repeatedly.</summary>
     public void Detach()
     {
+        _beatTimer?.Stop();
+        _endBeat = false;
         Pause();
         _timer?.Stop();
         BankClassicGold();   // leaving Classic pays out what the run earned
@@ -1232,6 +1305,9 @@ public sealed class GameViewModel : ObservableObject
         if (!_runRecorded && _run.PiecesPlaced > 0 && _game.Story?.IsTutorial != true) _lifetime.Add(_run, _game.Story);
         _run.Reset();
         _runRecorded = false;
+        _beatTimer?.Stop();
+        _endBeat = false;
+        _beatStarted = false;
         _earned = new List<Achievement>();
         _checkAchievements = false;
         _foundLore = new List<LoreEntry>();
@@ -1425,6 +1501,11 @@ public sealed class GameViewModel : ObservableObject
             }
         }
 
+        // The first time a finish is seen, hold the board for a beat before any result card shows.
+        bool finished = _game.State is GameState.LevelComplete or GameState.GameOver;
+        if (finished && !_beatStarted) BeginEndBeat();
+        else if (!finished) _beatStarted = false;
+
         HandleCompletion();
         RaiseBonus();
 
@@ -1527,4 +1608,20 @@ public sealed class GameViewModel : ObservableObject
             _timer.Start();
         }
     }
+}
+
+/// <summary>How the board is held at the end of a level or run (the page animates the matching cue).</summary>
+public enum EndBeatKind
+{
+    /// <summary>The move counter pulses.</summary>
+    Win,
+
+    /// <summary>The move counter pulses red.</summary>
+    OutOfMoves,
+
+    /// <summary>The top row flashes once.</summary>
+    Overflow,
+
+    /// <summary>Reduced motion: a short hold with no pulse.</summary>
+    Still,
 }

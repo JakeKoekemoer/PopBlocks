@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using PopBlocks.Engine;
 using PopBlocks.Engine.Audio;
 using PopBlocks.Engine.Models;
@@ -234,6 +234,9 @@ public partial class MainPage : ContentPage
 
     private async void OnAboutClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(_services.GetRequiredService<AboutPage>());
+
+    private async void OnShareClicked(object? sender, EventArgs e) =>
+        await Ui.ShareAsync(ShareText.Build(new ShareContext(ShareKind.Menu)));
 
     private async void OnSettingsClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(_services.GetRequiredService<SettingsPage>());

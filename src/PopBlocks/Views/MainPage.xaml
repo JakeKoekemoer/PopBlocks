@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="PopBlocks.Views.MainPage"
@@ -122,7 +122,7 @@
                 </Grid>
             </Border>
 
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="12">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
                 <Button Grid.Row="0" Grid.Column="0" Text="MAP" Style="{StaticResource SecondaryButton}"
                         MinimumWidthRequest="0" Clicked="OnMapClicked" />
                 <Button Grid.Row="0" Grid.Column="1" Text="ENDLESS" Style="{StaticResource SecondaryButton}"
@@ -138,6 +138,9 @@
                 <!-- Settings: pop effects, landing guide, motion, sound, board style, name and saved data all live on their own page -->
                 <Button Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Text="SETTINGS" Style="{StaticResource SecondaryButton}"
                         MinimumWidthRequest="0" Clicked="OnSettingsClicked" />
+                <Button Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Text="SHARE" Style="{StaticResource SecondaryButton}"
+                        MinimumWidthRequest="0" Clicked="OnShareClicked"
+                        SemanticProperties.Description="Share PopBlocks with a friend" />
             </Grid>
 
 

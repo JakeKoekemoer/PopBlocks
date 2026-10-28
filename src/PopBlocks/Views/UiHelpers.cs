@@ -5,6 +5,19 @@ namespace PopBlocks.Views;
 /// <summary>Small helpers shared by the pages and workshop panels that are built in code (map, region, archive, workshop).</summary>
 internal static class Ui
 {
+    /// <summary>Opens the phone's own share sheet with some text. The game needs no internet permission for this.</summary>
+    public static async Task ShareAsync(string text)
+    {
+        try
+        {
+            await Share.Default.RequestAsync(new ShareTextRequest { Text = text, Title = "Share PopBlocks" });
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("Ui.ShareAsync", e);
+        }
+    }
+
     public static Color Res(string key, Color fallback)
     {
         var resources = Application.Current?.Resources;

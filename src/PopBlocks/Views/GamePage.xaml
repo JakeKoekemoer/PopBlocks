@@ -41,7 +41,8 @@
                                      VerticalOptions="Center"
                                      MinimumWidthRequest="58">
                     <Label Text="MOVES" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
-                    <Label Text="{Binding MovesText}"
+                    <Label x:Name="MovesLabel"
+                           Text="{Binding MovesText}"
                            FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{Binding MovesColour}"
@@ -234,7 +235,8 @@
         </VerticalStackLayout>
 
         <!-- Pause / level complete / level failed / game over -->
-        <Grid Grid.RowSpan="4"
+        <Grid x:Name="OverlayGrid"
+              Grid.RowSpan="4"
               IsVisible="{Binding IsOverlayVisible}"
               BackgroundColor="{StaticResource Overlay}"
               Margin="-6,-2,-6,-6">
@@ -323,14 +325,33 @@
                            FontSize="12"
                            HorizontalTextAlignment="Center" />
 
-                    <Button Text="{Binding NextText}"
-                            Style="{StaticResource PrimaryButton}"
-                            IsVisible="{Binding IsComplete}"
-                            Command="{Binding NextLevelCommand}" />
+                    <Grid IsVisible="{Binding IsComplete}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Button Text="{Binding NextText}"
+                                Style="{StaticResource PrimaryButton}"
+                                MinimumWidthRequest="0"
+                                Command="{Binding NextLevelCommand}" />
+                        <Button Grid.Column="1"
+                                Text="SHOP"
+                                Style="{StaticResource SecondaryButton}"
+                                MinimumWidthRequest="0"
+                                IsVisible="{Binding ShowShop}"
+                                Command="{Binding ShopCommand}"
+                                SemanticProperties.Description="Open the workshop" />
+                    </Grid>
                     <Button Text="{Binding RetryText}"
                             Style="{StaticResource PrimaryButton}"
                             IsVisible="{Binding CanRetry}"
                             Command="{Binding RestartCommand}" />
+                    <Button Text="SHOP"
+                            Style="{StaticResource GhostButton}"
+                            IsVisible="{Binding ShowShopOnFailed}"
+                            Command="{Binding ShopCommand}"
+                            SemanticProperties.Description="Open the workshop" />
+                    <Button Text="SHARE"
+                            Style="{StaticResource GhostButton}"
+                            IsVisible="{Binding ShowShare}"
+                            Command="{Binding ShareCommand}"
+                            SemanticProperties.Description="Share this result" />
 
                     <!-- Reroll: a new level for gold. The price falls with each failure and is free from the tenth. Plain words only:
                          no countdown, no timer, no urgent colour. The "?" appears only when the player cannot pay yet. -->

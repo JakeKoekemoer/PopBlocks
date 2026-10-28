@@ -67,6 +67,9 @@ public partial class GamePage : ContentPage
         _vm.Toast += OnToast;
         _vm.Banner += OnBanner;
         _vm.PropertyChanged += OnViewModelPropertyChanged;
+        _vm.EndBeatStarted += OnEndBeatStarted;
+        _vm.ShopRequested += OnShopRequested;
+        _vm.ShareRequested += text => _ = Ui.ShareAsync(text);
 
         BoardView.StartInteraction += OnTouchStart;
         BoardView.DragInteraction += OnTouchDrag;
@@ -256,9 +259,76 @@ public partial class GamePage : ContentPage
         BoardView.Invalidate();
     }
 
+    // ------------------------------------------------------------------ the end of a level
+
+    /// <summary>
+    /// The board is held for a beat after the last pop: the move counter pulses once (red on a loss) or the top row flashes
+    /// when the stack overflowed. Reduced motion has the hold without the pulse. The card then fades in over 250 ms.
+    /// </summary>
+    private void OnEndBeatStarted(EndBeatKind kind)
+    {
+        switch (kind)
+        {
+            case EndBeatKind.Win:
+            case EndBeatKind.OutOfMoves:
+                _ = PulseMovesAsync();
+                break;
+            case EndBeatKind.Overflow:
+                new Animation(v =>
+                {
+                    _board.TopRowFlash = (float)(v < 0.5 ? v * 2 : (1 - v) * 2);
+                    BoardView.Invalidate();
+                }).Commit(this, "TopRowFlash", 16, 400, Easing.Linear, (_, _) =>
+                {
+                    _board.TopRowFlash = 0f;
+                    BoardView.Invalidate();
+                });
+                break;
+        }
+    }
+
+    private async Task PulseMovesAsync()
+    {
+        await MovesLabel.ScaleToAsync(1.15, 220, Easing.CubicOut);
+        await MovesLabel.ScaleToAsync(1.0, 220, Easing.CubicIn);
+    }
+
+    /// <summary>A result card fades in; the pause card appears at once.</summary>
+    private async void FadeOverlayIn()
+    {
+        if (_vm.IsPaused || _settings.ReducedMotion)
+        {
+            OverlayGrid.Opacity = 1;
+            return;
+        }
+        OverlayGrid.Opacity = 0;
+        await OverlayGrid.FadeToAsync(1, (uint)EndBeat.CardFadeMs, Easing.CubicOut);
+    }
+
+    /// <summary>SHOP on a result card: the workshop opens on Upgrades, and Back leads to the Map rather than into the finished level.</summary>
+    private async void OnShopRequested()
+    {
+        var services = Handler?.MauiContext?.Services;
+        if (services is null) return;
+        var nav = Navigation;
+        var stack = nav.NavigationStack;
+        if (stack.Count < 2 || stack[^2] is not WorldMapPage)
+            nav.InsertPageBefore(services.GetRequiredService<WorldMapPage>(), this);
+
+        var shop = services.GetRequiredService<WorkshopPage>();
+        shop.StartTab = WorkshopTab.Upgrades;
+        await nav.PushAsync(shop);
+        nav.RemovePage(this);
+    }
+
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(GameViewModel.PipBrightness) or nameof(GameViewModel.SceneMood) or nameof(GameViewModel.SceneSpeakerId))
+        if (e.PropertyName == nameof(GameViewModel.IsOverlayVisible))
+        {
+            if (_vm.IsOverlayVisible) FadeOverlayIn();
+            else OverlayGrid.Opacity = 1;
+        }
+        else if (e.PropertyName is nameof(GameViewModel.PipBrightness) or nameof(GameViewModel.SceneMood) or nameof(GameViewModel.SceneSpeakerId))
         {
             _bannerPip.Brightness = _vm.PipBrightness;
             ApplySpeaker();
@@ -502,6 +572,7 @@ public partial class GamePage : ContentPage
 
     private void OnTouchStart(object? sender, TouchEventArgs e)
     {
+        _vm.SkipEndBeat();   // a tap ends the hold after the last pop
         if (e.Touches.Length == 0) return;
         var p = e.Touches[0];
         _touchStartX = _anchorX = p.X;

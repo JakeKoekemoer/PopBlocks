@@ -2,8 +2,8 @@
 
 | Phase | Status | Commit |
 |---|---|---|
-| 1 Main menu | in progress | |
-| 2 Level-end cards | pending | |
+| 1 Main menu | done | b403232 |
+| 2 Level-end cards | in progress | |
 | 3 Rerolls | pending | |
 | 4 Loss support | pending | |
 | 5 Pop gold, floating gold, consolation | pending | |

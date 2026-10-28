@@ -33,6 +33,9 @@ public sealed class GameDrawable : IDrawable
     /// <summary>Chain Sense: the landing guide glows when dropping the piece where it is would start a chain.</summary>
     public bool ChainGlow { get; set; }
 
+    /// <summary>0..1: a white flash over the top row of the board, used once when the stack reaches the top.</summary>
+    public float TopRowFlash { get; set; }
+
     /// <summary>Calmer drawing: no pulsing or wobble in the highlights.</summary>
     public bool ReducedMotion { get; set; }
 
@@ -118,6 +121,12 @@ public sealed class GameDrawable : IDrawable
                 DrawActivePiece(canvas, (CellRenderer.BlockLayer)pass, game.CurrentPiece, originX, originY, cell);
             if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell);
             Effects.Draw(canvas, originX, originY, cell, boardW, Flip, now);
+
+            if (TopRowFlash > 0f)
+            {
+                canvas.FillColor = Colors.White.WithAlpha(0.6f * TopRowFlash);
+                canvas.FillRectangle(originX, Flip ? originY + boardH - cell : originY, boardW, cell);
+            }
 
             canvas.RestoreState();
         }
