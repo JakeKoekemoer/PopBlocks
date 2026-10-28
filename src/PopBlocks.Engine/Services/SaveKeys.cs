@@ -125,6 +125,9 @@ public static class SaveKeys
     /// <summary>Levels rerolled, in total (v1.1).</summary>
     public const string StatRerolls = "stat_rerolls";
 
+    /// <summary>Continues bought, in total (v1.1).</summary>
+    public const string StatContinues = "stat_continues";
+
     /// <summary>Levels played in one region (the journal's per-region count): <c>stat_plays_r1</c> to <c>stat_plays_r8</c>.</summary>
     public static string StatRegionPlays(int region) => "stat_plays_r" + region;
 
@@ -134,7 +137,7 @@ public static class SaveKeys
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
-        StatRerolls,
+        StatRerolls, StatContinues,
     };
 
     // Not listed here on purpose: PersistentSettings.EnabledKey ("save_file_enabled"). It records whether this phone keeps a
@@ -153,7 +156,7 @@ public static class SaveKeys
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
-        StatRerolls,
+        StatRerolls, StatContinues,
     };
 }
 

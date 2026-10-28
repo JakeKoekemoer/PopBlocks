@@ -44,6 +44,9 @@ public enum GameEvent
 
     /// <summary>Prism Shift was used: the colours of the next piece were rearranged.</summary>
     PrismShifted,
+
+    /// <summary>Moves were bought after running out: the level goes on.</summary>
+    Continued,
 }
 
 /// <summary>Whether a helper (Second Chance, Prism Shift) can be used right now, and if not, why.</summary>

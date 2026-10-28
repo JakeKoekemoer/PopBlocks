@@ -37,22 +37,28 @@ public sealed class Consolation
     public int ProgressPaid(int level) =>
         SaveCode.ParseSeedList(_settings.GetString(SaveKeys.ConsolationPaid, "")).TryGetValue(level, out int n) ? n : 0;
 
-    /// <summary>What a loss would pay now, without paying it.</summary>
-    public ConsolationResult Preview(int level, int runPopGold, double goalProgress, bool levelCleared, bool eased)
+    /// <summary>
+    /// What a loss would pay now, without paying it. <paramref name="alreadyPaid"/> is what an earlier loss of the same attempt
+    /// paid (the attempt went on after a continue and was lost again): only the difference is due.
+    /// </summary>
+    public ConsolationResult Preview(int level, int runPopGold, double goalProgress, bool levelCleared, bool eased,
+        ConsolationResult alreadyPaid = default)
     {
         if (eased) return default;
-        int pop = PopPart(runPopGold);
+        int pop = Math.Max(0, PopPart(runPopGold) - alreadyPaid.PopPart);
         if (levelCleared) return new ConsolationResult(pop, 0);
 
         int reward = GoldRewards.For(level, isTutorial: level <= StoryConfig.TutorialLastLevel);
-        int remaining = Math.Max(0, reward - ProgressPaid(level));
-        return new ConsolationResult(pop, Math.Min(ProgressPart(reward, goalProgress), remaining));
+        int remaining = Math.Max(0, reward - ProgressPaid(level) + alreadyPaid.ProgressPart);
+        int target = Math.Min(ProgressPart(reward, goalProgress), remaining);
+        return new ConsolationResult(pop, Math.Max(0, target - alreadyPaid.ProgressPart));
     }
 
     /// <summary>Pays the consolation for a lost attempt, once. Returns what was paid.</summary>
-    public ConsolationResult Pay(int level, int runPopGold, double goalProgress, bool levelCleared, bool eased)
+    public ConsolationResult Pay(int level, int runPopGold, double goalProgress, bool levelCleared, bool eased,
+        ConsolationResult alreadyPaid = default)
     {
-        var result = Preview(level, runPopGold, goalProgress, levelCleared, eased);
+        var result = Preview(level, runPopGold, goalProgress, levelCleared, eased, alreadyPaid);
         if (result.Total <= 0) return result;
 
         if (result.ProgressPart > 0)

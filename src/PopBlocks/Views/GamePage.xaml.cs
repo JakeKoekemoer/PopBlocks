@@ -27,6 +27,8 @@ public partial class GamePage : ContentPage
     private readonly StageDrawable _stage = new();           // the picture above the panel
     private readonly PipDrawable _bannerPip = new() { Mood = PipMood.Happy };
     private int _bannerVersion;
+    private readonly HeartsDrawable _hearts = new();       // the continues left on a failed card
+    private bool _continueBusy;
     private readonly CoinFlyDrawable _coinFly = new();   // the coins that fly from a result card to the gold chip
 
     private IDispatcherTimer? _animationTimer;
@@ -62,6 +64,7 @@ public partial class GamePage : ContentPage
         StageView.Drawable = _stage;
         BannerPipView.Drawable = _bannerPip;
         CoinFlyView.Drawable = _coinFly;
+        HeartsView.Drawable = _hearts;
 
         _vm.Redraw += OnRedraw;
         _vm.WaveResolved += OnWaveResolved;
@@ -408,6 +411,60 @@ public partial class GamePage : ContentPage
         await OverlayGrid.FadeToAsync(1, (uint)EndBeat.CardFadeMs, Easing.CubicOut);
     }
 
+    /// <summary>
+    /// Buying a continue: the next heart cracks and empties (220 ms), the card slides away, and the move counter flashes the new
+    /// moves. Under Reduced motion the purchase just happens. The gold is taken once, by the view model, and the button is
+    /// ignored while this runs.
+    /// </summary>
+    private async void OnContinueClicked(object? sender, EventArgs e)
+    {
+        if (_continueBusy || !_vm.CanAffordContinue) return;
+        _continueBusy = true;
+        try
+        {
+            bool still = _settings.ReducedMotion;
+            if (!still)
+            {
+                _hearts.CrackIndex = _vm.ContinuesLeft - 1;
+                new Animation(v =>
+                {
+                    _hearts.CrackT = (float)v;
+                    HeartsView.Invalidate();
+                }).Commit(this, "HeartCrack", 16, 220, Easing.CubicOut);
+                await Task.Delay(240);
+                await OverlayGrid.TranslateToAsync(0, Height * 0.5, 200, Easing.CubicIn);
+            }
+
+            bool bought = _vm.BuyContinue();
+            OverlayGrid.TranslationY = 0;
+            _hearts.CrackIndex = -1;
+            if (!bought) return;
+
+            if (!still)
+            {
+                // The gold chip counts down to what is left.
+                _ = CountChipDownAsync();
+            }
+            OnToast("+5 moves");
+            if (!still) _ = PulseMovesAsync();
+        }
+        finally
+        {
+            _continueBusy = false;
+        }
+    }
+
+    private async Task CountChipDownAsync()
+    {
+        // The view model starts the chip showing the gold from before the purchase; walk it down to the real figure.
+        for (int step = 1; step <= 6; step++)
+        {
+            await Task.Delay(60);
+            _vm.SetChipHold(_vm.ChipHoldNow * (6 - step) / 6);
+        }
+        _vm.SetChipHold(0);
+    }
+
     /// <summary>EASE THIS LEVEL asks first, in plain words: the level pays no gold but the story moves on.</summary>
     private async void OnEaseRequested()
     {
@@ -439,6 +496,9 @@ public partial class GamePage : ContentPage
         {
             if (_vm.IsOverlayVisible)
             {
+                _hearts.Left = _vm.ContinuesLeft;
+                _hearts.CrackIndex = -1;
+                HeartsView.Invalidate();
                 FadeOverlayIn();
                 StartGoldCountUp();
             }

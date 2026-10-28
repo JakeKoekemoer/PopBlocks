@@ -357,6 +357,24 @@
                            FontSize="12"
                            HorizontalTextAlignment="Center" />
 
+                    <!-- Out of moves: five more moves for gold, three times per attempt. The hearts show how many are left. -->
+                    <VerticalStackLayout IsVisible="{Binding ShowContinue}" Spacing="4">
+                        <Button x:Name="ContinueButton"
+                                Text="{Binding ContinueText}"
+                                Style="{StaticResource PrimaryButton}"
+                                IsEnabled="{Binding CanAffordContinue}"
+                                Clicked="OnContinueClicked"
+                                SemanticProperties.Description="Buy five more moves" />
+                        <Label Text="{Binding ContinueHintText}"
+                               IsVisible="{Binding ShowContinueHint}"
+                               Style="{StaticResource CaptionLabel}"
+                               HorizontalTextAlignment="Center" />
+                        <GraphicsView x:Name="HeartsView"
+                                      HeightRequest="26"
+                                      HorizontalOptions="Fill"
+                                      SemanticProperties.Description="{Binding ContinuesLeftText}" />
+                    </VerticalStackLayout>
+
                     <Grid IsVisible="{Binding IsComplete}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <Button Text="{Binding NextText}"
                                 Style="{StaticResource PrimaryButton}"

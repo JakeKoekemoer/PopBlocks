@@ -6,8 +6,8 @@
 | 2 Level-end cards | done | c533cc3 |
 | 3 Rerolls | done | 19f59e1 |
 | 4 Loss support | done | c3eccf8 |
-| 5 Pop gold, floating gold, consolation | done | PENDING5 |
-| 6 Continues | pending | |
+| 5 Pop gold, floating gold, consolation | done | 60f1b4e |
+| 6 Continues | done | PENDING6 |
 | 7 Settings tabs and custom rules | pending | |
 | 8 Petals vs Shards | pending | |
 | 9a Block sets | pending | |

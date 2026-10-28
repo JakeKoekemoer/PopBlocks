@@ -32,6 +32,9 @@ public sealed class RunStats
     public bool Eased { get; private set; }
     public bool Failed { get; private set; }
 
+    /// <summary>Continues bought in this run (moves bought after running out).</summary>
+    public int Continues { get; private set; }
+
     /// <summary>Moves left when the level was won, counted against the level's own limit (upgrades do not add to it). 0 if unlimited.</summary>
     public int MovesLeftAtFinish { get; private set; }
 
@@ -66,6 +69,7 @@ public sealed class RunStats
         LargestGroup = LongestChain = MostClearedByOnePiece = CellsPopped = Waves = PiecesPlaced = AbilitiesUsed = 0;
         MovesLeftAtFinish = 0;
         Completed = Failed = BoardCleared = Eased = false;
+        Continues = 0;
         _clearedByThisPiece = 0;
         _beforeLastLock = null;
         Array.Clear(_colourCounts);
@@ -136,6 +140,11 @@ public sealed class RunStats
 
             case GameEvent.LevelFailed:
                 Failed = true;
+                break;
+
+            case GameEvent.Continued:
+                Failed = false;   // the level is not over after all
+                Continues++;
                 break;
         }
     }

@@ -1,5 +1,7 @@
 using PopBlocks.Engine.Levels;
 using PopBlocks.Engine.Models;
+using PopBlocks.Engine.Services;
+using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Engine.Logic;
 
@@ -156,7 +158,45 @@ public sealed class GameEngine
     // ---- Story: moves and goals ----
 
     /// <summary>Pieces allowed in this Story level, shop bonus included. 0 when unlimited or not Story.</summary>
-    public int MoveLimit => Story is { MoveLimit: > 0 } s ? s.MoveLimit + (s.IsTutorial ? 0 : _extraMoves) : 0;
+    public int MoveLimit => Story is { MoveLimit: > 0 } s ? s.MoveLimit + (s.IsTutorial ? 0 : _extraMoves) + _continueMoves : 0;
+
+    private int _continueMoves;   // moves bought with continues this attempt
+
+    /// <summary>Continues bought in this attempt (0 to <see cref="ContinuePricing.MaxPerAttempt"/>). A new game, a retry or a reroll starts it again at 0.</summary>
+    public int ContinuesUsed { get; private set; }
+
+    /// <summary>
+    /// The player may buy more moves: a normal Story level (not a lesson, a finale or a level the player eased) that was lost by
+    /// running out of moves, with continues left. An overflow ends the attempt for good; there is nothing to buy.
+    /// </summary>
+    public bool CanContinue
+    {
+        get
+        {
+            if (State != GameState.GameOver || FailReason != FailReason.OutOfMoves) return false;
+            if (Story is not { IsTutorial: false, Eased: false } story) return false;
+            if (RegionCatalog.For(story.Number)?.LastLevel == story.Number) return false;   // a finale is played as it is
+            return ContinuesUsed < ContinuePricing.MaxPerAttempt;
+        }
+    }
+
+    /// <summary>
+    /// Buys <paramref name="moves"/> more moves after running out. Only allowed when <see cref="CanContinue"/>. The game
+    /// goes back to playing: the next piece is the next one from the same stream (nothing is skipped or rerolled) and an undo
+    /// snapshot is taken as for any new piece. The app takes the gold; the engine only knows moves.
+    /// </summary>
+    public bool Continue(int moves = ContinuePricing.ExtraMoves)
+    {
+        if (!CanContinue || moves <= 0) return false;
+        _continueMoves += moves;
+        ContinuesUsed++;
+        FailReason = FailReason.None;
+        State = GameState.Playing;   // overwritten by SpawnNext if the next piece cannot be placed
+        SpawnNext();
+        Raise(GameEvent.Continued);
+        Notify();
+        return true;
+    }
 
     public bool HasMoveLimit => MoveLimit > 0;
 
@@ -249,6 +289,8 @@ public sealed class GameEngine
 
         Score = 0;
         PiecesPlaced = 0;
+        _continueMoves = 0;
+        ContinuesUsed = 0;
         _poppedClassic = 0;
         ClassicGoldTenths = 0;
         Chain = 0;

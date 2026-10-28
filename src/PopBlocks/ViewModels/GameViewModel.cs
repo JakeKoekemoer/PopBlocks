@@ -472,14 +472,60 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>The HUD gold chip counts up to the gold just paid instead of jumping: the page releases it as coins land.</summary>
     public void SetChipHold(int remaining)
     {
-        int hold = Math.Clamp(remaining, 0, Math.Max(0, _progress.Gold));
+        int hold = Math.Min(remaining, Math.Max(0, _progress.Gold));   // a negative hold shows the chip above the real gold: it counts down after a purchase
         if (hold == _chipHold) return;
         _chipHold = hold;
         OnPropertyChanged(nameof(SubText));
     }
 
+    // ---- continues (v1.1) ----
+
+    /// <summary>Five more moves for gold, on a Story level lost by running out of moves (not a finale, not an eased level).</summary>
+    public bool ShowContinue => _isFailed && _setup.IsStory && _game.CanContinue;
+    public int ContinuePrice => ContinuePricing.Price(_game.ContinuesUsed + 1);
+    public bool CanAffordContinue => ShowContinue && _progress.Gold >= ContinuePrice;
+    public string ContinueText => $"+{ContinuePricing.ExtraMoves} MOVES · {ContinuePrice} GOLD";
+    public bool ShowContinueHint => ShowContinue && !CanAffordContinue;
+    public string ContinueHintText => "Earn gold in Endless mode";
+    public int ContinuesLeft => ContinuePricing.MaxPerAttempt - _game.ContinuesUsed;
+    public string ContinuesLeftText => $"{ContinuesLeft} of {ContinuePricing.MaxPerAttempt} continues left";
+
+    /// <summary>
+    /// Buys the continue: takes the gold once, then gives five more moves. Nothing is taken if the engine will not continue.
+    /// The loss is not paid out again; if the level is then lost once more, only what is new is paid.
+    /// </summary>
+    public bool BuyContinue()
+    {
+        if (!ShowContinue || _buyingContinue) return false;
+        _buyingContinue = true;
+        try
+        {
+            int price = ContinuePrice;
+            if (price <= 0 || !_progress.TrySpend(price)) return false;
+            if (!_game.Continue(ContinuePricing.ExtraMoves))
+            {
+                _progress.AwardGold(price);
+                return false;
+            }
+
+            _lossHandled = false;   // a second loss pays only the difference
+            _chipHold = -price;     // the chip shows the gold from before and counts down
+            OnPropertyChanged(nameof(SubText));
+            return true;
+        }
+        finally
+        {
+            _buyingContinue = false;
+        }
+    }
+
+    private bool _buyingContinue;
+
     /// <summary>One tick of the count-up (a coin sound).</summary>
     public void PlayCoinTick() => _audio.Ui(UiSound.Coin);
+
+    /// <summary>How far the HUD chip is held away from the real gold (negative: above it, counting down after a purchase).</summary>
+    public int ChipHoldNow => _chipHold;
 
     /// <summary>Small note under the card explaining why no gold was paid.</summary>
     public string GoldNote => !_isComplete ? string.Empty
@@ -501,6 +547,13 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowShop));
         OnPropertyChanged(nameof(ShowShopOnFailed));
         OnPropertyChanged(nameof(ShowShare));
+        OnPropertyChanged(nameof(ShowContinue));
+        OnPropertyChanged(nameof(ContinuePrice));
+        OnPropertyChanged(nameof(CanAffordContinue));
+        OnPropertyChanged(nameof(ContinueText));
+        OnPropertyChanged(nameof(ShowContinueHint));
+        OnPropertyChanged(nameof(ContinuesLeft));
+        OnPropertyChanged(nameof(ContinuesLeftText));
         OnPropertyChanged(nameof(ShowSolvableNote));
         OnPropertyChanged(nameof(ShowEase));
         OnPropertyChanged(nameof(HasGoldReward));
@@ -1105,9 +1158,10 @@ public sealed class GameViewModel : ObservableObject
     {
         if (_lossHandled || !_setup.IsStory || _game.Story is not { IsTutorial: false } story) return;
         _lossHandled = true;
-        _lossPaid = _consolation.Pay(story.Number, _game.ClassicGoldTenths / 10, _game.GoalProgress,
-            levelCleared: _progress.IsCleared(story.Number), eased: story.Eased);
-        _chipHold = _lossPaid.Total;
+        var due = _consolation.Pay(story.Number, _game.ClassicGoldTenths / 10, _game.GoalProgress,
+            levelCleared: _progress.IsCleared(story.Number), eased: story.Eased, alreadyPaid: _lossPaid);
+        _lossPaid = new ConsolationResult(_lossPaid.PopPart + due.PopPart, _lossPaid.ProgressPart + due.ProgressPart);
+        _chipHold = due.Total;
         UpdateOverlay();
     }
 
@@ -1334,9 +1388,18 @@ public sealed class GameViewModel : ObservableObject
         UpdateOverlay();
     }
 
+    /// <summary>Adds the run that is ending to the lifetime bests, if that has not happened yet (a lesson never counts).</summary>
+    private void RecordPendingRun()
+    {
+        if (_runRecorded || _run.PiecesPlaced == 0 || _game.Story?.IsTutorial == true) return;
+        _runRecorded = true;
+        _lifetime.Add(_run, _game.Story);
+    }
+
     /// <summary>Stops the timer and pauses. Safe to call repeatedly.</summary>
     public void Detach()
     {
+        if (_game.State is GameState.GameOver or GameState.LevelComplete) RecordPendingRun();   // a level just lost or won counts even if the page is left at once
         _beatTimer?.Stop();
         _endBeat = false;
         _chipHold = 0;
@@ -1397,7 +1460,7 @@ public sealed class GameViewModel : ObservableObject
             : PopTiming.Instant;
 
         // A level left half-played still counts towards the player's personal bests (once). Tutorial lessons never do.
-        if (!_runRecorded && _run.PiecesPlaced > 0 && _game.Story?.IsTutorial != true) _lifetime.Add(_run, _game.Story);
+        RecordPendingRun();
         _run.Reset();
         _runRecorded = false;
         _beatTimer?.Stop();
@@ -1603,8 +1666,9 @@ public sealed class GameViewModel : ObservableObject
         }
 
         // The run is over (won, lost, or Classic game over): add it to the lifetime bests, once.
-        if (_game.State is GameState.GameOver or GameState.LevelComplete && !_runRecorded)
+        if (_game.State is GameState.GameOver or GameState.LevelComplete && !_runRecorded && !(_setup.IsStory && _game.CanContinue))
         {
+            // (A level lost by running out of moves may still be continued; its run is recorded when the attempt really ends.)
             _runRecorded = true;
             if (!_setup.IsLesson)   // a tutorial lesson is practice: it adds nothing to the bests or the achievements
             {
@@ -1679,7 +1743,10 @@ public sealed class GameViewModel : ObservableObject
         }
 
         _result = _progress.Complete(_game.Story);
-        _popGoldPaid = _game.EarnsPopGold ? _classicGold.Bank(_game.ClassicGoldTenths) : 0;   // pop gold on top of the first clear, replays too
+        int banked = _game.EarnsPopGold ? _classicGold.Bank(_game.ClassicGoldTenths) : 0;   // pop gold on top of the first clear, replays too
+        int credit = Math.Min(banked, _lossPaid.PopPart);   // the attempt was lost once before a continue: that half was already paid
+        if (credit > 0) _progress.TrySpend(credit);
+        _popGoldPaid = banked - credit;
         _chipHold = _result.GoldAwarded + _popGoldPaid;                                      // the chip counts up to it as the coins land
 
         // Story rewards are granted here, before any scene is shown, so skipping a scene can never lose one.

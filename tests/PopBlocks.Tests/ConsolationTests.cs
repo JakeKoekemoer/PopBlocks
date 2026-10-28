@@ -73,6 +73,22 @@ public class ConsolationTests
     }
 
     [Fact]
+    public void A_second_loss_after_a_continue_pays_only_what_is_new()
+    {
+        var (c, progress, _) = Make();
+        int reward = GoldRewards.For(60, false);
+
+        var first = c.Pay(60, runPopGold: 4, goalProgress: 0.5, levelCleared: false, eased: false);
+        var second = c.Pay(60, runPopGold: 10, goalProgress: 0.75, levelCleared: false, eased: false, alreadyPaid: first);
+
+        Assert.Equal(5 - first.PopPart, second.PopPart);                                   // half of 10, less what was paid
+        Assert.Equal(Consolation.ProgressPart(reward, 0.75) - first.ProgressPart, second.ProgressPart);
+        Assert.Equal(first.Total + second.Total, progress.Gold);
+        Assert.Equal(first.ProgressPart + second.ProgressPart, c.ProgressPaid(60));
+        Assert.Equal(0, c.Pay(60, 10, 0.75, false, false, new ConsolationResult(first.PopPart + second.PopPart, first.ProgressPart + second.ProgressPart)).Total);
+    }
+
+    [Fact]
     public void An_eased_level_pays_no_consolation()
     {
         var (c, progress, _) = Make();

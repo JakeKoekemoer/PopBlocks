@@ -51,6 +51,12 @@ On top of that:
 A player who finishes the campaign has earned about **14,000** gold from the Story alone; Classic is extra, and is
 what a stuck player can turn to for the price of a reroll.
 
+## Sinks (continues)
+
+| Phase | What | Gold |
+|---|---|---|
+| v1.1 | **Continue**: five more moves on a Story level lost by running out of moves (30, 42, 55; at most three per attempt; never on a finale or an eased level) | recurring, never needed to finish the game |
+
 ## Sinks
 
 | Phase | What | Gold |
