@@ -157,6 +157,7 @@ public sealed class GameDrawable : IDrawable
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
         long now = Clock();
+        Diagnostics.CountFrame();   // (debug builds only) so a board that repaints while idle shows up in the numbers
 
         canvas.SaveState();
 
@@ -233,9 +234,14 @@ public sealed class GameDrawable : IDrawable
         // Vertical gradient drawn as thin solid bands clipped to the rounded panel. (SetFillPaint is avoided on
         // purpose: on Android its shader stays on the paint and later solid FillColor calls come out invisible.)
         canvas.SaveState();
-        var panelPath = new PathF();
-        panelPath.AppendRoundedRectangle(x, y, w, h, corner);
-        canvas.ClipPath(panelPath);
+        if (_panelPath is null || _panelX != x || _panelY != y || _panelW != w || _panelH != h || _panelCorner != corner)
+        {
+            // The clip outline only changes with the size of the board, so it is built when that changes, not every frame.
+            _panelPath = new PathF();
+            _panelPath.AppendRoundedRectangle(x, y, w, h, corner);
+            (_panelX, _panelY, _panelW, _panelH, _panelCorner) = (x, y, w, h, corner);
+        }
+        canvas.ClipPath(_panelPath);
         const int bands = 40;
         var top = Theme.Top;
         var bottom = Theme.Bottom;
@@ -633,8 +639,9 @@ public sealed class GameDrawable : IDrawable
         canvas.StrokeSize = 2f;
         canvas.StrokeDashPattern = InsightDash;
         float minSx = float.MaxValue, maxSx = float.MinValue, topSy = float.MaxValue;
-        foreach (var c in s.Landed)
+        for (int li = 0; li < s.Landed.Count; li++)
         {
+            var c = s.Landed[li];
             if (BoardSpace.AboveView(c.Y) || BoardSpace.BelowView(c.Y)) continue;
             float sx = BoardSpace.ScreenX(c.X, Flip, originX, cell), sy = BoardSpace.ScreenY(c.Y, Flip, originY, cell);
             minSx = MathF.Min(minSx, sx);
@@ -675,6 +682,9 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>The Orb's swirl and shiver move while it is on the board.</summary>
     public bool OrbAnimates => AmbientOn && !ReducedMotion && Game is { OrbAt: not null };
+
+    private PathF? _panelPath;
+    private float _panelX, _panelY, _panelW, _panelH, _panelCorner;
 
     private int _belowShown = -1;
     private string _belowText = string.Empty;

@@ -18,8 +18,8 @@
 | 12 Pip's Insight | done | cfb2750 |
 | 13 Fracture | done | a5a6cbd |
 | 14 The Orb | done (Endless and Always rule; Story auto-orbs off, see Unfinished) | 5a5a440 |
-| 15 Achievements | done | PENDING15 |
-| 16 Performance | pending | |
+| 15 Achievements | done | ada9c8b |
+| 16 Performance | done | PENDING16 |
 | 17 Wrap-up | pending | |
 
 ## Unfinished

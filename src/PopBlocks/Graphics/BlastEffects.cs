@@ -283,11 +283,16 @@ public sealed class BlastEffects
         if (age < CrackTickMs)
         {
             float k = 1f - age / (float)CrackTickMs;
-            foreach (var c in wave.Cracked)
+            for (int ci = 0; ci < wave.Cracked.Count; ci++)
             {
+                var c = wave.Cracked[ci];
                 // Where the block ended up after the wave's gravity.
                 int y = c.Y;
-                foreach (var m in wave.Moves) if (m.X == c.X && m.FromY == c.Y) { y = m.ToY; break; }
+                for (int mi = 0; mi < wave.Moves.Count; mi++)
+                {
+                    var m = wave.Moves[mi];
+                    if (m.X == c.X && m.FromY == c.Y) { y = m.ToY; break; }
+                }
                 if (BoardSpace.AboveView(y)) continue;
                 float px = BoardSpace.ScreenX(c.X, flip, originX, cell), py = BoardSpace.ScreenY(y, flip, originY, cell);
                 canvas.Alpha = 0.85f * k;
@@ -310,8 +315,9 @@ public sealed class BlastEffects
         if (burst.Reduced || age >= BreakMs) { canvas.Alpha = 1f; return; }
         float t = age / (float)BreakMs;
         float dir = flip ? -1f : 1f;
-        foreach (var c in wave.Broken)
+        for (int bi = 0; bi < wave.Broken.Count; bi++)
         {
+            var c = wave.Broken[bi];
             if (BoardSpace.AboveView(c.Y)) continue;
             float cx = BoardSpace.ScreenX(c.X, flip, originX, cell) + cell / 2f, cy = BoardSpace.ScreenY(c.Y, flip, originY, cell) + cell / 2f;
             for (int p = 0; p < 3; p++)

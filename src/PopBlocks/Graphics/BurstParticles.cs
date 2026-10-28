@@ -80,8 +80,9 @@ public static class BurstParticles
         }
 
         int index = 0;
-        foreach (var c in wave.ClearedCells)
+        for (int ci = 0; ci < wave.ClearedCells.Count; ci++)
         {
+            var c = wave.ClearedCells[ci];
             index++;
             if (BoardSpace.AboveView(c.Y)) continue;
             float cx = BoardSpace.ScreenX(c.X, flip, originX, cell) + cell / 2f;
@@ -127,8 +128,9 @@ public static class BurstParticles
         float floor = originY + (flip ? 0f : GameConfig.VisibleRows * cell);
 
         int index = 0;
-        foreach (var c in wave.ClearedCells)
+        for (int ci = 0; ci < wave.ClearedCells.Count; ci++)
         {
+            var c = wave.ClearedCells[ci];
             index++;
             if (BoardSpace.AboveView(c.Y)) continue;
             float px = BoardSpace.ScreenX(c.X, flip, originX, cell);
@@ -202,8 +204,9 @@ public static class BurstParticles
         if (ageMs >= life) return;
         float alpha = 1f - ageMs / (float)life;
 
-        foreach (var c in wave.ClearedCells)
+        for (int ci = 0; ci < wave.ClearedCells.Count; ci++)
         {
+            var c = wave.ClearedCells[ci];
             if (BoardSpace.AboveView(c.Y)) continue;
             float px = BoardSpace.ScreenX(c.X, flip, originX, cell);
             float py = BoardSpace.ScreenY(c.Y, flip, originY, cell);
