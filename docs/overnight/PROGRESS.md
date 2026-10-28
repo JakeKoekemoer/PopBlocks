@@ -20,7 +20,7 @@
 | 14 The Orb | done (Endless and Always rule; Story auto-orbs off, see Unfinished) | 5a5a440 |
 | 15 Achievements | done | ada9c8b |
 | 16 Performance | done | f41f667 |
-| 17 Wrap-up | done | PENDING |
+| 17 Wrap-up | done | 4aa89c0 |
 
 ## Unfinished
 - Phase 11: the default board height is still 16 rows. Tall boards (20-32) work through the player's own rules; making 24 the default needs the solver and the level snapshot set regenerated for it (see DECISIONS).
