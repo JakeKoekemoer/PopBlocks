@@ -14,8 +14,8 @@
 
     <ApplicationTitle>PopBlocks</ApplicationTitle>
     <ApplicationId>com.popblocks.game</ApplicationId>
-    <ApplicationDisplayVersion>3.0</ApplicationDisplayVersion>
-    <ApplicationVersion>4</ApplicationVersion>
+    <ApplicationDisplayVersion>5.0</ApplicationDisplayVersion>
+    <ApplicationVersion>5</ApplicationVersion>
 
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 

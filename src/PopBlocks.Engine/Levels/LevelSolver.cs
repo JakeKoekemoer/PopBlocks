@@ -52,6 +52,9 @@ public static class LevelSolver
     private sealed class State
     {
         public byte[] Cells = new byte[W * H];
+
+        /// <summary>1 where the block sleeps (a solid piece nothing has joined yet). Mirrors <see cref="Board.IsDormant"/>.</summary>
+        public byte[] Dormant = new byte[W * H];
         public int Score, Popped, BestChain, BestGroup;
         public int[] ByColour = new int[6];
 
@@ -62,6 +65,7 @@ public static class LevelSolver
         {
             var c = new State { Score = Score, Popped = Popped, BestChain = BestChain, BestGroup = BestGroup };
             Array.Copy(Cells, c.Cells, Cells.Length);
+            Array.Copy(Dormant, c.Dormant, Dormant.Length);
             Array.Copy(ByColour, c.ByColour, ByColour.Length);
             Array.Copy(ChainsByLength, c.ChainsByLength, ChainsByLength.Length);
             return c;
@@ -315,13 +319,54 @@ public static class LevelSolver
     {
         var s = before.Clone();
         if (exactScore) s.Score += p.Drop * GameConfig.HardDropPointsPerRow;
-        for (int i = 0; i < p.CellIndexes.Length; i++) s.Cells[p.CellIndexes[i]] = p.Colours[i];
+        for (int i = 0; i < p.CellIndexes.Length; i++)
+        {
+            s.Cells[p.CellIndexes[i]] = p.Colours[i];
+            s.Dormant[p.CellIndexes[i]] = 0;
+        }
+
+        // Like the engine: a piece that is a burst-sized group all by itself does not pop by landing; it sleeps.
+        MarkDormant(s, p, sc);
 
         int chain = Settle(s, sc);
         if (chain > 0) s.ChainsByLength[Math.Min(chain, ChainSlots - 1)]++;
         if (chain == 0 && level.NoPopPenalty > 0 && s.Score > 0)
             s.Score -= Math.Min(s.Score, level.NoPopPenalty);
         return s;
+    }
+
+    /// <summary>
+    /// Mirrors <c>ColourMatcher.MarkDormant</c>: right after a piece lands, any burst-sized group made only of that piece's
+    /// own cells (a solid piece that touches nothing of its colour) is put to sleep. A group that also holds older blocks
+    /// is left awake, so it pops as usual.
+    /// </summary>
+    private static void MarkDormant(State s, Placement p, Scratch sc)
+    {
+        Array.Clear(sc.Seen);
+        foreach (int start in p.CellIndexes)
+        {
+            if (sc.Seen[start] != 0) continue;
+            byte colour = s.Cells[start];
+
+            int n = 0, sp = 0;
+            bool onlyOwn = true;
+            sc.Stack[sp++] = start;
+            sc.Seen[start] = 1;
+            while (sp > 0)
+            {
+                int c = sc.Stack[--sp];
+                sc.Members[n++] = c;
+                if (Array.IndexOf(p.CellIndexes, c) < 0) onlyOwn = false;
+                int x = c % W, y = c / W;
+                if (x > 0) Push(s, sc, c - 1, colour, ref sp);
+                if (x < W - 1) Push(s, sc, c + 1, colour, ref sp);
+                if (y > 0) Push(s, sc, c - W, colour, ref sp);
+                if (y < H - 1) Push(s, sc, c + W, colour, ref sp);
+            }
+
+            if (n >= GameConfig.MinGroupSize && onlyOwn)
+                for (int j = 0; j < n; j++) s.Dormant[sc.Members[j]] = 1;
+        }
     }
 
     /// <summary>Pops groups, applies gravity and repeats until stable. Returns the chain length.</summary>
@@ -353,7 +398,11 @@ public static class LevelSolver
                     if (y < H - 1) Push(s, sc, c + W, colour, ref sp);
                 }
 
-                if (n >= GameConfig.MinGroupSize)
+                // A group pops only if at least one of its blocks is awake (a sleeping solid piece waits for company).
+                bool live = false;
+                for (int j = 0; j < n && !live; j++) live = s.Dormant[sc.Members[j]] == 0;
+
+                if (n >= GameConfig.MinGroupSize && live)
                 {
                     for (int j = 0; j < n; j++) sc.Mark[sc.Members[j]] = 1;
                     marked += n;
@@ -371,7 +420,7 @@ public static class LevelSolver
             s.Popped += marked;
 
             for (int i = 0; i < W * H; i++)
-                if (sc.Mark[i] != 0) s.Cells[i] = 0;
+                if (sc.Mark[i] != 0) { s.Cells[i] = 0; s.Dormant[i] = 0; }
 
             for (int x = 0; x < W; x++)
             {
@@ -384,6 +433,8 @@ public static class LevelSolver
                     {
                         s.Cells[write * W + x] = c;
                         s.Cells[y * W + x] = 0;
+                        s.Dormant[write * W + x] = s.Dormant[y * W + x];   // a sleeping block keeps sleeping while it falls
+                        s.Dormant[y * W + x] = 0;
                     }
                     write--;
                 }

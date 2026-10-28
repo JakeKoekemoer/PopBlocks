@@ -55,30 +55,47 @@ public class SeededLevelStructureTests
         Assert.True(same <= total / 10, $"{same} of {total} levels got the same pile for two salts.");
     }
 
+    /// <summary>
+    /// A seed whose level the bot cannot win is a rare miss: the catalogue then builds a plain fallback level
+    /// (<see cref="BuiltLevel.Verified"/> is false) and <see cref="LevelRoller"/> never accepts the seed, so no player is
+    /// ever given it. The structure rule is about the levels a player can get, so such a seed is counted, not compared.
+    /// More than about 2% of seeds going unverified would mean the bot or the rules have broken, so that fails.
+    /// </summary>
+    private static void AssertUnverifiedIsRare(int unverified, int total) =>
+        Assert.True(unverified * 50 <= total, $"{unverified} of {total} seeds could not be verified by the bot.");
+
     [Fact]
     public void A_seed_never_changes_the_structure_of_any_level()
     {
         // Every level, a few salts. (The wider sweep over 20 salts is in the opt-in fuzz run.)
+        int total = 0, unverified = 0;
         foreach (int salt in new[] { 11, 7919, 2_000_000_011 })
             for (int n = 1; n <= LevelSnapshotTests.LastSnapshotLevel; n++)
             {
+                total++;
                 var legacy = LevelCatalog.Get(n);
-                var seeded = LevelCatalog.Get(n, LevelSeed.Derive(salt, n, 0, 0));
-                Assert.Equal(Structure(legacy), Structure(seeded));
+                var seeded = LevelCatalog.Build(n, LevelSeed.Derive(salt, n, 0, 0));
+                if (!seeded.Verified) { unverified++; continue; }
+                Assert.Equal(Structure(legacy), Structure(seeded.Level));
             }
+        AssertUnverifiedIsRare(unverified, total);
     }
 
     [Fact]
     public void Structure_holds_for_twenty_salts_on_a_spread_of_levels()
     {
         int[] levels = { 1, 10, 11, 12, 13, 16, 20, 26, 32, 50, 51, 75, 100, 101, 128, 134, 150, 151, 161, 175, 199, 200, 220 };
+        int total = 0, unverified = 0;
         for (int s = 1; s <= 20; s++)
             foreach (int n in levels)
             {
+                total++;
                 var legacy = LevelCatalog.Get(n);
-                var seeded = LevelCatalog.Get(n, LevelSeed.Derive(s * 10007, n, 0, 0));
-                Assert.Equal(Structure(legacy), Structure(seeded));
+                var seeded = LevelCatalog.Build(n, LevelSeed.Derive(s * 10007, n, 0, 0));
+                if (!seeded.Verified) { unverified++; continue; }
+                Assert.Equal(Structure(legacy), Structure(seeded.Level));
             }
+        AssertUnverifiedIsRare(unverified, total);
     }
 
     [Fact]
