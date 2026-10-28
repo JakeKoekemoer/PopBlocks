@@ -42,6 +42,11 @@ public sealed class GameViewModel : ObservableObject
     private readonly TutorialProgress _tutorial;
     private readonly StoryLevels _levels;
     private readonly ClassicGold _classicGold;
+    private readonly Consolation _consolation;
+    private int _popGoldPaid;                // Story: the pop gold banked on a win
+    private ConsolationResult _lossPaid;     // Story: what a loss paid
+    private bool _lossHandled;
+    private int _chipHold;                   // gold already paid that the HUD chip has not counted up to yet
     private readonly UnlockStore _unlocks;
     private List<Achievement> _earned = new();
     private bool _checkAchievements;
@@ -88,8 +93,9 @@ public sealed class GameViewModel : ObservableObject
     public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, GameAudio audio, AudioSettings audioSettings,
         CampaignService campaign, CosmeticLoadout loadout, DevTools dev, LifetimeStats lifetime, EndingService ending,
         AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial,
-        StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks)
+        StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks, Consolation consolation)
     {
+        _consolation = consolation;
         _levels = levels;
         _classicGold = classicGold;
         _unlocks = unlocks;
@@ -328,7 +334,7 @@ public sealed class GameViewModel : ObservableObject
         : "ENDLESS";
 
     /// <summary>Best score in Endless, gold in Story, "TUTORIAL" in a lesson.</summary>
-    public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{_progress.Gold:N0} gold" : $"BEST {_bestScore:N0}  ·  {RunGoldText}";
+    public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{Math.Max(0, _progress.Gold - _chipHold):N0} gold" : $"BEST {_bestScore:N0}  ·  {RunGoldText}";
 
     public string ChainText { get => _chainText; private set { if (SetProperty(ref _chainText, value)) OnPropertyChanged(nameof(HasChain)); } }
     public bool HasChain => _chainText.Length > 0;
@@ -390,8 +396,8 @@ public sealed class GameViewModel : ObservableObject
 
     public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : $"LEVEL {_setup.Level} COMPLETE")
         : _isFailed ? (_game.FailReason == FailReason.OutOfMoves
-            ? (_setup.IsLesson ? "OUT OF MOVES" : $"LEVEL {_setup.Level} â€” OUT OF MOVES")
-            : (_setup.IsLesson ? "BOARD FULL" : $"LEVEL {_setup.Level} â€” STACK REACHED THE TOP"))
+            ? (_setup.IsLesson ? "OUT OF MOVES" : $"LEVEL {_setup.Level} — OUT OF MOVES")
+            : (_setup.IsLesson ? "BOARD FULL" : $"LEVEL {_setup.Level} — STACK REACHED THE TOP"))
         : _isClassicOver ? "GAME OVER"
         : "PAUSED";
 
@@ -449,6 +455,31 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>"+25 gold", shown when a level is cleared for the first time.</summary>
     public bool HasGoldReward => _isComplete && _result.GoldAwarded > 0;
     public string GoldRewardText => $"+{_result.GoldAwarded:N0} gold";
+    public int GoldRewardValue => _result.GoldAwarded;
+
+    // ---- pop gold and consolation (v1.1) ----
+
+    /// <summary>The pop gold of a won Story level, banked with the win (shown on its own line next to the first-clear gold).</summary>
+    public bool HasPopGold => _isComplete && _popGoldPaid > 0;
+    public int PopGoldValue => _popGoldPaid;
+    public string PopGoldText => $"Pop gold  +{_popGoldPaid:N0}";
+
+    /// <summary>A lost Story level keeps half the pop gold and part of the first-clear reward; with none of either it says so.</summary>
+    public bool ShowConsolation => _isFailed && _setup.IsStory && !_setup.Eased;
+    public int ConsolationValue => _lossPaid.Total;
+    public string ConsolationText => _lossPaid.Total > 0 ? "Kept half your gold" : "No gold this time";
+
+    /// <summary>The HUD gold chip counts up to the gold just paid instead of jumping: the page releases it as coins land.</summary>
+    public void SetChipHold(int remaining)
+    {
+        int hold = Math.Clamp(remaining, 0, Math.Max(0, _progress.Gold));
+        if (hold == _chipHold) return;
+        _chipHold = hold;
+        OnPropertyChanged(nameof(SubText));
+    }
+
+    /// <summary>One tick of the count-up (a coin sound).</summary>
+    public void PlayCoinTick() => _audio.Ui(UiSound.Coin);
 
     /// <summary>Small note under the card explaining why no gold was paid.</summary>
     public string GoldNote => !_isComplete ? string.Empty
@@ -474,6 +505,13 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowEase));
         OnPropertyChanged(nameof(HasGoldReward));
         OnPropertyChanged(nameof(GoldRewardText));
+        OnPropertyChanged(nameof(GoldRewardValue));
+        OnPropertyChanged(nameof(HasPopGold));
+        OnPropertyChanged(nameof(PopGoldValue));
+        OnPropertyChanged(nameof(PopGoldText));
+        OnPropertyChanged(nameof(ShowConsolation));
+        OnPropertyChanged(nameof(ConsolationValue));
+        OnPropertyChanged(nameof(ConsolationText));
         OnPropertyChanged(nameof(GoldNote));
         OnPropertyChanged(nameof(HasGoldNote));
         OnPropertyChanged(nameof(HasRegionProgress));
@@ -1062,6 +1100,17 @@ public sealed class GameViewModel : ObservableObject
         if (_levels.RecordFailure(_setup.Level) > 0) _levels.PrefetchReroll(_setup.Level);
     }
 
+    /// <summary>A lost Story level keeps half its pop gold and part of the first-clear reward (see <see cref="Consolation"/>). Once per run.</summary>
+    private void PayConsolation()
+    {
+        if (_lossHandled || !_setup.IsStory || _game.Story is not { IsTutorial: false } story) return;
+        _lossHandled = true;
+        _lossPaid = _consolation.Pay(story.Number, _game.ClassicGoldTenths / 10, _game.GoalProgress,
+            levelCleared: _progress.IsCleared(story.Number), eased: story.Eased);
+        _chipHold = _lossPaid.Total;
+        UpdateOverlay();
+    }
+
     /// <summary>Restarting a level after placing at least one piece counts as a failure; leaving to the menu does not.</summary>
     private void CountAbandonedRun()
     {
@@ -1290,6 +1339,7 @@ public sealed class GameViewModel : ObservableObject
     {
         _beatTimer?.Stop();
         _endBeat = false;
+        _chipHold = 0;
         Pause();
         _timer?.Stop();
         BankClassicGold();   // leaving Classic pays out what the run earned
@@ -1332,6 +1382,11 @@ public sealed class GameViewModel : ObservableObject
         }
         _failureCounted = false;
         RerollHintOpen = false;
+        if (_setup.IsStory) _classicGold.BeginRun();   // Story pops pay too: this run starts with nothing banked
+        _popGoldPaid = 0;
+        _lossPaid = default;
+        _lossHandled = false;
+        _chipHold = 0;
 
         // Shop upgrades and settings apply from the start of each game.
         _game.PreviewCount = _shop.PreviewCount;
@@ -1544,6 +1599,7 @@ public sealed class GameViewModel : ObservableObject
         else if (_game.State == GameState.GameOver)
         {
             CountLoss();   // a failed Story level: counted once, on the player's current level only
+            PayConsolation();
         }
 
         // The run is over (won, lost, or Classic game over): add it to the lifetime bests, once.
@@ -1623,6 +1679,8 @@ public sealed class GameViewModel : ObservableObject
         }
 
         _result = _progress.Complete(_game.Story);
+        _popGoldPaid = _game.EarnsPopGold ? _classicGold.Bank(_game.ClassicGoldTenths) : 0;   // pop gold on top of the first clear, replays too
+        _chipHold = _result.GoldAwarded + _popGoldPaid;                                      // the chip counts up to it as the coins land
 
         // Story rewards are granted here, before any scene is shown, so skipping a scene can never lose one.
         _outcome = _campaign.OnLevelCompleted(_game.Story.Number, _result);

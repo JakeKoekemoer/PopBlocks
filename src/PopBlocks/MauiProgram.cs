@@ -44,6 +44,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<PlayerIdentity>(sp => new PlayerIdentity(sp.GetRequiredService<ILocalSettings>()));
         builder.Services.AddSingleton<StoryLevels>(sp => new StoryLevels(
             sp.GetRequiredService<ILocalSettings>(), sp.GetRequiredService<PlayerProgress>(), sp.GetRequiredService<PlayerIdentity>()));
+        builder.Services.AddSingleton<Consolation>(sp => new Consolation(sp.GetRequiredService<ILocalSettings>(), sp.GetRequiredService<PlayerProgress>()));
         builder.Services.AddSingleton<ClassicGold>(sp => new ClassicGold(sp.GetRequiredService<ILocalSettings>(), sp.GetRequiredService<PlayerProgress>()));
 #if ANDROID
         builder.Services.AddSingleton<ISoundPlayer, AndroidSoundPlayer>();

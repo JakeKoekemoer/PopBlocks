@@ -6,9 +6,10 @@ checked by tests (`P4ShopTests`, `P4GateTests`, `AchievementTests`); change them
 
 ## Rules
 
-1. **Gold is paid on first clear only, with one exception: Classic.** Replaying a Story level, reloading a save or
-   skipping a scene never pays again. Classic pays by the block popped (see Income), in whole gold, once per banking
-   event, with the leftover tenths carried in `classic_gold_carry`.
+1. **First-clear gold is paid once per level.** Replaying a Story level, reloading a save or skipping a scene never
+   pays it again. Since v1.1 popping blocks pays gold too, in Endless and in Story alike (see Income), in whole gold,
+   once per banking event, with the leftover tenths carried in `classic_gold_carry`. Lessons and levels the player eased
+   pay no pop gold, no first-clear gold and no consolation.
 2. **Nothing needed to finish the game costs gold.** Every level 1-200 is winnable by the bot solver with zero
    purchases and zero abilities (`AllLevels_1_to_200_BotWinnable_WithNoUpgrades`). The ending does not depend on any
    optional collectible.
@@ -33,7 +34,14 @@ On top of that:
   50, 75, 100, 125, 150, 175, 200, 225. Total **1,100**.
 * **Achievements** (13, one-off): total **910** (`AchievementCatalog.TotalGold`).
 * "Beyond the Spectrum" levels above 200 keep paying level gold, so a finished game still earns.
-* **Classic** (`SeedingConfig.ClassicTenthsPerBlock`, `ClassicGold`): tenths of a gold per block popped, by Classic level
+* **Pop gold in Story** (v1.1): the same rate as Endless, by the score level the pop happens at, banked when the level is
+  won (replays too), on top of the unchanged first-clear gold. A normal winning run of 60 to 100 blocks pays roughly
+  8 to 20 gold. Pop gold floats up from each popped group as `+0.6` (one decimal under 10, whole numbers from 10), and
+  the win card counts pop gold and first-clear gold up on two lines.
+* **Loss consolation** (v1.1, `Consolation`): a lost level pays `floor(popGold / 2) + floor(firstClearReward x goalProgress / 2)`.
+  The second term is paid only while the level is uncleared and is capped for good per level at that level's first-clear
+  reward (`consolation_paid`), so losing can never out-earn winning. Eased levels and lessons pay none.
+* **Classic** (`SeedingConfig.ClassicTenthsPerBlock`, `ClassicGold`), now called Endless in the app: tenths of a gold per block popped, by Classic level
   (`1 + score / 800`): 1 for levels 1-4, 2 for 5-8, 3 for 9-12, 4 for 13-16 and 5 from 17. Every wave counts, chain
   waves included, with no chain multiplier; drop points never count. A decent early run pays about 15 gold, roughly one
   early reroll. Paid when the game ends, when the player leaves Classic and when the app goes to the background; a

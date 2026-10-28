@@ -39,6 +39,7 @@ public sealed class BlastEffects
 
     private long _chainStartMs = long.MinValue;
     private string _chainText = string.Empty;
+    private int _chainGoldTenths;   // gold paid by the chain so far, for the banner
     private long _shakeStartMs = long.MinValue;
     private int _shakeFlair;
 
@@ -86,10 +87,13 @@ public sealed class BlastEffects
         _slots[_nextSlot] = burst;
         _nextSlot = (_nextSlot + 1) % SlotCount;
 
+        _chainGoldTenths = wave.ChainIndex <= 1 ? wave.GoldTenths : _chainGoldTenths + wave.GoldTenths;
         if (wave.ChainIndex >= 2)
         {
             _chainStartMs = nowMs;
-            _chainText = $"CHAIN ×{wave.Multiplier}";
+            _chainText = _chainGoldTenths > 0
+                ? $"CHAIN ×{wave.Multiplier}  +{FloatingText.FormatGold(_chainGoldTenths)} gold"
+                : $"CHAIN ×{wave.Multiplier}";
         }
 
         if (burst.Flair >= 2)

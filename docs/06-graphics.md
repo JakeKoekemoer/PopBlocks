@@ -69,6 +69,10 @@ The board does not repaint on a fixed schedule. `GamePage` repaints when the vie
 
 `GameDrawable.Clock` is a replaceable `Func<long>` (default: `Environment.TickCount64`). Replace it to render a specific animation moment deterministically.
 
+### Floating gold (v1.1)
+
+`Graphics/FloatingText.cs` holds `FloatingText`, a pool of twelve slots drawn by `GameDrawable.Floaters` after the burst effects. `Spawn(BurstWave)` floats one `+0.6` (one decimal under 10 gold, whole numbers from 10; a 12 px coin to its left; 15 sp bold `#FFD54A` with a 2 px `#3A2A00` outline) per group in `wave.Gold`, at the group's centre, rising 36 dp over 900 ms with a 120 ms pop-in and the alpha held for 500 ms. Chain waves add a second line `×N CHAIN` in `#FF7A45`. The strings are formatted at spawn, so drawing allocates nothing. Reduced motion fades the number in place for 600 ms. `CoinFlyDrawable` (same file) draws the 6 to 10 coins that fly from a result card to the gold chip; the page animates it only while the coins are in the air.
+
 ## 6.5 The ghost and the hint
 
 - **Ghost:** a faint outline of the active piece at its landing position (`LandingDistance`), toggled by `GameSettings.ShowGhost`. A tutorial level can force it on (`LevelDefinition.ForceGhost`).

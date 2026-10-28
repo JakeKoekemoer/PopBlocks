@@ -104,6 +104,9 @@ public static class SaveKeys
     /// <summary>Comma-separated <c>level:1</c> pairs: levels the player chose to ease (a feather on the Map).</summary>
     public const string EasedLevels = "eased_levels";
 
+    /// <summary>Comma-separated <c>level:gold</c> pairs: the progress half of the loss consolation already paid for each uncleared level (never above that level's first-clear reward).</summary>
+    public const string ConsolationPaid = "consolation_paid";
+
     // ---- Classic gold (ClassicGold) ----
     /// <summary>Tenths of a gold earned in Classic and not yet paid (0 to 9).</summary>
     public const string ClassicGoldCarry = "classic_gold_carry";
@@ -145,7 +148,7 @@ public static class SaveKeys
         AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced, AudioTrack,
         Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
         PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
-        LevelLosses, EasedLevels,
+        LevelLosses, EasedLevels, ConsolationPaid,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),

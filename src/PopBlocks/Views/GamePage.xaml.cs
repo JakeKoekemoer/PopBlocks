@@ -27,6 +27,7 @@ public partial class GamePage : ContentPage
     private readonly StageDrawable _stage = new();           // the picture above the panel
     private readonly PipDrawable _bannerPip = new() { Mood = PipMood.Happy };
     private int _bannerVersion;
+    private readonly CoinFlyDrawable _coinFly = new();   // the coins that fly from a result card to the gold chip
 
     private IDispatcherTimer? _animationTimer;
     private IDispatcherTimer? _stageTimer;
@@ -60,6 +61,7 @@ public partial class GamePage : ContentPage
         ScenePipRightView.Drawable = _portrait;   // the same portrait, shown on whichever side the speaker stands
         StageView.Drawable = _stage;
         BannerPipView.Drawable = _bannerPip;
+        CoinFlyView.Drawable = _coinFly;
 
         _vm.Redraw += OnRedraw;
         _vm.WaveResolved += OnWaveResolved;
@@ -184,6 +186,11 @@ public partial class GamePage : ContentPage
         _board.Effects.Enabled = _settings.BlastEffects;
         _board.Effects.ReducedMotion = _settings.ReducedMotion;
         _board.Effects.Flair = _shop.FlairLevel;
+        _board.Floaters.ReducedMotion = _settings.ReducedMotion;
+        _board.Floaters.Clear();
+        this.AbortAnimation("GoldCountUp");
+        this.AbortAnimation("CoinFly");
+        CoinFlyView.IsVisible = false;
 
         // Looks from the wardrobe. They are read once here, so nothing changes in the middle of a level.
         VisualDesign.UseSkin(_loadout.Skin);
@@ -226,6 +233,7 @@ public partial class GamePage : ContentPage
 
     private void OnWaveResolved(BurstWave wave)
     {
+        if (_settings.BlastEffects) _board.Floaters.Spawn(wave, Environment.TickCount64);
         _board.Effects.Trigger(wave, Environment.TickCount64);
         StartAnimation();
     }
@@ -294,6 +302,100 @@ public partial class GamePage : ContentPage
         await MovesLabel.ScaleToAsync(1.0, 220, Easing.CubicIn);
     }
 
+    // ------------------------------------------------------------------ gold on the result card
+
+    private const int CountUpMs = 900;
+    private const int CoinTickMs = 120;
+    private const int MaxCoinTicks = 8;
+
+    /// <summary>
+    /// The gold on a result card counts up from 0 over 900 ms, with a coin tick about every 120 ms (never more than eight),
+    /// while a few coins fly to the gold chip and the chip counts up behind them. A failed card with nothing to keep just says
+    /// so. Reduced motion shows the final numbers at once. The final text is always set at the end, so the numbers are right
+    /// for a screen reader whatever the animation did.
+    /// </summary>
+    private void StartGoldCountUp()
+    {
+        if (_vm.IsPaused) return;
+        int pop = _vm.IsComplete ? _vm.PopGoldValue : 0;
+        int first = _vm.IsComplete ? _vm.GoldRewardValue : 0;
+        int kept = _vm.ShowConsolation ? _vm.ConsolationValue : 0;
+        int total = pop + first + kept;
+        if (total <= 0)
+        {
+            _vm.SetChipHold(0);
+            return;
+        }
+
+        void Show(double t)
+        {
+            PopGoldLabel.Text = $"Pop gold  +{(int)Math.Round(pop * t):N0}";
+            GoldRewardLabel.Text = $"+{(int)Math.Round(first * t):N0} gold";
+            ConsolationLabel.Text = $"Kept half your gold  +{(int)Math.Round(kept * t):N0}";
+            _vm.SetChipHold(total - (int)Math.Round(total * t));
+        }
+
+        void Finish()
+        {
+            PopGoldLabel.Text = _vm.PopGoldText;
+            GoldRewardLabel.Text = _vm.GoldRewardText;
+            ConsolationLabel.Text = kept > 0 ? $"{_vm.ConsolationText}  +{kept:N0}" : _vm.ConsolationText;
+            _vm.SetChipHold(0);
+        }
+
+        if (_settings.ReducedMotion)
+        {
+            Finish();
+            return;
+        }
+
+        Show(0);
+        int ticks = 0;
+        long lastTick = Environment.TickCount64 - CoinTickMs;
+        new Animation(t =>
+        {
+            Show(t);
+            long now = Environment.TickCount64;
+            if (ticks < MaxCoinTicks && now - lastTick >= CoinTickMs)
+            {
+                lastTick = now;
+                ticks++;
+                _vm.PlayCoinTick();
+            }
+        }, 0, 1, Easing.CubicOut).Commit(this, "GoldCountUp", 16, CountUpMs, Easing.Linear, (_, _) => Finish());
+
+        LaunchCoins(total);
+    }
+
+    /// <summary>Six to ten coins from the middle of the card to the gold chip.</summary>
+    private void LaunchCoins(int total)
+    {
+        var chip = GoldChipLabel;
+        var (cx, cy) = (CoinFlyView.Width / 2.0, CoinFlyView.Height / 2.0);
+        if (CoinFlyView.Width <= 0 || chip.Width <= 0) return;
+
+        double tx = 0, ty = 0;
+        for (Element? e = chip; e is VisualElement v && !ReferenceEquals(v, CoinFlyView.Parent); e = e.Parent)
+        {
+            tx += v.X;
+            ty += v.Y;
+        }
+
+        _coinFly.Coins = Math.Clamp(6 + total / 20, 6, CoinFlyDrawable.MaxCoins);
+        _coinFly.From = new PointF((float)cx, (float)cy);
+        _coinFly.To = new PointF((float)(tx + chip.Width / 2.0), (float)(ty + chip.Height / 2.0));
+        _coinFly.Progress = 0f;
+        CoinFlyView.IsVisible = true;
+        new Animation(v =>
+        {
+            _coinFly.Progress = (float)v;
+            CoinFlyView.Invalidate();
+        }).Commit(this, "CoinFly", 16, 800, Easing.Linear, (_, _) =>
+        {
+            CoinFlyView.IsVisible = false;
+        });
+    }
+
     /// <summary>A result card fades in; the pause card appears at once.</summary>
     private async void FadeOverlayIn()
     {
@@ -335,8 +437,19 @@ public partial class GamePage : ContentPage
     {
         if (e.PropertyName == nameof(GameViewModel.IsOverlayVisible))
         {
-            if (_vm.IsOverlayVisible) FadeOverlayIn();
-            else OverlayGrid.Opacity = 1;
+            if (_vm.IsOverlayVisible)
+            {
+                FadeOverlayIn();
+                StartGoldCountUp();
+            }
+            else
+            {
+                OverlayGrid.Opacity = 1;
+                this.AbortAnimation("GoldCountUp");
+                this.AbortAnimation("CoinFly");
+                CoinFlyView.IsVisible = false;
+                _vm.SetChipHold(0);
+            }
         }
         else if (e.PropertyName is nameof(GameViewModel.PipBrightness) or nameof(GameViewModel.SceneMood) or nameof(GameViewModel.SceneSpeakerId))
         {

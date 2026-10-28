@@ -115,10 +115,27 @@ public sealed class GameEngine
     private int _poppedClassic;
 
     /// <summary>
-    /// Tenths of a gold earned so far in this Classic game (see <see cref="SeedingConfig.ClassicTenthsPerBlock"/>). Always 0
-    /// in Story. The app pays it out through <c>ClassicGold</c>.
+    /// Tenths of a gold earned by popping so far this game (see <see cref="SeedingConfig.ClassicTenthsPerBlock"/>). Endless
+    /// and Story both earn it, at the same rate; lessons and eased levels earn none (<see cref="EarnsPopGold"/>). The app pays
+    /// it out through <c>ClassicGold</c>: when the run ends in Endless, on a win in Story, and as half of it on a loss.
     /// </summary>
     public int ClassicGoldTenths { get; private set; }
+
+    /// <summary>This game pays pop gold: Endless, and a normal Story level. Not a lesson, not a level the player eased.</summary>
+    public bool EarnsPopGold => Story is null || (!Story.IsTutorial && !Story.Eased);
+
+    /// <summary>How far the level's goals are met, 0 to 1: the average of each goal's progress. 0 for Endless.</summary>
+    public double GoalProgress
+    {
+        get
+        {
+            var goals = Goals;
+            if (goals.Count == 0) return 0;
+            double sum = 0;
+            for (int i = 0; i < goals.Count; i++) sum += goals[i].Fraction;
+            return Math.Clamp(sum / goals.Count, 0.0, 1.0);
+        }
+    }
 
     /// <summary>Burst waves so far in the current resolution; returns to 0 when the board stabilises.</summary>
     public int Chain { get; private set; }
@@ -463,16 +480,26 @@ public sealed class GameEngine
         int points = ScoringSystem.WavePoints(groups.Select(g => g.Size), Chain);
         var cleared = groups.SelectMany(g => g.Cells).ToList();
 
-        // Classic pays by the block, at the Classic level the pop happens at (before this wave's points are counted).
-        // Every wave counts, chain waves included, with no chain multiplier. Drop points never count.
-        if (Story is null) ClassicGoldTenths += cleared.Count * SeedingConfig.ClassicTenthsPerBlock(Level);
+        // Pop gold is paid by the block, at the Endless level the pop happens at (before this wave's points are counted).
+        // Every wave counts, chain waves included, with no chain multiplier. Drop points never count. Each group reports
+        // what it paid and where it was, so the app can float the number over it.
+        int rate = EarnsPopGold ? SeedingConfig.ClassicTenthsPerBlock(Level) : 0;
+        var payouts = new GroupGold[groups.Count];
+        for (int g = 0; g < groups.Count; g++)
+        {
+            var cells = groups[g].Cells;
+            float sx = 0, sy = 0;
+            for (int c = 0; c < cells.Count; c++) { sx += cells[c].X; sy += cells[c].Y; }
+            payouts[g] = new GroupGold(sx / cells.Count + 0.5f, sy / cells.Count + 0.5f, cells.Count, multiplier, cells.Count * rate, groups[g].Colour);
+            ClassicGoldTenths += payouts[g].GoldTenths;
+        }
 
         GravityResolver.Clear(Board, cleared);
         var moves = GravityResolver.Apply(Board);
         Score += points;
         _poppedClassic += cleared.Count;
 
-        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves);
+        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts };
         LastWave = wave;
         _goals?.OnWave(wave);
         WaveResolved?.Invoke(wave);
@@ -557,7 +584,7 @@ public sealed class GameEngine
 
     private EngineSnapshot Capture(Piece piece) => new(
         Board.Clone(), piece, _queue.ToArray(), Score, PiecesPlaced, _poppedClassic,
-        LastChain, LastPenalty, LastWave, _goals?.Clone(), _rewindable?.Position ?? 0);
+        LastChain, LastPenalty, LastWave, _goals?.Clone(), _rewindable?.Position ?? 0, ClassicGoldTenths);
 
     // ------------------------------------------------------------------ helpers
 
@@ -626,6 +653,7 @@ public sealed class GameEngine
         Score = snap.Score;
         PiecesPlaced = snap.PiecesPlaced;
         _poppedClassic = snap.PoppedBlocks;
+        ClassicGoldTenths = snap.GoldTenths;   // a rewound pop pays nothing, so undoing and popping again cannot farm gold
         Chain = 0;
         LastChain = snap.LastChain;
         LastPenalty = snap.LastPenalty;

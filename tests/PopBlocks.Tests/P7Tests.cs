@@ -28,7 +28,7 @@ public class P7Tests
         // Audio settings (the soundtrack update). Sound effects on/off stays the older "sound_effects" key.
         "audio_master", "audio_music", "audio_sfx", "audio_ambience", "audio_mute_master", "audio_mute_music", "audio_mute_ambience", "audio_reduced", "audio_track",
         // v1.1 (overnight build). Add-only.
-        "stat_rerolls", "level_losses", "eased_levels",
+        "stat_rerolls", "level_losses", "eased_levels", "consolation_paid",
     };
 
     [Fact]

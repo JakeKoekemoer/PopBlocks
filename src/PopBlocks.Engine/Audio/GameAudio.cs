@@ -6,7 +6,7 @@ using PopBlocks.Engine.Story;
 namespace PopBlocks.Engine.Audio;
 
 /// <summary>The small user-interface sounds.</summary>
-public enum UiSound { Tap, MenuOpen, MenuClose, Locked, SettingsChange }
+public enum UiSound { Tap, MenuOpen, MenuClose, Locked, SettingsChange, Coin }
 
 /// <summary>
 /// The one object the app talks to for sound. It owns the engine, the director and the platform output, turns game events into
@@ -380,7 +380,8 @@ public sealed class GameAudio : IDisposable
             UiSound.SettingsChange => SfxLibrary.SettingsChange,
             _ => SfxLibrary.ButtonTap,
         };
-        Play(cue, 1f, Cues.KeyOffset);
+        // The coin tick is the button tap an octave up and a little quieter, so a run of them reads as coins counting.
+        Play(cue, sound == UiSound.Coin ? 0.7f : 1f, Cues.KeyOffset + (sound == UiSound.Coin ? 12f : 0f));
     });
 
     private void FallbackPlay(SoundEffect effect, float pitch = 1f)

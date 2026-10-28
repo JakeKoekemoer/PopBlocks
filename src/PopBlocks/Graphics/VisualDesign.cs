@@ -199,6 +199,6 @@ public static class VisualDesign
 
     public const int BurstDurationMs = 620;
     public const int FallDurationMs = 230;
-    public const int ChainAccentMs = 900;
+    public const int ChainAccentMs = 1200;
     public const int ShakeMs = 320;
 }

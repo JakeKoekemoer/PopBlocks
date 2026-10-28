@@ -29,7 +29,8 @@
                            FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{StaticResource TextPrimary}" />
-                    <Label Text="{Binding SubText}"
+                    <Label x:Name="GoldChipLabel"
+                           Text="{Binding SubText}"
                            FontSize="12"
                            FontAttributes="Bold"
                            TextColor="{StaticResource GoldColor}" />
@@ -290,16 +291,34 @@
                                 SemanticProperties.Description="Copy the seed of this run" />
                     </Grid>
 
+                    <!-- A win: pop gold and first-clear gold on two lines. Both count up when the card appears. -->
+                    <Label x:Name="PopGoldLabel"
+                           Text="{Binding PopGoldText}"
+                           IsVisible="{Binding HasPopGold}"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="Center" />
                     <HorizontalStackLayout IsVisible="{Binding HasGoldReward}"
                                            HorizontalOptions="Center"
                                            Spacing="10">
                         <GraphicsView x:Name="CoinView" WidthRequest="30" HeightRequest="30" VerticalOptions="Center" />
-                        <Label Text="{Binding GoldRewardText}"
+                        <Label x:Name="GoldRewardLabel"
+                               Text="{Binding GoldRewardText}"
                                FontSize="26"
                                FontAttributes="Bold"
                                TextColor="{StaticResource GoldColor}"
                                VerticalOptions="Center" />
                     </HorizontalStackLayout>
+
+                    <!-- A loss: half the gold kept, counting up; or a plain "No gold this time" -->
+                    <Label x:Name="ConsolationLabel"
+                           Text="{Binding ConsolationText}"
+                           IsVisible="{Binding ShowConsolation}"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="Center" />
                     <Label Text="{Binding GoldNote}"
                            IsVisible="{Binding HasGoldNote}"
                            Style="{StaticResource BodyLabel}"
@@ -674,5 +693,8 @@
                 </VerticalStackLayout>
             </Border>
         </Grid>
+
+        <!-- Coins flying from a result card to the gold chip. Draws only while they are in the air. -->
+        <GraphicsView x:Name="CoinFlyView" Grid.RowSpan="4" InputTransparent="True" IsVisible="False" />
     </Grid>
 </ContentPage>

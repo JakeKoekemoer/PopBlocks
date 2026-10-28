@@ -22,6 +22,9 @@ public sealed class GameDrawable : IDrawable
 
     public GameEngine? Game { get; set; }
     public BlastEffects Effects { get; } = new();
+
+    /// <summary>The gold each popped group paid, floating up from where it popped.</summary>
+    public FloatingText Floaters { get; } = new();
     public bool ShowGhost { get; set; } = true;
 
     /// <summary>Landing guide look: false = thin outline, true = bold (thicker line, a tint and a faint column of light).</summary>
@@ -73,7 +76,7 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>True while something on the board is animating, so the page keeps repainting.</summary>
     public bool NeedsAnimation(long nowMs) =>
-        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || HintColumn >= 0;
+        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || HintColumn >= 0;
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -121,6 +124,7 @@ public sealed class GameDrawable : IDrawable
                 DrawActivePiece(canvas, (CellRenderer.BlockLayer)pass, game.CurrentPiece, originX, originY, cell);
             if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell);
             Effects.Draw(canvas, originX, originY, cell, boardW, Flip, now);
+            Floaters.Draw(canvas, originX, originY, cell, Flip, now);
 
             if (TopRowFlash > 0f)
             {

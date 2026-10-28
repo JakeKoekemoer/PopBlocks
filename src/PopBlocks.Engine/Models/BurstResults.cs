@@ -15,6 +15,12 @@ public readonly record struct CellMove(int X, int FromY, int ToY, CellColour Col
 /// </summary>
 public readonly record struct HangingRun(int X, int Y, int Gap, CellColour Colour);
 
+/// <summary>
+/// What one popped group paid: where it was (the centre of its cells, in board cells, so the app can float a number there),
+/// how many cells, the chain multiplier it popped at, and the pop gold in tenths of a gold (0 when the level pays none).
+/// </summary>
+public readonly record struct GroupGold(float CentreX, float CentreY, int Cells, int Multiplier, int GoldTenths, CellColour Colour);
+
 /// <summary>Everything that happened in one burst-and-gravity wave (used for scoring display and effects).</summary>
 public sealed record BurstWave(
     int ChainIndex,
@@ -22,4 +28,19 @@ public sealed record BurstWave(
     int Points,
     IReadOnlyList<ColourGroup> Groups,
     IReadOnlyList<BlockCell> ClearedCells,
-    IReadOnlyList<CellMove> Moves);
+    IReadOnlyList<CellMove> Moves)
+{
+    /// <summary>One entry per popped group, in the same order as <see cref="Groups"/>.</summary>
+    public IReadOnlyList<GroupGold> Gold { get; init; } = Array.Empty<GroupGold>();
+
+    /// <summary>Tenths of a gold this wave paid, over all its groups.</summary>
+    public int GoldTenths
+    {
+        get
+        {
+            int total = 0;
+            for (int i = 0; i < Gold.Count; i++) total += Gold[i].GoldTenths;
+            return total;
+        }
+    }
+}
