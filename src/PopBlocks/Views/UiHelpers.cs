@@ -2,7 +2,7 @@ using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Views;
 
-/// <summary>Small helpers shared by the pages that are built in code (map, region, archive).</summary>
+/// <summary>Small helpers shared by the pages and workshop panels that are built in code (map, region, archive, workshop).</summary>
 internal static class Ui
 {
     public static Color Res(string key, Color fallback)
@@ -43,6 +43,23 @@ internal static class Ui
         FontSize = size,
         LineHeight = 1.25,
         TextColor = colour ?? Res("TextSecondary", Colors.Gray),
+    };
+
+    /// <summary>A small pill for a second row of tabs (looks by kind, achievements or journal). Touch height is 44.</summary>
+    public static Button Chip(string text, bool selected) => new()
+    {
+        Text = text,
+        FontSize = 11,
+        FontAttributes = FontAttributes.Bold,
+        CharacterSpacing = 1,
+        CornerRadius = 22,
+        HeightRequest = 44,
+        Padding = new Thickness(14, 0),
+        MinimumWidthRequest = 0,
+        BackgroundColor = selected ? Color.FromArgb("#3338BDF8") : Color.FromArgb("#14FFFFFF"),
+        TextColor = selected ? Res("TextPrimary", Colors.White) : Res("TextSecondary", Colors.Gray),
+        BorderColor = selected ? Res("Accent", Colors.Cyan) : Colors.Transparent,
+        BorderWidth = 1,
     };
 
     /// <summary>State is always written out as well as drawn, so it never depends on colour alone.</summary>

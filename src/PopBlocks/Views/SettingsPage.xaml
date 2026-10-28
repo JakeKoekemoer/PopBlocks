@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PopBlocks.Views.SettingsPage"
+             NavigationPage.HasNavigationBar="False"
+             Background="{StaticResource PageGradient}">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" RowSpacing="8">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="14">
+            <Button Text="←"
+                    Style="{StaticResource RoundButton}"
+                    FontSize="18"
+                    HorizontalOptions="Start"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="Settings"
+                   FontSize="28"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource TextPrimary}"
+                   VerticalOptions="Center"
+                   SemanticProperties.HeadingLevel="Level1" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="18" Padding="4,8,4,32">
+
+                <!-- Shown after a restore or an erase: the game must be closed and opened again, so everything below is switched off. -->
+                <Border x:Name="LockBanner" Style="{StaticResource Glass}" Padding="20,16" IsVisible="False">
+                    <Label x:Name="LockText"
+                           FontSize="15"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           SemanticProperties.Description="Close PopBlocks completely and open it again" />
+                </Border>
+
+                <VerticalStackLayout x:Name="Body" Spacing="18">
+
+                    <!-- The game -->
+                    <Border Style="{StaticResource Glass}" Padding="18,8">
+                        <VerticalStackLayout Spacing="2">
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Pop effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Neon glow and burst when blocks pop" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="EffectsSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnEffectsToggled" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Landing guide" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Shows where the piece will land. Bold is thicker and easier to see." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Button x:Name="GuideButton"
+                                        Grid.Column="1"
+                                        Style="{StaticResource SecondaryButton}"
+                                        MinimumWidthRequest="0"
+                                        WidthRequest="120"
+                                        HeightRequest="40"
+                                        CornerRadius="20"
+                                        FontSize="13"
+                                        Clicked="OnGuideClicked" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Reduced motion" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="No screen shake, flashes or confetti. The game plays the same." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="MotionSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnMotionToggled" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Sound effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Sounds for turning, placing, dropping and popping" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="SoundSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnSoundToggled" />
+                            </Grid>
+                            <Grid x:Name="BoardStyleRow" ColumnDefinitions="*,Auto" MinimumHeightRequest="48" IsVisible="False">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Board style" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Earned by restoring regions. Looks only." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Button x:Name="BoardStyleButton"
+                                        Grid.Column="1"
+                                        Style="{StaticResource SecondaryButton}"
+                                        MinimumWidthRequest="0"
+                                        WidthRequest="120"
+                                        HeightRequest="40"
+                                        CornerRadius="20"
+                                        FontSize="13"
+                                        Clicked="OnBoardStyleClicked" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Music and sound: nothing here leaves the phone, and the game plays the same with all of it off -->
+                    <Border Style="{StaticResource Glass}" Padding="18,12">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="MUSIC AND SOUND" Style="{StaticResource CaptionLabel}" Margin="0,0,0,2" />
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="All sound" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="The master switch. Off is silent at once." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="MasterSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnMasterToggled" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Master volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="MasterValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="MasterSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnMasterChanged"
+                                        DragCompleted="OnVolumeDragCompleted"
+                                        SemanticProperties.Description="Master volume" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Music" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="The soundtrack that follows the world you are in" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="MusicSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnMusicToggled" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Music volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="MusicValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="MusicSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnMusicChanged"
+                                        SemanticProperties.Description="Music volume" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Effects volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="SfxValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="SfxSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnSfxChanged"
+                                        DragCompleted="OnVolumeDragCompleted"
+                                        SemanticProperties.Description="Sound effects volume" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Ambience" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Soft background sound for each region" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="AmbienceSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnAmbienceToggled" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="30">
+                                    <Label Text="Ambience volume" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" VerticalOptions="Center" />
+                                    <Label x:Name="AmbienceValue" Grid.Column="1" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+                                </Grid>
+                                <Slider x:Name="AmbienceSlider"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        MinimumTrackColor="{StaticResource Accent}"
+                                        ThumbColor="{StaticResource Accent}"
+                                        ValueChanged="OnAmbienceChanged"
+                                        SemanticProperties.Description="Ambience volume" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Reduced audio" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Quieter, simpler sound: fewer layers, softer effects, no ambience" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="ReducedAudioSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnReducedAudioToggled" />
+                            </Grid>
+                            <Label Text="Sound effects can be turned off on their own with the switch above. When something else is playing sound on the phone, or a call comes in, PopBlocks gives way and carries on afterwards."
+                                   Style="{StaticResource BodyLabel}" FontSize="12" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- The in-game name: local only, travels only inside the player's own save -->
+                    <Border Style="{StaticResource Glass}" Padding="24,20">
+                        <VerticalStackLayout Spacing="12">
+                            <Label Text="YOUR NAME" Style="{StaticResource CaptionLabel}" />
+                            <Label x:Name="NameLabel"
+                                   FontSize="24"
+                                   FontAttributes="Bold"
+                                   TextColor="{StaticResource TextPrimary}" />
+                            <Label Style="{StaticResource BodyLabel}"
+                                   Text="Pip uses this name in the game. It stays on this phone and travels only inside your own save. Changing the name never changes your levels." />
+                            <Entry x:Name="NameEntry"
+                                   Placeholder="A new name"
+                                   MaxLength="20"
+                                   TextColor="{StaticResource TextPrimary}"
+                                   SemanticProperties.Description="A new name, up to 20 characters" />
+                            <Button x:Name="RenameButton"
+                                    Text="RENAME"
+                                    Style="{StaticResource GhostButton}"
+                                    HeightRequest="46"
+                                    Clicked="OnRenameClicked" />
+                            <Label x:Name="NameStatus" Style="{StaticResource BodyLabel}" FontSize="13" IsVisible="False" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Save data: a file that survives an uninstall, plus the save code for moving by hand -->
+                    <Border Style="{StaticResource Glass}" Padding="24,20">
+                        <VerticalStackLayout Spacing="12">
+                            <Label Text="SAVE DATA" Style="{StaticResource CaptionLabel}" />
+                            <Label x:Name="SaveStatusTitle"
+                                   FontSize="20"
+                                   FontAttributes="Bold"
+                                   TextColor="{StaticResource TextPrimary}" />
+                            <Label x:Name="SaveStatusDetail" Style="{StaticResource BodyLabel}" />
+                            <Button x:Name="BackUpButton"
+                                    Text="BACK UP NOW"
+                                    Style="{StaticResource SecondaryButton}"
+                                    HeightRequest="46"
+                                    Clicked="OnBackUpClicked"
+                                    SemanticProperties.Hint="Writes your progress to the save file now" />
+                            <Button x:Name="FindButton"
+                                    Text="FIND MY SAVE FILE"
+                                    Style="{StaticResource GhostButton}"
+                                    HeightRequest="46"
+                                    Clicked="OnFindClicked"
+                                    SemanticProperties.Hint="Choose a PopBlocks save file to restore your progress from" />
+                            <Label Text="Reinstalled and your progress didn't come back by itself? Choose the file here."
+                                   Style="{StaticResource BodyLabel}"
+                                   FontSize="12" />
+
+                            <BoxView HeightRequest="1" Color="{StaticResource Line}" Margin="0,6" />
+
+                            <Label Text="SAVE CODE" Style="{StaticResource CaptionLabel}" />
+                            <Label Style="{StaticResource BodyLabel}"
+                                   Text="To move to another phone, copy your save code and paste it in on the other side. It is the same text the save file holds." />
+                            <Button x:Name="CopyButton"
+                                    Text="COPY MY SAVE CODE"
+                                    Style="{StaticResource GhostButton}"
+                                    HeightRequest="46"
+                                    Clicked="OnCopyCode"
+                                    SemanticProperties.Hint="Copies a line of text that holds your progress" />
+                            <Editor x:Name="CodeEditor"
+                                    Placeholder="Paste a save code here"
+                                    AutoSize="TextChanges"
+                                    MinimumHeightRequest="70"
+                                    FontSize="13"
+                                    TextColor="{StaticResource TextPrimary}"
+                                    SemanticProperties.Description="Save code to restore" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Button Grid.Column="0" x:Name="PasteButton" Text="PASTE" Style="{StaticResource GhostButton}" HeightRequest="46" Clicked="OnPasteCode" />
+                                <Button Grid.Column="1" x:Name="RestoreButton" Text="RESTORE" Style="{StaticResource GhostButton}" HeightRequest="46" Clicked="OnRestoreCode" />
+                            </Grid>
+
+                            <Label x:Name="SaveMessage" Style="{StaticResource BodyLabel}" FontSize="13" IsVisible="False" />
+
+                            <BoxView HeightRequest="1" Color="{StaticResource Line}" Margin="0,6" />
+
+                            <Button x:Name="DeleteButton"
+                                    Text="DELETE SAVE DATA"
+                                    Style="{StaticResource GhostButton}"
+                                    TextColor="{StaticResource Danger}"
+                                    HeightRequest="46"
+                                    Clicked="OnDeleteClicked"
+                                    SemanticProperties.Hint="Deletes the save file, and can also erase all progress" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

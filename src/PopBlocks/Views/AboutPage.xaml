@@ -63,39 +63,24 @@
                         </Grid>
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                             <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="Your progress is also kept in a small text file in your Documents folder, so a reinstall doesn't lose it. It never leaves your phone, and you can delete it in Settings." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
                             <Label Grid.Column="1" Text="No internet needed. It works anywhere, even on a plane." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
                         </Grid>
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                             <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
-                            <Label Grid.Column="1" Text="Gold is earned by playing. It can't be bought." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                            <Label Grid.Column="1" Text="Gold is earned by playing, in the Story and by popping blocks in Classic. It can't be bought." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
                         </Grid>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- Save code: progress moved by hand, no account and no network -->
-                <Border Style="{StaticResource Glass}" Padding="24,20">
-                    <VerticalStackLayout Spacing="12">
-                        <Label Text="YOUR PROGRESS" Style="{StaticResource CaptionLabel}" />
-                        <Label Style="{StaticResource BodyLabel}"
-                               Text="PopBlocks keeps everything on this phone and never uploads it. To move to a new phone, or to keep a copy before reinstalling, copy your save code and paste it in on the other side." />
-                        <Button x:Name="CopyButton"
-                                Text="COPY MY SAVE CODE"
-                                Style="{StaticResource GhostButton}"
-                                HeightRequest="46"
-                                Clicked="OnCopyCode"
-                                SemanticProperties.Hint="Copies a line of text that holds your progress" />
-                        <Editor x:Name="CodeEditor"
-                                Placeholder="Paste a save code here"
-                                AutoSize="TextChanges"
-                                MinimumHeightRequest="70"
-                                FontSize="13"
-                                TextColor="{StaticResource TextPrimary}"
-                                SemanticProperties.Description="Save code to restore" />
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                            <Button Grid.Column="0" x:Name="PasteButton" Text="PASTE" Style="{StaticResource GhostButton}" HeightRequest="46" Clicked="OnPasteCode" />
-                            <Button Grid.Column="1" x:Name="RestoreButton" Text="RESTORE" Style="{StaticResource GhostButton}" HeightRequest="46" Clicked="OnRestoreCode" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="Stuck on a level? Swap it for a new one with a reroll. A reroll costs gold, a little less after every try, and it is free after 10 tries. Gold never stands between you and the story." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
                         </Grid>
-                        <Label x:Name="CodeStatus" Style="{StaticResource BodyLabel}" FontSize="13" IsVisible="False" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="✓" FontAttributes="Bold" TextColor="#39FF14" />
+                            <Label Grid.Column="1" Text="Your levels are yours. Each player gets their own, built on this phone and checked by a bot so they can always be won." Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        </Grid>
                     </VerticalStackLayout>
                 </Border>
 

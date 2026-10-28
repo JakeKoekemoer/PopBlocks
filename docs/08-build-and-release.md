@@ -67,7 +67,7 @@ The product promise is that the game never touches the network. Release APKs mus
 ./scripts/Check-Permissions.ps1 -Apk path\to\the.apk
 ```
 
-It locates `aapt2` in the Android SDK, dumps the APK's permissions and **fails (exit code 1)** if `INTERNET` is present. Debug builds get `INTERNET` added by the Android tooling so the debugger can attach, so only check Release builds. The manifest in the repository declares no permissions at all; if the check ever fails on a Release build, something (a new package, a manifest edit) added one, and that change must be reversed.
+It locates `aapt2` in the Android SDK, dumps the APK's permissions and **fails (exit code 1)** if `INTERNET` is present. Debug builds get `INTERNET` added by the Android tooling so the debugger can attach, so only check Release builds. The manifest in the repository declares no permissions at all; if the check ever fails on a Release build, something (a new package, a manifest edit) added one, and that change must be reversed. The music and sound system adds no permission and no package (it uses `AudioTrack`, which needs none); its on-device checklist is in [11.11](11-audio.md).
 
 ## 8.6 Versioning
 
@@ -75,7 +75,7 @@ It locates `aapt2` in the Android SDK, dumps the APK's permissions and **fails (
 - `ApplicationVersion` in `PopBlocks.csproj`: an integer that must go up with every installed build.
 - The About page displays both, read from the installed package, so it can never disagree with the build.
 
-Saves are versioned separately (`save_version`, see [Architecture](02-architecture.md#26-persistence)). An over-the-top install keeps every saved key; `allowBackup` is off, so a reinstall (uninstall, then install) starts empty unless the player restores a save code.
+Saves are versioned separately (`save_version`, see [Architecture](02-architecture.md#26-persistence)). An over-the-top install keeps every saved key. `allowBackup` is off (no cloud backup), but a reinstall (uninstall, then install) picks the progress back up from `Documents/PopBlocks/popblocks-save.txt` on Android 10 and newer (see [Architecture](02-architecture.md#26-persistence)). To test a reinstall by hand: play a little, open the home screen so the file is flushed, uninstall, install again and launch; you should see "Welcome back". If Android does not let the new install see the old file, the name prompt's "I HAVE A SAVE FILE" button (or Settings → FIND MY SAVE FILE) picks it by hand. Deleting the file in Settings turns this off.
 
 ## 8.6a Developer menu
 

@@ -29,7 +29,7 @@ Every rule that depends on a level number reads from here. That is why the bands
 |---|---|---|
 | `CellColour` | `Empty` plus the five colours, as a `byte` enum. | `Empty = 0` so a zeroed array is an empty board. |
 | `BlockCell` | `(X, Y, Colour)` record struct. | Inside a piece, X/Y are offsets from the pivot; in results they are absolute board coordinates. Called `BlockCell`, not `Cell`, to avoid clashing with `Microsoft.Maui.Controls.Cell`. |
-| `Board` | Fixed-size grid of `CellColour`. Origin top-left, Y grows down. | Indexer with bounds checks, `IsInside`, `Clone`, `CopyFrom`, `Clear`, `CountOccupied`, `AnyInRows`, and text conversion (`FromRows`, `ToRows`, `FromChar`, `ToChar`). Rows 0..`HiddenRows-1` are the hidden spawn area. |
+| `Board` | Fixed-size grid of `CellColour`. Origin top-left, Y grows down. | Indexer with bounds checks, `IsInside`, `IsDormant` / `SetDormant` (see `ColourMatcher`), `Clone`, `CopyFrom`, `Clear`, `CountOccupied`, `AnyInRows`, and text conversion (`FromRows`, `ToRows`, `FromChar`, `ToChar`). Rows 0..`HiddenRows-1` are the hidden spawn area. |
 | `Piece` | Immutable falling cluster. | See 3.2.1. |
 | `ShapeDef`, `ShapeCatalog` | Every shape in the game. | See 3.2.2. |
 | `ColourGroup`, `CellMove`, `BurstWave` | Results of one burst wave. | `BurstWave` carries the chain index, multiplier, points, the groups, the cleared cells, and the cells that fell. It feeds scoring display, goal tracking and the visual effects. |
@@ -64,14 +64,16 @@ All of these are pure (no hidden state) except `GameEngine` and the generators.
 ### `ColourMatcher`
 `FindGroups(board, minSize = 4)` returns all connected same-colour groups using **orthogonal** adjacency only (iterative flood fill with an explicit stack, so a big group cannot overflow the call stack). It is read-only: it never changes the board, so every group in a wave comes from one consistent snapshot. That matters because two groups that touch the same falling column must both be found before either is removed.
 
+**Dormant blocks.** A piece that is a burst-sized group of one colour by itself (a *solid* piece, `Piece.IsSolid`) must not pop just by landing. Right after a lock the engine calls `MarkDormant(board, placedCells)`, which puts any burst-sized group made *only* of the piece's own cells to sleep (`Board.SetDormant`). `FindGroups` then skips a group unless at least one of its cells is awake, so a sleeping group waits until another block of its colour touches it; at that point the group has an awake cell and everything in it bursts together, sleepers included. The flags live on the `Board`: writing a cell wakes it, and `Clone`, `CopyFrom` (undo) and `GravityResolver.Apply` (falling) carry them along. `PlacementPreview` applies the same rule so its glow matches a real drop.
+
 ### `GravityResolver`
-`Clear` empties cells; `Apply` compacts each column downward, preserving order, and returns the list of `CellMove`s (which cells fell from where to where). The move list exists purely so the app can animate falling; the engine itself does not need it.
+`Clear` empties cells; `Apply` compacts each column downward, preserving order, and returns the list of `CellMove`s (which cells fell from where to where). The move list exists purely so the app can animate falling; the engine itself does not need it. `FindHanging(board, list)` is read-only: it lists the stacks that hang over empty cells (a lock never applies gravity, only a pop does) so the app can show what will drop and how far.
 
 ### `ScoringSystem`
 `Multiplier`, `GroupPoints`, `WavePoints`, plus the Classic difficulty curve (`LevelForScore`, `FallIntervalMs`, `ColourCountForLevel`). Uses `checked` arithmetic so an overflow would throw in tests instead of silently wrapping.
 
 ### `PieceGenerator`, `IPieceGenerator` and `RewindableGenerator`
-`IPieceGenerator.Next(colourCount)` returns a piece already at the spawn position. `PieceGenerator` draws random pieces from the weighted Classic set, or from the Exotic set for a configurable share. It is seeded with a `Random` instance so levels are deterministic. `ScriptedPieceGenerator` plays a fixed list of pieces first (hand-made tutorials) and then hands over to another generator.
+`IPieceGenerator.Next(colourCount)` returns a piece already at the spawn position. `PieceGenerator` draws random pieces from the weighted Classic set, or from the Exotic set for a configurable share. It is seeded with a `Random` instance so levels are deterministic. A piece that would be solid is recoloured unless a `solidChance` roll (default `GameConfig.SolidPieceChance`, 0.15, about 1 piece in 60 overall) lets it stay; the recolouring draws no random numbers and the roll is drawn only for those pieces. Prism Shift skips colourings that would make an ordinary piece solid. `ScriptedPieceGenerator` plays a fixed list of pieces first (hand-made tutorials) and then hands over to another generator.
 
 The interface exists so the engine can be fed any sequence: random for Classic, seeded for Story, scripted for tutorials, and fixed lists in tests.
 

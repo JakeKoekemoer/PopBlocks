@@ -56,8 +56,8 @@ Change the text in the region file. That is all. Run the tests: `FullStoryTests`
 
 ## 10.4 Rules to keep
 
-1. Every level 1-200 is completable with zero purchases and zero helpers (the bot proves it; `P4GateTests`, `P7Tests`).
-2. Gold is paid on first clear only. Replaying, skipping a scene or catching a save up (`Reconcile`) never pays again.
+1. Every level 1-200 is completable with zero purchases and zero helpers, **for every seed a player can be given** (the bot proves it when the level is generated, the gate test and the fuzz sample it; `P4GateTests`, `P7Tests`, `SeededCatalogueReplayTests`). No level needs gold to progress: the reroll, the only thing that spends gold on the way, is free from the tenth failure (`P7Tests`).
+2. Gold is paid on first clear only (Classic pays by the block; see `docs/story/economy.md`). Replaying, skipping a scene or catching a save up (`Reconcile`) never pays again. A reroll never pays or refunds.
 3. Story and accessibility are never sold. Cosmetics are discovered through the story or an achievement and then bought; locked items show a hint, never a price.
 4. Never rename or reuse a save key or an unlock id. Add new ones.
 5. Rules live in the engine. If an engine rule changes, change `LevelSolver` with it, and expect `LevelSnapshotTests` to show every level that moved.

@@ -16,10 +16,15 @@ public sealed class DevTools
     private readonly LifetimeStats? _lifetime;
     private readonly EndingService? _ending;
     private readonly ConsumableInventory? _consumables;
+    private readonly StoryLevels? _levels;
+    private readonly PlayerIdentity? _identity;
 
     public DevTools(PlayerProgress progress, ShopService shop, UnlockStore unlocks, CampaignService campaign, CosmeticLoadout loadout,
-        LifetimeStats? lifetime = null, EndingService? ending = null, ConsumableInventory? consumables = null)
+        LifetimeStats? lifetime = null, EndingService? ending = null, ConsumableInventory? consumables = null,
+        StoryLevels? levels = null, PlayerIdentity? identity = null)
     {
+        _levels = levels;
+        _identity = identity;
         _consumables = consumables;
         _lifetime = lifetime;
         _ending = ending;
@@ -33,6 +38,9 @@ public sealed class DevTools
     public void AddGold(int amount) => _progress.DevSetGold((int)Math.Clamp((long)_progress.Gold + amount, 0, int.MaxValue));
 
     public void SetGold(int amount) => _progress.DevSetGold(amount);
+
+    /// <summary>Sets how many times the current level has been failed (a reroll is free from the tenth).</summary>
+    public void SetFailures(int failures) => _levels?.DevSetFailures(failures);
 
     /// <summary>
     /// Makes <paramref name="level"/> the next level to play (levels below it count as cleared). Story flags are
@@ -81,6 +89,8 @@ public sealed class DevTools
         _lifetime?.DevClear();
         _progress.DevSetHighestCleared(0);
         _progress.DevSetGold(0);
+        _levels?.DevReset();
+        _identity?.DevClear();   // a fresh install is asked for a name again
         foreach (var item in ShopCatalog.Items) _shop.DevSetLevel(item.Id, 0);
         if (_consumables is not null)
             foreach (var c in ConsumableCatalog.All) _consumables.DevSetCount(c.Kind, 0);
@@ -90,7 +100,10 @@ public sealed class DevTools
     public string Describe()
     {
         var region = RegionCatalog.For(_progress.NextLevel);
+        string seeded = _levels is null ? "" :
+            $"Name {_identity?.Name}   Seed {_levels.SeedText(_progress.NextLevel)}   Failures {_levels.Failures(_progress.NextLevel)}   Rerolls {_levels.Rerolls(_progress.NextLevel)}\n";
         return $"Next level {_progress.NextLevel} ({region?.Title ?? RegionCatalog.BeyondTitle})\n" +
+               seeded +
                $"Cleared {_progress.HighestCleared}   Gold {_progress.Gold:N0}\n" +
                $"Regions restored {_campaign.RestoredRegionCount} / {RegionCatalog.All.Count}   Fragments {_campaign.FragmentCount}\n" +
                $"Unlock ids {_unlocks.Count}   Board {_loadout.SelectedBoard}";

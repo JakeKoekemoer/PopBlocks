@@ -10,13 +10,14 @@ Connect four or more cells of one colour (sideways or up/down, not diagonally) a
 PopBlocks.sln
 src/
   PopBlocks.Engine/     Pure C# rules: board, pieces, collision, matching, gravity, scoring, game state, undo, board generation, Story levels and the
-                        level solver; the campaign (regions, scenes, rewards, ending); the shop, helpers, cosmetics, achievements and the save code.
+                        level solver; the campaign (regions, scenes, rewards, ending); the shop, helpers, cosmetics, achievements, the save code and the save file mirror (`PersistentSettings`).
                         No MAUI references, so it is unit-testable without Android.
   PopBlocks/            The .NET MAUI app (net10.0-android): drawing, view model, pages, platform code.
     Graphics/           VisualDesign (palette, skins), CellRenderer, GameDrawable (board, neon pops, flip, boards, frames), BlastEffects (burst styles, flair), Pip and the story pictures
     ViewModels/         GameViewModel (observable state, commands, game timer, tutorial coaching)
-    Views/              MainPage (menu), LevelSelectPage, GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage, ShopPage,
-                        WardrobePage, ArchivePage, JournalPage, AchievementsPage, AboutPage (with the save code), DevMenuPage (development builds)
+    Views/              MainPage (menu), WorldMapPage (the Story map: each region with its levels), GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage (the four workshop tabs: ShopPanel for
+                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage, SettingsPage (settings, name, saved data), AboutPage,
+                        DevMenuPage (development builds)
     Services/           LocalSettingsService (MAUI Preferences)
 tests/
   PopBlocks.Tests/      xUnit tests for the engine
@@ -35,7 +36,7 @@ Debug builds run through the debugger. For a standalone install use a Release bu
 
 ## Game modes
 
-**Story** is the main mode, a campaign of **200 levels in eight regions** (the Forgotten Garden to the Heart of the Spectrum) followed by an endless band, Beyond the Spectrum. You restore a broken world, guided by Pip, and the story is told in short scenes that can always be skipped. Every level starts with a preset pile of blocks, gives you goals, and a limited number of pieces (moves). Meet every goal before the pieces run out to clear the level and unlock the next one. You lose if you run out of moves, or if the stack reaches the top.
+**Story** is the main mode, a campaign of **200 levels in eight regions** (the Forgotten Garden to the Heart of the Spectrum) followed by an endless band, Beyond the Spectrum. You restore a broken world, guided by Pip, and the story is told in short scenes that can always be skipped. Every level starts with a pile of blocks built for you (every player gets their own levels, from their in-game name and a hidden number), gives you goals, and a limited number of pieces (moves). Meet every goal before the pieces run out to clear the level and unlock the next one. You lose if you run out of moves, or if the stack reaches the top.
 
 | Levels | Tier | What changes |
 |---|---|---|
@@ -53,25 +54,26 @@ Every generated level is **proven winnable**: a bot plays it first, and the move
 
 **The tutorial** is separate from the Story. It is ten hand-made, coached lessons (moving, rotating, dropping, speed, mixed colours, chains, moves, goals) with their own progress and no gold. A new player is asked once, on Story level 1, whether they want it; it can also be played any time from **More → TUTORIAL**. Lessons never move Story progress, play story scenes or count towards achievements and lifetime bests (`LevelCatalog.Lesson`, `GameSetup.Lesson`, `TutorialProgress`).
 
-**The menu** opens on just **PLAY** (continue the Story; level 1 for a new player) and **MORE**, which shows the full menu: Story card, map, Classic, workshop, archive, levels, tutorial, settings and about.
+**The menu** opens on just **PLAY** (continue the Story; level 1 for a new player) and **MORE**, which shows the full menu: Story card, map (regions and their levels together), Classic, workshop, archive, tutorial, settings and about.
 
-**Gold and Bram's workshop.** Clearing a non-tutorial level for the **first time** pays gold; harder tiers pay more, restoring a region pays a one-off reward, and achievements pay small amounts. Replaying a level pays nothing. The workshop grows a lamp for every region you restore:
+**Gold and Bram's workshop.** Clearing a non-tutorial level for the **first time** pays gold; harder tiers pay more, restoring a region pays a one-off reward, and achievements pay small amounts. Replaying a level pays nothing. The workshop is one screen with four tabs, and each tab has a lamp that lights as you restore regions (Upgrades from the start, Looks at region 3, Supplies at region 5, Trophies at region 6). Every tab is open from the start; the lamps only show the workshop growing. The Archive is not in the workshop: it opens from the menu.
 
-| Where | What | Effect |
+| Tab | What | Effect |
 |---|---|---|
-| Workbench | Lookout, Pop Flair, Spare Moves | See up to 5 pieces ahead; richer pops; +2/+4/+6 moves per level |
+| Upgrades | Lookout, Pop Flair, Spare Moves | See up to 5 pieces ahead; richer pops; +2/+4/+6 moves per level |
 | | Colour Lens, Chain Sense | Outline groups a block or two short of a burst; glow when a drop would start a chain |
 | | Prism Reserve | Free Prism Shifts per level |
-| | Second Chance, Prism Shift (supplies, up to 3 each) | Take back your last block; rearrange the colours of the next piece. Once per level, off on finales |
-| Paint shelf | Skins, burst styles, boards, piece frames, Pip's accessories | How the game looks. Found through the story or an achievement, then bought; some are free rewards |
+| Supplies | Second Chance, Prism Shift (up to 3 each) | Take back your last block; rearrange the colours of the next piece. Once per level, off on finales |
+| Looks | Skins, burst styles, boards, piece frames, Pip's accessories | How the game looks. Found through the story or an achievement, then bought; some are free rewards |
+| Trophies | Achievements, Journal | What you have earned and your bests. Nothing to buy |
 
 A locked item tells you how to find it and never shows a price. Prices, rewards and requirements are data (`Services/ShopCatalog.cs`, `ConsumableInventory.cs`, `CosmeticCatalog.cs`); the reasoning is in `docs/story/economy.md`. There is nothing to buy with real money.
 
-**Save code.** The About page can copy your progress as one line of text and restore it on another phone (the app keeps no cloud backup, by design).
+**Saved data.** Progress is also kept in a small text file, `Documents/PopBlocks/popblocks-save.txt`, so uninstalling and reinstalling PopBlocks does not lose it (Android 10 or newer; no permission is needed, and nothing is uploaded). Settings shows its state, can back it up on demand, find it by hand if a reinstall did not pick it up, and delete it or erase all progress. The same Settings section can copy progress as one line of text (the **save code**) and restore it on another phone. The app keeps no cloud backup, by design.
 
-**Classic** starts from an empty board and speeds up with your score. It keeps a personal best.
+**Classic** starts from an empty board and speeds up with your score. It keeps a personal best and **earns gold** for every block popped (paid when the run ends, when you leave, or when the app goes to the background). An optional **seed** (the SEED link in the menu) gives the same pieces again; a run on a typed seed pays gold but never sets the best score.
 
-**Pops.** A match first lights up in its own colour, turns solid neon, and then bursts. Pop effects can be switched off on the menu (pops are then instant).
+**Pops.** A match first lights up in its own colour, turns solid neon, and then bursts. Pop effects can be switched off in Settings (pops are then instant).
 
 ## Controls
 
@@ -127,11 +129,11 @@ All balance numbers (speed curve, level step, points, chain cap, board size) are
 
 ## Not built
 
-Haptics (would need the VIBRATE permission), music, Burst Charge, online features of any kind, other platforms. Trail effects, a chain celebration and victory effects were planned for the looks and cut; challenge levels outside the 200 are an optional later addition.
+Haptics (would need the VIBRATE permission), Burst Charge, online features of any kind, other platforms. Trail effects, a chain celebration and victory effects were planned for the looks and cut; challenge levels outside the 200 are an optional later addition.
 
 ## Sound
 
-Four short single-voice (mono-tone) effects: **rotate** (high tick), **place** (low thud), **hard drop** (falling whoosh ending in the thud) and **pop** (falling bloop, one tone higher for each step of a chain). They are generated in code (`PopBlocks.Engine/Audio/ToneSynth.cs`), so there are no audio files, and played through Android's `SoundPool` (`Platforms/Android/AndroidSoundPlayer.cs`). A **Sound effects** switch on the menu turns them off. No permission is needed.
+A procedural soundtrack, **The Shattered Spectrum**: a quiet theme for the menu and map, the Garden for Classic, and one piece for each of the eight regions that fades, recovers and is restored along with the region, plus a scripted finale. The effects (rotate, place, hard drop, and a pop per colour that sings in the region's key) are played by the same mixer. Everything is computed on the phone as you play (`PopBlocks.Engine/Audio/`), so there are no audio files, and the sound reaches the speaker through Android's `AudioTrack` (`Platforms/Android/AndroidAudioOutput.cs`). Any song earned along the way can be picked on the pause screen. **Settings, Music and sound** has master, music, effects and ambience volumes, switches, and a reduced-audio mode; the game plays the same with all of it off. The older `ToneSynth` and `SoundPool` player remain only as a fallback if the new output cannot start. No permission is needed. Details: [`docs/11-audio.md`](docs/11-audio.md).
 
 ## License
 

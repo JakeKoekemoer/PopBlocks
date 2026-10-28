@@ -10,6 +10,11 @@ public sealed class Board
 {
     private readonly CellColour[] _cells;
 
+    // Dormant cells belong to a solid piece (see GameConfig.SolidPieceChance). They never start a burst on their own: a
+    // group pops only if at least one of its cells is not dormant. Writing a cell clears its flag, so a block that is
+    // placed is always live unless the engine puts it to sleep afterwards. Clone, CopyFrom and gravity carry the flags.
+    private readonly bool[] _dormant;
+
     public int Width { get; }
     public int Height { get; }
 
@@ -20,6 +25,7 @@ public sealed class Board
         Width = width;
         Height = height;
         _cells = new CellColour[width * height];
+        _dormant = new bool[width * height];
     }
 
     public CellColour this[int x, int y]
@@ -33,6 +39,7 @@ public sealed class Board
         {
             if (!IsInside(x, y)) throw new ArgumentOutOfRangeException($"({x},{y}) is outside the board.");
             _cells[y * Width + x] = value;
+            _dormant[y * Width + x] = false;
         }
     }
 
@@ -40,7 +47,21 @@ public sealed class Board
 
     public bool IsEmpty(int x, int y) => this[x, y] == CellColour.Empty;
 
-    public void Clear() => Array.Clear(_cells);
+    /// <summary>True if the cell holds a dormant block (outside the board or empty cells are never dormant).</summary>
+    public bool IsDormant(int x, int y) => IsInside(x, y) && _dormant[y * Width + x];
+
+    /// <summary>Puts the block at (x, y) to sleep, or wakes it. An empty cell cannot be dormant.</summary>
+    public void SetDormant(int x, int y, bool dormant = true)
+    {
+        if (this[x, y] == CellColour.Empty) dormant = false;
+        _dormant[y * Width + x] = dormant;
+    }
+
+    public void Clear()
+    {
+        Array.Clear(_cells);
+        Array.Clear(_dormant);
+    }
 
     /// <summary>Overwrites this board's cells with another board's. Both must be the same size.</summary>
     public void CopyFrom(Board other)
@@ -48,12 +69,14 @@ public sealed class Board
         if (other.Width != Width || other.Height != Height)
             throw new ArgumentException("Boards must be the same size.", nameof(other));
         Array.Copy(other._cells, _cells, _cells.Length);
+        Array.Copy(other._dormant, _dormant, _dormant.Length);
     }
 
     public Board Clone()
     {
         var copy = new Board(Width, Height);
         Array.Copy(_cells, copy._cells, _cells.Length);
+        Array.Copy(_dormant, copy._dormant, _dormant.Length);
         return copy;
     }
 

@@ -22,6 +22,11 @@ public class P7Tests
         "stat_boards_cleared", "stat_cells_popped", "stat_levels_won", "stat_most_goals",
         "stat_plays_r1", "stat_plays_r2", "stat_plays_r3", "stat_plays_r4", "stat_plays_r5", "stat_plays_r6", "stat_plays_r7", "stat_plays_r8",
         "upgrade_prismreserve", "consumable_second_chance", "consumable_prism_shift",
+        // Seeded levels, rerolls and Classic gold.
+        "player_name", "player_salt", "current_level_for", "current_level_seed", "current_level_rerolls", "current_level_failures",
+        "first_clear_seeds", "classic_gold_carry",
+        // Audio settings (the soundtrack update). Sound effects on/off stays the older "sound_effects" key.
+        "audio_master", "audio_music", "audio_sfx", "audio_ambience", "audio_mute_master", "audio_mute_music", "audio_mute_ambience", "audio_reduced", "audio_track",
     };
 
     [Fact]
@@ -160,5 +165,76 @@ public class P7Tests
         Assert.Equal(0, engine.ExtraMoves);
         Assert.Equal(1, engine.PreviewCount);
         Assert.Equal(LevelCatalog.Get(60).MoveLimit, engine.MoveLimit);
+    }
+
+    // ------------------------------------------------------------------ gold never gates the story (seeded levels and rerolls)
+
+    [Fact]
+    public void Every_level_1_to_220_has_a_free_reroll_at_ten_failures_and_a_price_that_never_exceeds_its_reward()
+    {
+        for (int level = 1; level <= 220; level++)
+        {
+            Assert.Equal(0, RerollPricing.Price(level, SeedingConfig.FailuresForFreeReroll));
+            Assert.Equal(0, RerollPricing.Price(level, SeedingConfig.FailuresForFreeReroll + 25));
+            Assert.InRange(RerollPricing.Price(level, 0), 0, GoldRewards.For(level, false));
+        }
+    }
+
+    [Fact]
+    public void A_player_with_no_gold_gets_through_any_level_by_failing_it_ten_times()
+    {
+        foreach (int level in new[] { 1, 10, 11, 12, 25, 50, 75, 100, 125, 150, 175, 199, 200, 201, 345 })
+        {
+            var settings = new InMemorySettings();
+            var progress = new PlayerProgress(settings);
+            progress.DevSetHighestCleared(level - 1);
+            progress.DevSetGold(0);
+            var identity = new PlayerIdentity(settings, () => 5);
+            identity.Choose("Broke");
+            var levels = new StoryLevels(settings, progress, identity);
+
+            for (int i = 1; i < SeedingConfig.FailuresForFreeReroll; i++)
+            {
+                levels.RecordFailure(level);
+                if (RerollPricing.Price(level, i) > 0) Assert.False(levels.CanAffordReroll(level), $"level {level}, {i} failures");
+            }
+            levels.RecordFailure(level);
+
+            Assert.True(levels.CanAffordReroll(level), $"level {level} should be free after ten failures");
+            Assert.True(levels.TryReroll(level));
+            Assert.Equal(0, progress.Gold);
+        }
+    }
+
+    [Fact]
+    public void Failing_on_purpose_is_allowed_and_nothing_stops_a_cleared_level_being_rerolled_for_free()
+    {
+        var settings = new InMemorySettings();
+        var progress = new PlayerProgress(settings);
+        progress.DevSetHighestCleared(120);
+        var identity = new PlayerIdentity(settings, () => 5);
+        identity.Choose("Tester");
+        var levels = new StoryLevels(settings, progress, identity);
+
+        for (int level = 1; level <= 120; level += 7)
+        {
+            Assert.True(levels.CanOfferReroll(level));
+            Assert.Equal(0, levels.RerollPrice(level));
+        }
+    }
+
+    [Fact]
+    public void Nothing_in_the_story_costs_gold_to_continue()
+    {
+        // The only thing that spends gold on the way is the reroll, and it is free from the tenth failure.
+        // A level's completion never asks for gold and the ending needs no purchase (see EndingReachable_...).
+        for (int level = 1; level <= 220; level++)
+        {
+            var settings = new InMemorySettings();
+            var progress = new PlayerProgress(settings);
+            progress.DevSetHighestCleared(level - 1);
+            Assert.True(progress.IsUnlocked(level));
+            Assert.Equal(level, progress.NextLevel);
+        }
     }
 }

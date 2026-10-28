@@ -2,6 +2,7 @@ using Android.App;
 using Android.Content.PM;
 using Android.OS;
 using Android.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace PopBlocks;
 
@@ -23,5 +24,45 @@ public class MainActivity : MauiAppCompatActivity
         // Keep the screen awake while playing.
         Window?.AddFlags(WindowManagerFlags.KeepScreenOn);
         Diagnostics.Crumb("MainActivity.OnCreate: done");
+    }
+
+    /// <summary>
+    /// Writes the save file before the app goes to the background, so a change made a moment ago is not lost if Android
+    /// then closes the app (or the player uninstalls it straight away).
+    /// </summary>
+    protected override void OnPause()
+    {
+        base.OnPause();
+        try
+        {
+            Microsoft.Maui.IPlatformApplication.Current?.Services.GetService<PopBlocks.Engine.Services.PersistentSettings>()?.Flush();
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("MainActivity.OnPause: save file flush", e);
+        }
+
+        // Stop the music while the app is out of sight, and give up audio focus so other apps can have the speaker.
+        try
+        {
+            Microsoft.Maui.IPlatformApplication.Current?.Services.GetService<PopBlocks.Engine.Audio.GameAudio>()?.OnSleep();
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("MainActivity.OnPause: audio sleep", e);
+        }
+    }
+
+    protected override void OnResume()
+    {
+        base.OnResume();
+        try
+        {
+            Microsoft.Maui.IPlatformApplication.Current?.Services.GetService<PopBlocks.Engine.Audio.GameAudio>()?.OnResume();
+        }
+        catch (Exception e)
+        {
+            Diagnostics.Error("MainActivity.OnResume: audio resume", e);
+        }
     }
 }

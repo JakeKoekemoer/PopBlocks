@@ -43,6 +43,22 @@ public static class SaveKeys
     /// <summary>Calms animation: no screen shake, flashes or confetti. Off by default.</summary>
     public const string ReducedMotion = "reduced_motion";
 
+    // ---- Audio (AudioSettings). Sound-effects on/off is the existing SoundEffects key above ----
+    /// <summary>Volumes are whole numbers from 0 to 100.</summary>
+    public const string AudioMaster = "audio_master";
+    public const string AudioMusic = "audio_music";
+    public const string AudioSfx = "audio_sfx";
+    public const string AudioAmbience = "audio_ambience";
+    public const string AudioMuteMaster = "audio_mute_master";
+    public const string AudioMuteMusic = "audio_mute_music";
+    public const string AudioMuteAmbience = "audio_mute_ambience";
+
+    /// <summary>A calmer mix: no ambience, fewer music layers, no chain flourishes, softer effects. Off by default.</summary>
+    public const string AudioReduced = "audio_reduced";
+
+    /// <summary>The song the player chose in the pause screen (1 to 25, see Soundtrack). 0 means automatic: the music of the place.</summary>
+    public const string AudioTrack = "audio_track";
+
     // ---- Story (UnlockStore, CosmeticLoadout) ----
     /// <summary>Comma-separated ids: scenes seen, fragments, lore, achievements, cosmetics owned.</summary>
     public const string Unlocks = "unlocks_v1";
@@ -58,6 +74,32 @@ public static class SaveKeys
 
     /// <summary>The look chosen after the ending (a <c>FinalChoice</c> id, empty until chosen).</summary>
     public const string EndingTheme = "ending_theme";
+
+    // ---- Seeded levels and rerolls (PlayerIdentity, LevelAttemptState, PlayerProgress) ----
+    /// <summary>The in-game name (1 to 20 characters). Display only: it never changes a level once the salt is set.</summary>
+    public const string PlayerName = "player_name";
+
+    /// <summary>Hash of the name and a random install number, set once. 0 means not set (an existing player who has not been asked yet).</summary>
+    public const string PlayerSalt = "player_salt";
+
+    /// <summary>The level number the next three values belong to. Ignored unless it is the player's current level (HighestCleared + 1).</summary>
+    public const string CurrentLevelFor = "current_level_for";
+
+    /// <summary>Seed of the player's current level. 0 means not yet assigned.</summary>
+    public const string CurrentLevelSeed = "current_level_seed";
+
+    /// <summary>Rerolls used on the current level. Not reset by a reroll; reset when the level is cleared.</summary>
+    public const string CurrentLevelRerolls = "current_level_rerolls";
+
+    /// <summary>Failures on the current level. Not reset by a reroll; reset when the level is cleared.</summary>
+    public const string CurrentLevelFailures = "current_level_failures";
+
+    /// <summary>Comma-separated <c>level:seed</c> pairs: the seed each cleared level was first cleared with.</summary>
+    public const string FirstClearSeeds = "first_clear_seeds";
+
+    // ---- Classic gold (ClassicGold) ----
+    /// <summary>Tenths of a gold earned in Classic and not yet paid (0 to 9).</summary>
+    public const string ClassicGoldCarry = "classic_gold_carry";
 
     // ---- Lifetime stats (LifetimeStats): maxima and counters only ----
     public const string StatLargestGroup = "stat_largest_group";
@@ -81,11 +123,17 @@ public static class SaveKeys
         StatRegionPlays(5), StatRegionPlays(6), StatRegionPlays(7), StatRegionPlays(8),
     };
 
+    // Not listed here on purpose: PersistentSettings.EnabledKey ("save_file_enabled"). It records whether this phone keeps a
+    // save file outside the app. That is a choice about the phone, not progress, so it is never carried in a save code.
+
     /// <summary>Every key, for tests and documentation.</summary>
     public static IReadOnlyList<string> All { get; } = new[]
     {
         SaveVersion, ProgressHighest, Gold, UpgradePreview, UpgradePopFlair, UpgradeExtraMoves, UpgradeColourLens, UpgradeChainSense, UpgradePrismReserve, ConsumableSecondChance, ConsumablePrismShift, BestScore,
-        BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects, Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
+        BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects,
+        AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced, AudioTrack,
+        Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
+        PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
         StatLargestGroup, StatLongestChain, StatMostCleared, StatMostMovesLeft,
         StatAbilitiesUsed, StatBoardsCleared, StatCellsPopped, StatLevelsWon, StatMostGoals,
         StatRegionPlays(1), StatRegionPlays(2), StatRegionPlays(3), StatRegionPlays(4),

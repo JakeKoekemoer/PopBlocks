@@ -6,7 +6,7 @@ namespace PopBlocks.Services;
 /// <see cref="ILocalSettings"/> backed by the MAUI Preferences API (Android SharedPreferences).
 /// Data stays on the device; there is no cloud sync and no personal information is stored.
 /// </summary>
-public sealed class LocalSettingsService : ILocalSettings
+public sealed class LocalSettingsService : ILocalSettings, IClearableSettings
 {
     public int GetInt(string key, int defaultValue) => Preferences.Default.Get(key, defaultValue);
     public void SetInt(string key, int value) => Preferences.Default.Set(key, value);
@@ -14,4 +14,7 @@ public sealed class LocalSettingsService : ILocalSettings
     public void SetBool(string key, bool value) => Preferences.Default.Set(key, value);
     public string GetString(string key, string defaultValue) => Preferences.Default.Get(key, defaultValue);
     public void SetString(string key, string value) => Preferences.Default.Set(key, value);
+
+    /// <summary>Removes every saved value. Used only by "erase everything" in Settings.</summary>
+    public void Clear() => Preferences.Default.Clear();
 }

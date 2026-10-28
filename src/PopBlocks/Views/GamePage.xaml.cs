@@ -151,12 +151,21 @@ public partial class GamePage : ContentPage
     private void OnWindowInactive(object? sender, EventArgs e)
     {
         StopRepeat();
-        _vm.Pause();
+        _vm.OnAppInactive();   // pauses, and banks any Classic gold: a swipe-away cannot be caught afterwards
     }
 
     private async void OnMenuClicked(object? sender, EventArgs e)
     {
         await Navigation.PopAsync();
+    }
+
+    /// <summary>The pause screen's song list: automatic, then every song earned so far.</summary>
+    private async void OnTrackListTapped(object? sender, TappedEventArgs e)
+    {
+        var choices = _vm.TrackChoices();
+        string picked = await DisplayActionSheet("Soundtrack", "Close", null, choices.Select(c => c.Label).ToArray());
+        foreach (var (number, label) in choices)
+            if (label == picked) { _vm.ChooseTrack(number); return; }
     }
 
     // ------------------------------------------------------------------ a new game or level begins
@@ -444,6 +453,7 @@ public partial class GamePage : ContentPage
 
     private void WireButton(Button button, Action action, bool repeat)
     {
+        button.ClassId = "NoTap";   // the controls play their own sounds (the global button tap would double them)
         button.Pressed += (_, _) =>
         {
             action();

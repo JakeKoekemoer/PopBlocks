@@ -1,0 +1,30 @@
+PopBlocks is a falling-block colour puzzle you can play anywhere. No internet needed, no ads, nothing to buy.
+
+Drop the pieces and line up four or more blocks of the same colour, sideways or up and down, and they burst. The blocks above settle downward, which can set off another burst. Chain reactions score big, with chains worth up to x5.
+
+STORY MODE
+- 200 levels across eight regions, from the Forgotten Garden to the Heart of the Spectrum, followed by an endless band of extra levels
+- Restore a broken world with Pip, your guide. The story is told in short scenes that you can always skip
+- Every level starts with a pile built just for you, gives you goals and a limited number of pieces. Meet every goal before the pieces run out
+- Goals include reaching a score, popping a number of blocks, popping one colour, making a chain, popping one big group, clearing the board and making separate chains. Some levels combine several goals
+- Every level is checked to be winnable, and you never need upgrades to finish the campaign
+- Stuck? Swap a level for a new one with a reroll. It costs a little gold, less after every try, and it is free after 10 tries
+- Later regions bring new twists, including boards that are drawn upside down
+
+CLASSIC MODE
+Start from an empty board and keep going. The pieces speed up as your score grows. Beat your personal best, and earn gold for every block you pop. Want the same pieces again? Start a run from a seed.
+
+LEARN AT YOUR OWN PACE
+Ten short coached lessons teach moving, rotating, dropping, chains, moves and goals. You are offered them once, and you can replay them any time from the menu.
+
+GROW YOUR WORKSHOP
+Clear a level for the first time to earn gold, pop blocks in Classic to earn more, and earn more still by restoring regions and unlocking achievements. Spend it in Bram's workshop on helpers such as seeing more of the next pieces, extra moves, taking back your last block and shifting the colours of the next piece. You can also spend it on how the game looks: block skins, burst styles, boards, piece frames and accessories for Pip. Gold can only be earned by playing.
+
+MADE FOR EVERYONE
+- Every colour also has its own symbol on the block, so colour is never the only clue
+- Play with simple gestures (tap to rotate, drag to move, flick down to drop) or with the on-screen buttons, which you can hide
+- The game pauses by itself if you get a call or switch apps
+- Pop effects and sound effects can be switched off in Settings
+
+PRIVATE BY DESIGN
+PopBlocks never connects to the internet. There are no ads, no accounts, no tracking and no in-app purchases. Your progress, and the in-game name you choose, stay on your phone. A small text file in your Documents folder keeps your progress safe through a reinstall, you can delete it in Settings, and you can move your progress to another phone with the save code in Settings.

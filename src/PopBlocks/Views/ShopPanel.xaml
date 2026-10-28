@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PopBlocks.Views.ShopPanel">
+
+    <ScrollView>
+        <VerticalStackLayout x:Name="ItemsHost" Spacing="14" Padding="0,4,0,28" />
+    </ScrollView>
+</ContentView>

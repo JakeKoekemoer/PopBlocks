@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PopBlocks.Views.WardrobePanel">
+
+    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+        <ScrollView Grid.Row="0" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout x:Name="TabsHost" Spacing="6" />
+        </ScrollView>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout x:Name="Host" Spacing="12" Padding="0,4,0,28" />
+        </ScrollView>
+    </Grid>
+</ContentView>

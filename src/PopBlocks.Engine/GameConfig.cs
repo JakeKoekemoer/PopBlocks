@@ -16,6 +16,14 @@ public static class GameConfig
     public const int MinGroupSize = 4;
     public const int ColourFamilies = 5;
 
+    /// <summary>
+    /// A "solid" piece is one that is already a burst-sized group of a single colour all by itself (say a one-colour
+    /// square). Landing never pops one: its cells go dormant and wait until another block of that colour joins them.
+    /// This is the chance that the generator lets a would-be solid piece stay solid; every other would-be solid piece
+    /// is quietly recoloured so it is not. Roughly 1 piece in 60 comes out solid at 0.15.
+    /// </summary>
+    public const double SolidPieceChance = 0.15;
+
     // ---- Speed (spec section 5.3) ----
     public const int InitialFallIntervalMs = 800;
     public const int MinFallIntervalMs = 140;

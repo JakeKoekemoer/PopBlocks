@@ -21,6 +21,7 @@ public static class PlacementPreview
         var landed = piece.Moved(0, distance);
         foreach (var c in landed.Cells)
             copy[landed.X + c.X, landed.Y + c.Y] = c.Colour;
+        ColourMatcher.MarkDormant(copy, landed.Cells.Select(c => (landed.X + c.X, landed.Y + c.Y)));
 
         int waves = 0;
         while (true)

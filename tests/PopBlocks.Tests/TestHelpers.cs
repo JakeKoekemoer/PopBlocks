@@ -15,7 +15,7 @@ public sealed class ScriptedGenerator : IPieceGenerator
         _pieces.Count > 0 ? _pieces.Dequeue() : Pieces.Pair(CellColour.Lime, CellColour.Lime);
 }
 
-public sealed class InMemorySettings : ILocalSettings
+public sealed class InMemorySettings : ILocalSettings, IClearableSettings
 {
     private readonly Dictionary<string, object> _values = new();
 
@@ -28,6 +28,7 @@ public sealed class InMemorySettings : ILocalSettings
     public void SetBool(string key, bool value) => _values[key] = value;
     public string GetString(string key, string defaultValue) => _values.TryGetValue(key, out var v) ? (string)v : defaultValue;
     public void SetString(string key, string value) => _values[key] = value;
+    public void Clear() => _values.Clear();
 }
 
 public static class Pieces

@@ -82,7 +82,7 @@ Upgrades are data. Everything about one is a `ShopItem` in **`Services/ShopCatal
 1. Add an id constant and a `ShopItem` to `ShopCatalog.Items`: title, description, `ItemCategory`, base effect, and one `ShopTier` per purchasable level (price, effect text, and a `Requirement`: `None`, `RegionRestored(n)` or `Achievement(id)`). Prices must rise with each tier.
 2. Add a save key constant to `SaveKeys` (**a new key; never reuse one**), put it in `SaveKeys.All`, and use it as the item's `SaveKey`. Then add it to the frozen list in `P7Tests.FrozenKeys` and decide whether the save code carries it (`SaveCode` picks up every catalogue item automatically).
 3. Add a property to `ShopService` that turns the level into the number the game uses (like `LensLevel` or `PrismFreeCharges`).
-4. **Make the game read it** at the start of a game: for an engine effect, set it in `GameViewModel.NewGame()` next to `PreviewCount` and `ExtraMoves`; for a visual effect, set it in `GamePage.OnGameStarted`. `ShopPage` and `DevTools.MaxShop` list whatever the catalogue contains.
+4. **Make the game read it** at the start of a game: for an engine effect, set it in `GameViewModel.NewGame()` next to `PreviewCount` and `ExtraMoves`; for a visual effect, set it in `GamePage.OnGameStarted`. `ShopPanel` (the workshop's UPGRADES tab) and `DevTools.MaxShop` list whatever the catalogue contains.
 5. **Do not make levels depend on it.** Move limits are tuned for a player with nothing.
 6. **Tests:** price, effect and persistence in `P4ShopTests`; `P7Tests` checks the new tiers are affordable from the campaign's own income. Update the economy table in `docs/story/economy.md`.
 
@@ -166,7 +166,7 @@ When you change behaviour, update the doc that owns it:
 | A rule, score, goal, tier or control | [Game design](01-game-design.md), the matching engine or story doc |
 | Project structure, DI, persistence keys | [Architecture](02-architecture.md) |
 | A public engine class | [Engine reference](03-engine-reference.md) |
-| Level generation, solver, shop numbers | [Story mode](04-story-mode.md) |
+| Level generation, seeding, the difficulty band, rerolls, Classic gold, solver, shop numbers | [Story mode](04-story-mode.md) (4.8 for seeds, rerolls and Classic gold), and `docs/story/economy.md` for any price |
 | Pages, view model, input | [App layer](05-app-layer.md) |
 | Drawing, effects, palette | [Graphics](06-graphics.md) |
 | Tests or test helpers | [Testing](07-testing.md) |
@@ -194,3 +194,35 @@ Helpers are the only used-up items. Read `docs/story/helpers.md` first.
 3. Stock, price and requirement are a row in `ConsumableCatalog`; the stock key is a new `SaveKeys` entry (frozen list, save code).
 4. Never make a level need it. `LevelSolver` plays without helpers and the fairness tests keep it that way. If the helper changes what the solver models, change `LevelSolver` too.
 5. UI: a button in `GamePage.xaml` bound to a `GameViewModel` command, shown only when allowed and held, disabled with a reason, with a spoken description.
+
+---
+
+## 9.15 Retune the difficulty band
+
+Every level number has a band of acceptable *hardness* (`min(2, weakNeed / fullNeed)`, see [Story mode](04-story-mode.md#48-seeded-levels-rerolls-and-classic-gold)) in `Levels/DifficultyBand.cs`. That file is **generated**; never edit it by hand. Retuning means measuring again:
+
+1. **Run the sweep** (about two minutes on a desktop):
+
+   ```
+   set POPBLOCKS_SWEEP_CSV=E:\PopBlocks\docs\story\seed-sweep.csv
+   dotnet test tests/PopBlocks.Tests --filter "FullyQualifiedName~Run_the_sweep_when_asked"
+   ```
+
+   It builds `POPBLOCKS_SWEEP_SEEDS` (default 50) candidates for every level 1 to 220 and writes `level, seed, verified, memoryOk, fullNeed, weakNeed, hardness, startBlocks, buildMs, weakMs`. `verified` means the bot wins *and* a person could play its plan in the real engine.
+2. **Write the band** from the CSV:
+
+   ```
+   set POPBLOCKS_BAND_FROM_CSV=E:\PopBlocks\docs\story\seed-sweep.csv
+   set POPBLOCKS_BAND_TO=E:\PopBlocks\src\PopBlocks.Engine\Levels\DifficultyBand.cs
+   dotnet test tests/PopBlocks.Tests --filter "FullyQualifiedName~Write_the_band_table_when_asked"
+   ```
+
+   The percentiles (20th to 80th for the band, 10th to 90th for the guard rails), the smoothing window (5 levels), the soft-start length (5 at a tier start, 2 after each introduction level) and the introduction levels (read from the `RegionRules` constants) are constants at the top of `SeedSweep.cs`.
+3. **Run the whole suite and the fuzz** (7.6). Then commit the CSV and the generated file together.
+4. **Playtest the edges**: five seeds at each band edge on three levels per tier, against the notes in `docs/story/p3-playtest.md` to `p6-playtest.md`. Hardness is a proxy for how hard a person finds a board. If an edge feels wrong, change the percentiles and repeat from step 2.
+
+Other numbers live in `SeedingConfig.cs`: the number of attempts (24) and time budget (2 s) of a roll, the loading card thresholds, the free-reroll failure count (10), the Classic gold rate, the name length. Check roll time on a low-end phone with the dev menu's **TIME THE GATE ON THIS PHONE**; if the 95th percentile is above about a second, lower the attempt count or drop the weak-bot run for levels where it is not needed.
+
+A band change affects only levels rolled *after* it. A level already assigned keeps its stored seed, so retuning cannot change a level a player is on. The flip side: a level found to be broken after release cannot be fixed by retuning alone.
+
+If you change a rule the solver mirrors (9.9), also rerun the sweep: `weakNeed` and `fullNeed` come from the solver.

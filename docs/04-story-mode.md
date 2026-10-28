@@ -25,8 +25,8 @@ A level is one immutable `LevelDefinition` record. It is *data*; the engine inte
 
 ### Why levels are data plus seeds
 
-- **Determinism.** The same number gives the same pile, pieces, goals and limit on every device and every run. Retrying a level is therefore fair (same puzzle), and a bug report "level 87 is impossible" is reproducible.
-- **Endless without storage.** Nothing is stored per level. Level 5,000 exists as soon as someone asks for it.
+- **Determinism.** The same number *and seed* gives the same pile, pieces, goals and limit on every device and every run. Retrying a level is therefore fair (same puzzle), and a bug report "level 87 is impossible" is reproducible from the level number and the seed the levels page shows. Different players get different seeds, so they get different levels (see 4.8); the original number-based level is seed 0 (`LevelSeed.Legacy`).
+- **Endless without storage.** Nothing is stored per level except the seed of the current level and of each cleared one. Level 5,000 exists as soon as someone asks for it.
 - **Testable.** A level is checked by replaying a plan through the real engine (see 4.5).
 
 ## 4.2 Hand-made levels (the ten lessons, and Story level 11)
@@ -53,7 +53,7 @@ Lesson 10 is generated and solver-limited, but still `IsTutorial`. Story level 1
 
 ## 4.3 Generated levels (12 and up)
 
-`LevelCatalog.Generated(n)` builds a level in these steps. It is deterministic in `n`.
+`LevelCatalog.Generated(n, seed)` builds a level in these steps. It is deterministic in `n` and the seed; with the legacy seed 0 it is exactly the level the game has always built for `n` (`LevelSnapshotTests` freezes that, and only that). A non-zero seed replaces `BoardSeed`, `PieceSeed` and the colour of a colour goal, and nothing else: every step below that depends on the level *number* (tier, region rule, special conditions, goal kinds) is unchanged by a seed.
 
 1. **Tier and progress.** `StoryConfig.TierFor(n)` and `ProgressInTier(n)` (0 to 1 through the band).
 2. **Region rule.** `RegionRules.For(n)` (in `Story/RegionRules.cs`) is the one table that gives each region its character: goal-kind weights, the chance of two or three goals, a tighter or looser move limit, taller or more scattered piles, and a repeating **variant** cycle from a given level (0 rainbow, 1 tall pile, 2 tight moves, 3 shape-heavy, 4 scattered). The generator reads the rule and keeps no level numbers of its own.
@@ -61,7 +61,7 @@ Lesson 10 is generated and solver-limited, but still `IsTutorial`. Story level 1
 4. **Special conditions.** `RegionRules.Flips(n)` and `Penalises(n)`: a few listed levels in region 6 (128, 138, 146; 134, 141, 148), then from the Citadel (151) on a pattern (`n % 4 == 3` flips, `n % 3 == 0` penalises from 156). Finales never flip or penalise. Level 200 is built specially from the chain-set goal.
 5. **Goals.** `PickKinds` chooses which goal kinds appear. A kind only becomes *available* once it has been introduced (colour goals from 13, clear-down from 16, chain from 20, big group from 26), and the introduction level always uses the new kind. From 32 on a second goal appears with a probability that grows by tier (always at 32 itself), and the region rule can raise it; from 161 a third can appear (always at 161). A penalty level always includes a Score goal. `MakeGoal` sizes each goal from the tier's *demand* (roughly how many good pieces the level asks for).
 6. **Prove it.** The solver plays the draft level. If it wins, the move limit becomes `ceil(botMoves * slack) + add`, where slack shrinks as tiers get harder (`SlackFor`). If the bot fails, the goals are eased by 10% per attempt (up to 8 attempts) until it wins.
-7. **Fallback.** If even the eased goals fail (should not happen) a plain generous level (pop 8 blocks, 40 moves) is returned so the player is never stuck.
+7. **Fallback.** If even the eased goals fail (should not happen) a plain generous level (pop 8 blocks, 40 moves) is returned so the player is never stuck. That level is **not bot-verified**; `BuiltLevel.Verified` says so, and a rolled seed never accepts one (4.8).
 8. **Intro card.** Levels in the `Intros` table get a coaching card describing what is new.
 
 All tuning tables are at the bottom of `LevelCatalog.cs`: `ProfileFor`, `ExoticShareFor`, `FallFor`, `DemandFor`, `SlackFor`, `MakeGoal`. To make levels harder or easier, change those, not the algorithm.
@@ -137,13 +137,56 @@ Every upgrade is a row in **`ShopCatalog`** (`Services/ShopCatalog.cs`): an id, 
 | Chain Sense | 700 (region 3) | `ChainSenseOwned`: the landing outline glows when the drop would start a chain. |
 | Prism Reserve | 600 (region 5), 1,200 (region 7) | `PrismFreeCharges`: free Prism Shifts per level. |
 
-Two helpers are *used up* rather than owned: **Second Chance** (150) and **Prism Shift** (100), handled by `ConsumableInventory`. Looks are on the paint shelf (`CosmeticCatalog`). Prices, requirements and the reasoning for the numbers are in `docs/story/economy.md`; the helper rules are in `docs/story/helpers.md`.
+Two helpers are *used up* rather than owned: **Second Chance** (150) and **Prism Shift** (100), handled by `ConsumableInventory`. Looks are on the workshop's LOOKS tab (`CosmeticCatalog`). Prices, requirements and the reasoning for the numbers are in `docs/story/economy.md`; the helper rules are in `docs/story/helpers.md`.
 
 The values are pushed into the engine and the effects at the **start of each game** (`GameViewModel.NewGame`, `GamePage.OnGameStarted`), so buying something mid-level never changes the level in progress.
 
 The game's difficulty and the move limits are tuned for a player with **no** upgrades and no helpers. Everything here is a convenience, not a requirement. Keep it that way: if a level can only be cleared with a purchase, the generator's slack is wrong. `P4GateTests` and `P7Tests` prove every level winnable by the bot with nothing bought, that the ending is reachable with no purchase and no optional memory, and that everything for sale is affordable from the campaign's own income.
 
-**The workshop** (`WorkshopService`, `WorkshopPage`) is Bram's hub. Its lamps light as regions are restored; lighting a corner is the only thing region progress changes there. Every door (workbench, paint shelf, archive, achievements, journal) is open from the start, so the workshop never stands between the player and the story.
+**The workshop** (`WorkshopService`, `WorkshopPage`) is Bram's one-screen hub with four tabs: UPGRADES, LOOKS, SUPPLIES and TROPHIES (achievements and the journal). Each tab has a lamp that lights as a region is restored (0, 3, 5 and 6); lighting a lamp is the only thing region progress changes there. Every tab is open from the start, so the workshop never stands between the player and the story. The Archive is deliberately not a workshop station: it opens from the main menu, and having two doors to it was the kind of repeat the workshop used to have (the workbench and the mechanic's bench were the same shop, and the paint shelf and the shop's LOOKS tab held the same cosmetics).
 
 To add or change an upgrade see [Extending](09-extending.md).
 
+
+## 4.8 Seeded levels, rerolls and Classic gold
+
+Code: `Levels/LevelSeed.cs`, `LevelRoller.cs`, `DifficultyBand.cs` (generated), `GateTiming.cs`; `Services/PlayerIdentity.cs`, `StoryLevels.cs`, `SeedStore.cs`, `RerollPricing.cs`, `ClassicGold.cs`; `SeedingConfig.cs` (every number in one place). Tests: `SeedMixTests`, `SeededLevelStructureTests`, `SeededCatalogueReplayTests`, `RerollTests`, `ClassicGoldTests`, `SeedSaveTests`, `PlayerIdentityTests`, `LoadingRecapTests`, `P7Tests`. The sweep tool is `SeedSweep`. The spec this implements lives in `docs/seeded-levels-plan.json`.
+
+### The seed
+
+A player has a **salt**: `Hash32(utf8(name), installNonce)` (FNV-1a), computed once when they answer the name prompt and stored as `player_salt`. A Story level's seed is `Mix32(salt, level, reroll, attempt) & 0x3FFFFFFF` (never 0). `Mix32` is a splitmix-style mixer with golden-value tests; `string.GetHashCode()` is never used because it differs between runs. **Seed 0 is "legacy"**: the original number-based level, used for levels cleared before seeds existed, for every old test and for the frozen snapshot.
+
+### The roll and the gate
+
+`LevelCatalog.Roll(level, salt, reroll)` (`LevelRoller`) tries `attempt` = 0 to 23 (or two seconds, `SeedingConfig`), building each candidate with `LevelCatalog.Build(level, seed)` and keeping the first that passes:
+
+1. **Hard requirements.** The full bot wins (`Verified`, not the plain fallback level); the move limit is at least 6; a memory level (offsets 11 and 17, never a finale) has its objective; and **the bot's plan can be played in the real engine** (`LevelSolver.PlanIsPlayable`). The last one matters: the bot's lightweight rules ignore that a tall pile can block a slide, so about one candidate in 1,500 has a plan a person could not carry out; "bot-verified" would not mean what it says.
+2. **The band.** `hardness = min(2, weakNeed / fullNeed)`, where the weak bot (`SolveOptions.Weak`) takes the top-1 placement with no look-ahead. A board only the look-ahead bot can win is harder for a person; tightness of the move limit is constant by construction. `DifficultyBand` holds, per level, the 20th to 80th percentile of hardness over a sweep, smoothed over five levels each side inside the tier, and held to the median of the previous five levels at a tier start and for two levels after each new mechanic.
+3. **Guard rails** (a preference, not a rule): a pile size or solve length outside the 10th to 90th percentile of the neighbouring levels is an outlier. A candidate inside them always beats one outside, but if every candidate is an outlier the closest is still used.
+
+If nothing fits, the verified candidate closest to the band is used. An unverified level is never returned. A roll is deterministic for `(salt, level, reroll)` apart from the time budget.
+
+### Failures, reroll and the first clear
+
+`StoryLevels` (one object, `GameViewModel` talks to it) keeps the rules of this section.
+
+| Situation | Seed used |
+|---|---|
+| Current level (HighestCleared + 1), first entry | `Roll(level, salt, 0)`, stored as `current_level_seed` |
+| Current level, later entries | The stored seed |
+| Cleared level with a recorded first-clear seed | The recorded seed |
+| Cleared before seeds existed, no record | Legacy seed 0 (the player replays the level they beat) |
+| Reroll on a cleared level | `Roll(level, salt, 1000 + k)`, `k` counted for this session. Free. Never stored. |
+
+- **Failures** (`RecordFailure`): a loss, or a restart after at least one piece was placed, on the current level only. Saved on every increment, not reset by a reroll, reset when the level is cleared. Leaving to the menu, replays and rerolling away from a run do not count.
+- **Reroll** (`TryReroll`): offered from the first failure, and always on a cleared level. `RerollPricing.Price = (reward * (10 - min(failures, 10)) + 9) / 10`: 12, 11, 6, 2, 0 gold on level 12 at 0, 1, 5, 9 and 10 failures. Not enough gold changes nothing. On the current level the new reroll count and the cleared seed are saved first and the gold is taken second, so a crash in between gives a free reroll rather than a lost payment; `Roll` is deterministic for a reroll count, so a restart gives the same new level.
+- **First clear**: `PlayerProgress.Complete` writes `level:seed` to `first_clear_seeds` in the same place gold is paid (never overwriting, never recording the legacy seed), then resets the current-level state.
+- **Prefetch**: the next level is rolled when a level begins; after a failure the next reroll is rolled too; both are cancelled when the player leaves the level.
+
+### The screens
+
+The name prompt (main menu, once, before the tutorial offer), the REROLL button and "?" hint on the failed and pause panels (words only: the price, "Free in N more tries", "Fresh level, free"), the loading card, the seed on the Map page (tap a level to see its details and its region; tap the seed to copy it), the Rename card in Settings, the Classic SEED link, and the dev menu (play a level with a typed seed, set failures, time the gate on the phone).
+
+### Classic gold
+
+`GameEngine.ClassicGoldTenths` counts tenths per block popped at the Classic level of the pop; `ClassicGold.Bank` pays whole gold and carries the rest, exactly once per banking event. A Classic run can start from a seed (`GameSetup.ClassicRun`, `SeededPieceGenerator`: piece `i` from `Random(Mix32(seed, i))`); a typed seed never sets `best_score`.

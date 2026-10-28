@@ -119,9 +119,7 @@
                         MinimumWidthRequest="0" Clicked="OnShopClicked" />
                 <Button Grid.Row="1" Grid.Column="1" Text="ARCHIVE" Style="{StaticResource SecondaryButton}"
                         MinimumWidthRequest="0" Clicked="OnArchiveClicked" />
-                <Button Grid.Row="2" Grid.Column="0" Text="LEVELS" Style="{StaticResource GhostButton}"
-                        HorizontalOptions="Center" Clicked="OnLevelsClicked" />
-                <Button Grid.Row="2" Grid.Column="1" Text="TUTORIAL" Style="{StaticResource GhostButton}"
+                <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="TUTORIAL" Style="{StaticResource GhostButton}"
                         HorizontalOptions="Center" Clicked="OnTutorialClicked" />
             </Grid>
 
@@ -131,71 +129,38 @@
                    TextColor="{StaticResource TextSecondary}"
                    HorizontalOptions="Center" />
 
-            <!-- Settings -->
-            <Border Style="{StaticResource Glass}" Padding="18,8" Margin="0,4,0,0">
-                <VerticalStackLayout Spacing="2">
-                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
-                        <VerticalStackLayout VerticalOptions="Center">
-                            <Label Text="Pop effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                            <Label Text="Neon glow and burst when blocks pop" FontSize="12" TextColor="{StaticResource TextSecondary}" />
-                        </VerticalStackLayout>
-                        <Switch x:Name="EffectsSwitch"
-                                Grid.Column="1"
-                                OnColor="{StaticResource Accent}"
-                                Toggled="OnEffectsToggled" />
-                    </Grid>
-                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
-                        <VerticalStackLayout VerticalOptions="Center">
-                            <Label Text="Landing guide" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                            <Label Text="Shows where the piece will land. Bold is thicker and easier to see." FontSize="12" TextColor="{StaticResource TextSecondary}" />
-                        </VerticalStackLayout>
-                        <Button x:Name="GuideButton"
-                                Grid.Column="1"
-                                Style="{StaticResource SecondaryButton}"
-                                MinimumWidthRequest="0"
-                                WidthRequest="120"
-                                HeightRequest="40"
-                                CornerRadius="20"
-                                FontSize="13"
-                                Clicked="OnGuideClicked" />
-                    </Grid>
-                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
-                        <VerticalStackLayout VerticalOptions="Center">
-                            <Label Text="Reduced motion" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                            <Label Text="No screen shake, flashes or confetti. The game plays the same." FontSize="12" TextColor="{StaticResource TextSecondary}" />
-                        </VerticalStackLayout>
-                        <Switch x:Name="MotionSwitch"
-                                Grid.Column="1"
-                                OnColor="{StaticResource Accent}"
-                                Toggled="OnMotionToggled" />
-                    </Grid>
-                    <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
-                        <VerticalStackLayout VerticalOptions="Center">
-                            <Label Text="Sound effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                            <Label Text="Beeps for turning, placing, dropping and popping" FontSize="12" TextColor="{StaticResource TextSecondary}" />
-                        </VerticalStackLayout>
-                        <Switch x:Name="SoundSwitch"
-                                Grid.Column="1"
-                                OnColor="{StaticResource Accent}"
-                                Toggled="OnSoundToggled" />
-                    </Grid>
-                    <Grid x:Name="BoardStyleRow" ColumnDefinitions="*,Auto" MinimumHeightRequest="48" IsVisible="False">
-                        <VerticalStackLayout VerticalOptions="Center">
-                            <Label Text="Board style" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                            <Label Text="Earned by restoring regions. Looks only." FontSize="12" TextColor="{StaticResource TextSecondary}" />
-                        </VerticalStackLayout>
-                        <Button x:Name="BoardStyleButton"
-                                Grid.Column="1"
-                                Style="{StaticResource SecondaryButton}"
-                                MinimumWidthRequest="0"
-                                WidthRequest="120"
-                                HeightRequest="40"
-                                CornerRadius="20"
-                                FontSize="13"
-                                Clicked="OnBoardStyleClicked" />
-                    </Grid>
-                </VerticalStackLayout>
-            </Border>
+            <!-- Classic seed: optional, and out of the way. A seed gives the same pieces again. It never touches the Story. -->
+            <VerticalStackLayout Spacing="6">
+                <Button x:Name="SeedLink"
+                        Text="SEED"
+                        Style="{StaticResource GhostButton}"
+                        HorizontalOptions="Center"
+                        Clicked="OnSeedLinkClicked"
+                        SemanticProperties.Description="Classic seed. Optional: play Classic with a seed to get the same pieces again." />
+                <Grid x:Name="SeedPanel" IsVisible="False" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Entry x:Name="SeedEntry"
+                           Keyboard="Numeric"
+                           Placeholder="Classic seed (empty is random)"
+                           MaxLength="10"
+                           TextColor="{StaticResource TextPrimary}"
+                           SemanticProperties.Description="Classic seed, a number from 0 to 2147483647. Leave empty for a random one." />
+                    <Button Grid.Column="1" Text="CLEAR" Style="{StaticResource GhostButton}" Clicked="OnSeedClearClicked" />
+                </Grid>
+                <Label x:Name="SeedNote"
+                       IsVisible="False"
+                       FontSize="12"
+                       TextColor="{StaticResource TextSecondary}"
+                       HorizontalTextAlignment="Center"
+                       Text="A run with a seed still pays gold, but it never sets your best score." />
+            </VerticalStackLayout>
+
+            <!-- Settings: pop effects, landing guide, motion, sound, board style, name and saved data all live on their own page -->
+            <Button Text="SETTINGS"
+                    Style="{StaticResource SecondaryButton}"
+                    HorizontalOptions="Center"
+                    WidthRequest="260"
+                    Margin="0,4,0,0"
+                    Clicked="OnSettingsClicked" />
 
             <Button Text="ABOUT" Style="{StaticResource GhostButton}" HorizontalOptions="Center" Clicked="OnAboutClicked" />
             <Button x:Name="DevButton" Text="DEV MENU" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
@@ -211,6 +176,58 @@
 
         </VerticalStackLayout>
     </ScrollView>
+
+    <!-- First launch (and the first launch after names were added): what should Pip call you? Skippable. The name is only
+         for the game; it never leaves the phone, and it never changes a level once chosen. -->
+    <Grid x:Name="NamePrompt" IsVisible="False" BackgroundColor="#EE070A16">
+        <Border Style="{StaticResource Glass}"
+                BackgroundColor="#F2141B38"
+                VerticalOptions="Center"
+                Margin="24,0"
+                Padding="22,22">
+            <VerticalStackLayout Spacing="14">
+                <Label Text="What should Pip call you?"
+                       FontSize="24"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource TextPrimary}" />
+                <Label Text="Pick any name. It is only for the game and never leaves your phone."
+                       Style="{StaticResource BodyLabel}"
+                       FontSize="15" />
+                <Entry x:Name="NameEntry"
+                       Placeholder="Your name"
+                       MaxLength="20"
+                       ReturnType="Done"
+                       TextColor="{StaticResource TextPrimary}"
+                       Completed="OnNameContinueClicked"
+                       SemanticProperties.Description="Your name, up to 20 characters" />
+                <Button Text="CONTINUE" Style="{StaticResource PrimaryButton}" Clicked="OnNameContinueClicked" />
+                <Button Text="SKIP" Style="{StaticResource SecondaryButton}" Clicked="OnNameSkipClicked"
+                        SemanticProperties.Hint="Uses the name Traveller" />
+                <!-- A reinstall that did not find its save file by itself: choose it by hand. -->
+                <Button Text="I HAVE A SAVE FILE" Style="{StaticResource GhostButton}" Clicked="OnNameFindSaveClicked"
+                        SemanticProperties.Hint="Choose a PopBlocks save file to restore your progress" />
+            </VerticalStackLayout>
+        </Border>
+    </Grid>
+
+    <!-- Shown after progress is restored from the first-launch prompt: the game has to be closed and opened again. -->
+    <Grid x:Name="RestoredOverlay" IsVisible="False" BackgroundColor="#EE070A16">
+        <Border Style="{StaticResource Glass}"
+                BackgroundColor="#F2141B38"
+                VerticalOptions="Center"
+                Margin="24,0"
+                Padding="22,22">
+            <VerticalStackLayout Spacing="14">
+                <Label Text="Progress restored"
+                       FontSize="24"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource TextPrimary}" />
+                <Label x:Name="RestoredText"
+                       Style="{StaticResource BodyLabel}"
+                       FontSize="15" />
+            </VerticalStackLayout>
+        </Border>
+    </Grid>
 
     </Grid>
 </ContentPage>

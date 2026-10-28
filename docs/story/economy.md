@@ -6,7 +6,9 @@ checked by tests (`P4ShopTests`, `P4GateTests`, `AchievementTests`); change them
 
 ## Rules
 
-1. **Gold is paid on first clear only.** Replaying a level, reloading a save or skipping a scene never pays again.
+1. **Gold is paid on first clear only, with one exception: Classic.** Replaying a Story level, reloading a save or
+   skipping a scene never pays again. Classic pays by the block popped (see Income), in whole gold, once per banking
+   event, with the leftover tenths carried in `classic_gold_carry`.
 2. **Nothing needed to finish the game costs gold.** Every level 1-200 is winnable by the bot solver with zero
    purchases and zero abilities (`AllLevels_1_to_200_BotWinnable_WithNoUpgrades`). The ending does not depend on any
    optional collectible.
@@ -31,8 +33,15 @@ On top of that:
   50, 75, 100, 125, 150, 175, 200, 225. Total **1,100**.
 * **Achievements** (13, one-off): total **910** (`AchievementCatalog.TotalGold`).
 * "Beyond the Spectrum" levels above 200 keep paying level gold, so a finished game still earns.
+* **Classic** (`SeedingConfig.ClassicTenthsPerBlock`, `ClassicGold`): tenths of a gold per block popped, by Classic level
+  (`1 + score / 800`): 1 for levels 1-4, 2 for 5-8, 3 for 9-12, 4 for 13-16 and 5 from 17. Every wave counts, chain
+  waves included, with no chain multiplier; drop points never count. A decent early run pays about 15 gold, roughly one
+  early reroll. Paid when the game ends, when the player leaves Classic and when the app goes to the background; a
+  run on a typed seed pays the same but never sets a best score. These numbers are starting values: tune them against
+  real reroll prices in a playtest.
 
-A player who finishes the campaign has earned about **14,000** gold.
+A player who finishes the campaign has earned about **14,000** gold from the Story alone; Classic is extra, and is
+what a stuck player can turn to for the price of a reroll.
 
 ## Sinks
 
@@ -42,6 +51,7 @@ A player who finishes the campaign has earned about **14,000** gold.
 | P4 | Lookout 3-4 (900, 1,500), Colour Lens (500, 1,100), Chain Sense (700) | 4,700 |
 | P5 | Cosmetics: 7 skins (80-320), 6 bursts (60-260), 6 boards (50-150) | 2,960 (`CosmeticCatalog.TotalPrice`) |
 | P6 | Prism Reserve (600 + 1,200) and the two helpers (Second Chance 150, Prism Shift 100 each, up to 3 held) | 1,800 for the upgrade, then recurring: at most 2 x 3 held = 750 gold of stock at a time |
+| Seeded levels | **Reroll**: the level's first-clear gold × (10 − failures) / 10, rounded up, free from the 10th failure, always free on the opening levels and on replays of cleared levels (`RerollPricing`) | 11 to 114 for a first reroll on levels 12 to 180; **0** at 10 failures; recurring, but never needed |
 
 Everything above adds up to roughly **12,500**, which leaves slack: a player who plays the whole campaign,
 finds some memories and earns most achievements can afford the lot by the end, and a player who skips optional content

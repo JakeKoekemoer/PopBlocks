@@ -53,7 +53,7 @@ Graphics (GameDrawable, ...)       draws engine state; never changes it
 - **GameViewModel** is the only thing that drives the engine. It turns engine changes into bindable properties, owns the dispatcher timer that calls `Tick()`, runs the tutorial controller, and pays gold when a level is completed.
 - **Graphics** only reads the engine. Drawing code never decides a rule. If drawing needs to know something (for example "which cells are about to pop") the engine exposes it as state (`PendingGroups`).
 
-Menu pages (`MainPage`, `LevelSelectPage`, `ShopPage`, `AboutPage`) are thin. They read services (`PlayerProgress`, `ShopService`, `GameSettings`) directly and navigate. They have no view model because they have almost no logic worth testing; the testable logic lives in the services in the engine project.
+Menu pages (`MainPage`, `WorldMapPage`, `WorkshopPage`, `SettingsPage`, `AboutPage`) are thin. They read services (`PlayerProgress`, `ShopService`, `GameSettings`) directly and navigate. They have no view model because they have almost no logic worth testing; the testable logic lives in the services in the engine project.
 
 ## 2.3 Dependency injection and start-up
 
@@ -61,8 +61,8 @@ Menu pages (`MainPage`, `LevelSelectPage`, `ShopPage`, `AboutPage`) are thin. Th
 
 | Lifetime | Types | Reason |
 |---|---|---|
-| Singleton | `ILocalSettings`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
-| Transient | `GamePage`, `GameViewModel`, `LevelSelectPage`, `ShopPage`, `WorkshopPage`, `WardrobePage`, `ArchivePage`, `AchievementsPage`, `JournalPage`, `DevMenuPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
+| Singleton | `ILocalSettings` (the `PersistentSettings` wrapper over `LocalSettingsService`), `ISaveFileStore`, `HighScoreService`, `GameSettings`, `PlayerProgress`, `ShopService`, `ConsumableInventory`, `UnlockStore`, `CampaignService`, `CosmeticLoadout`, `CosmeticShop`, `LifetimeStats`, `EndingService`, `AchievementService`, `WorkshopService`, `DevTools`, `ISoundPlayer` (now only the fallback), `AudioSettings`, `IAudioOutput`, `GameAudio`, `MainPage` | One source of truth for saved data. The main page is the root of navigation and lives for the whole run. |
+| Transient | `GamePage`, `GameViewModel`, `WorldMapPage`, `WorkshopPage`, `ShopPanel`, `WardrobePanel`, `TrophiesPanel`, `AchievementsPanel`, `JournalPanel`, `ArchivePage`, `DevMenuPage`, `AboutPage` | A fresh game page and view model per game, so no state leaks between levels. |
 
 Rules to keep:
 
@@ -109,7 +109,7 @@ A separate ~60 fps **animation timer** in `GamePage` repaints the board only whi
 
 ## 2.6 Persistence
 
-The engine defines `ILocalSettings` (int, bool, string get/set). The app implements it with MAUI `Preferences` (Android SharedPreferences) in `Services/LocalSettingsService.cs`; the tests implement it in memory. Services in the engine depend only on the interface.
+The engine defines `ILocalSettings` (int, bool, string get/set). The app implements it with MAUI `Preferences` (Android SharedPreferences) in `Services/LocalSettingsService.cs`; the tests implement it in memory. Services in the engine depend only on the interface. What the services are actually given is `PersistentSettings`, a wrapper around that store that also keeps the durable save file (see below).
 
 Why: save logic (gold, unlocks, purchases) is some of the most important code in the game, because a bug there loses a player's progress. Putting it behind an interface keeps it fully testable.
 
@@ -126,7 +126,13 @@ Why: save logic (gold, unlocks, purchases) is some of the most important code in
 | `ending_theme` | `EndingService` | The look chosen after the ending. |
 | `stat_*` | `LifetimeStats` | Personal bests and counters only (largest group, longest chain, ...). |
 | `best_score` | `HighScoreService` | Classic personal best. |
+| `player_name` | `PlayerIdentity` | The in-game name (1 to 20 characters). Display only. |
+| `player_salt` | `PlayerIdentity` | Hash of the name and a random install number, set once and never recomputed (so renaming changes no level). 0 means not set: the player has not been asked yet. |
+| `current_level_for`, `current_level_seed`, `current_level_rerolls`, `current_level_failures` | `SeedStore` / `StoryLevels` | The player's current level (HighestCleared + 1): which level the other three belong to, its seed (0 = not yet assigned), the rerolls used and the failures so far. Ignored on load unless `current_level_for` is the current level, so a restored save code with mismatched fields cannot plant a seed or failure count on another level. |
+| `first_clear_seeds` | `SeedStore` (written by `PlayerProgress.Complete`) | Comma-separated `level:seed` pairs, one per cleared level, never overwritten. A cleared level with no entry replays the original (legacy) level. A new save-code field kind, validated pair by pair (level 1 to 100,000, seed 1 to 1,073,741,823, no duplicates, at most 5,000 pairs). |
+| `classic_gold_carry` | `ClassicGold` | Tenths of a gold earned in Classic and not yet paid (0 to 9). |
 | `blast_effects`, `show_ghost`, `landing_guide_style`, `reduced_motion`, `controls_collapsed`, `sound_effects` | `GameSettings` | Options. |
+| `audio_master`, `audio_music`, `audio_sfx`, `audio_ambience` (0 to 100), `audio_mute_master`, `audio_mute_music`, `audio_mute_ambience`, `audio_reduced`, `audio_track` (0 to 25: the song chosen on the pause screen, 0 is automatic) | `AudioSettings` | Volumes, mutes and the reduced-audio mode (see [11](11-audio.md)). "Effects off" is the original `sound_effects` key. |
 
 Story state is **derived, not stored twice**: a region's state comes from `PlayerProgress.HighestCleared`, and everything else the story needs is one more id in `UnlockStore`. Rewards are granted through `UnlockStore.Unlock`, which returns true only the first time, so a reward is paid once however often a level is replayed or a scene is skipped.
 
@@ -134,21 +140,42 @@ Story state is **derived, not stored twice**: a region's state comes from `Playe
 
 `Services/SaveCode.cs` turns the keys above (except the format version) into one line of text, `PB1.` plus checksummed, compressed, URL-safe base64, for moving progress to a new phone or past a reinstall. It needs no file access, permission or network. Reading a code never trusts it: the checksum is checked before unpacking, the unpacked size is capped, only known keys are accepted, values are range-checked and clamped, ids are character-checked, and nothing is written unless the whole code is valid. The app must be restarted after a restore, because services read their data once at start. `SaveCodeTests` covers the round trip, tampering, truncation, a forged compression bomb and out-of-range values; a test also fails when a new key is added without deciding whether the code should carry it.
 
+### Persistent save file
+
+Preferences are deleted when the app is uninstalled, so `Services/PersistentSettings.cs` wraps the real store and keeps a durable copy. It passes every get and set straight through, and a moment after a change (1.5 s, collapsed into one write; also flushed from `MainActivity.OnPause`) it writes `SaveCode.Export` of the whole save through an `ISaveFileStore`. The Android store (`Platforms/Android/AndroidSaveFileStore.cs`) uses MediaStore to keep `Documents/PopBlocks/popblocks-save.txt`, which Android does not remove with the app and which needs no permission on Android 10 and newer. Below Android 10 the store reports itself unavailable and the game relies on the save code alone (a storage permission would break the "no permissions" promise).
+
+The file holds exactly one save code, so everything `SaveCode` guarantees applies to it, and a player can paste its text into RESTORE.
+
+How it stays safe:
+
+- **Restore happens once, on a fresh install only.** `MauiProgram` calls `RestoreIfFresh()` after the container is built and before `SaveMigrator`/any service reads data. "Fresh" means no `save_version`, no `progress_highest`, no `gold` and no `best_score`. An install that already has progress is never overwritten from the file. The result is kept for `MainPage` to tell the player once (`TakeRestoreNotice`).
+- **A file that exists but cannot be used is never replaced automatically.** If the file cannot be opened or is not a valid save, `PersistentSettings` stops writing (status `Blocked`) and leaves it untouched until the player chooses BACK UP NOW.
+- **Deleting is the player's choice.** `DeleteFile()` removes the file and turns the mirror off (`save_file_enabled` = false; BACK UP NOW turns it on again). `EraseEverything()` also clears the real store (`IClearableSettings`).
+- **Freezing.** After a restore from a file or code, or an erase, `Freeze()` makes every later write a no-op. The running services still hold the old values in memory, and without this they would write them back over the restore. The app has to be closed and opened again, as it always had to after a restore.
+- `save_file_enabled` is a property of the phone, not of progress, so it is deliberately not in `SaveKeys` or a save code.
+
+If a reinstall cannot see the old file (Android decides which files an install may read), the player can choose it by hand: Settings → FIND MY SAVE FILE, or "I HAVE A SAVE FILE" on the first-launch name prompt. Both use the system file picker (no permission) and the same check-confirm-restore flow as pasting a code (`Views/SaveRestoreFlow.cs`). `PersistentSettingsTests` covers all of the above with an in-memory store.
+
 Changing a key name loses existing players' data. Add new keys; do not rename old ones.
 
 ## 2.7 Design rules to keep
 
 1. **Rules live in the engine, never in drawing or XAML.** If you find yourself computing a game rule in `GameDrawable` or `GamePage`, move it into the engine and expose the result as state.
 2. **One home for each constant.** Gameplay numbers: `GameConfig`. Level bands: `StoryConfig`. Colours, sizes and animation timings: `VisualDesign`. Level tuning tables: the bottom of `LevelCatalog`. Shop prices: `ShopService`. Gold amounts: `GoldRewards`.
-3. **Levels are deterministic.** The same level number must produce the same pile, pieces, goals and move limit on every device and every run. Never use an unseeded `Random` in level generation.
-4. **The engine is single-threaded.** It is called from the UI thread only. The one exception is `LevelCatalog.Get`, which is thread-safe because the next level is generated on a background thread (see 2.8).
+3. **Levels are deterministic.** The same level number *and seed* must produce the same pile, pieces, goals and move limit on every device and every run (`LevelCatalog.Get(level, seed)` is a pure function; seed 0 is the original number-based level). Levels are no longer promised to be the same for every player or after every app update: a roll picks a seed per player, and a later retune of the difficulty band changes which seeds a roll would pick, never a level already stored. Never use an unseeded `Random` in level generation, and never `string.GetHashCode()` for a seed (it differs between runs): use `SeedMix`.
+4. **The engine is single-threaded.** It is called from the UI thread only. The exceptions are `GameAudio` (it owns one worker thread for sound; its public methods only queue work and return at once, and nothing in the audio code touches the game rules), and `LevelCatalog` and `StoryLevels`, which are thread-safe because levels are rolled and generated on background threads (see 2.8).
 5. **Immutable where it is cheap.** `Piece` is immutable (move and rotate return new pieces). `Board` is mutable for speed, with `Clone` and `CopyFrom`.
 6. **No allocations in the hot drawing path where avoidable.** `GameDrawable` reuses buffers; effects use a fixed set of slots.
 7. **Offline, always.** Do not add a package that needs a network permission.
 
 ## 2.8 Level generation threading
 
-Generating a level on the harder tiers runs the solver, which takes a noticeable moment. `GameViewModel.NewGame` therefore starts building the **next** level on a background task as soon as a level begins. `LevelCatalog` caches built levels behind a lock, so the foreground call (`LevelCatalog.Get`) either finds the result already waiting or builds it itself. Failures in the background task are swallowed on purpose: the level is simply built when needed.
+Generating a level on the harder tiers runs the solver, which takes a noticeable moment, and a *roll* (the search for a seed that passes the difficulty gate) builds several candidates. Rolling is therefore always off the UI thread:
+
+- `StoryLevels` owns the rolls. A roll for a level is started once and shared by everyone who asks for it (single flight, keyed by level and reroll number); a roll started early (a prefetch) is simply picked up later. `GameViewModel.NewGame` asks `StoryLevels.TryGetReady`; if the seed is not ready it shows nothing for 300 ms and then the **loading card** (a skippable recap of story already seen, held at least 600 ms, closed by itself when the level is ready), and carries on when `ResolveAsync` completes.
+- A level's seed is known at once when it is stored (the current level), recorded (a cleared level) or rolled ahead. The next level is rolled when a level begins; after a failure the next reroll is rolled too (not before the first failure, to save battery). Prefetches are cancelled when the player leaves the level.
+- `LevelCatalog` caches built levels by `(level, seed)` behind a lock but builds outside it, with a `Lazy` per key so two threads never solve the same level twice. Legacy levels are kept for good; seeded ones are bounded (`SeedingConfig.CacheSize`, oldest dropped), because only the current level, the next and a prefetched reroll are ever needed. A roll primes the cache with the level it already built.
+- Failures in a background roll are forgotten, so asking again tries again; the cancelled or failed task never reaches the player.
 
 ## 2.9 Diagnostics
 

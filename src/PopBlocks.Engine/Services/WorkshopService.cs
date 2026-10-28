@@ -2,35 +2,41 @@ using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Engine.Services;
 
-public enum WorkshopTarget
+/// <summary>
+/// The tabs of Bram's Workshop. The Archive is not here on purpose: it opens from the main menu, and the workshop
+/// does not keep a second door to it.
+/// </summary>
+public enum WorkshopTab
 {
-    None,
-    Shop,
-    Cosmetics,
-    Archive,
-    Achievements,
-    Journal,
+    /// <summary>Permanent upgrades: Lookout, Pop Flair, Spare Moves, Colour Lens, Chain Sense, Prism Reserve.</summary>
+    Upgrades,
+
+    /// <summary>Looks: block skins, burst styles, boards, piece frames and Pip's accessories.</summary>
+    Looks,
+
+    /// <summary>Helpers that are used up: Second Chance and Prism Shift.</summary>
+    Supplies,
+
+    /// <summary>Achievements and the journal: small proofs of things you have done, and your bests.</summary>
+    Trophies,
 }
 
 /// <summary>
-/// One corner of Bram's Workshop. A station lights up as regions are restored; that is its whole job. Every
-/// destination (Archive, Journal, Achievements, the shop) opens from the start whether or not its station is lit,
-/// so the workshop is something to watch grow and never a lock in front of story, accessibility or settings.
+/// One tab of Bram's Workshop and the lamp that burns over it. A lamp lights as regions are restored; that is its whole
+/// job. Every tab opens from the start whether or not its lamp is lit, so the workshop is something to watch grow and
+/// never a lock in front of story, accessibility or settings.
 /// </summary>
-public sealed record WorkshopStation(string Id, string Name, string Description, int RegionNeeded, WorkshopTarget Target);
+public sealed record WorkshopStation(string Id, string Name, string Description, int RegionNeeded, WorkshopTab Tab);
 
 /// <summary>Derives how the workshop looks from campaign progress. It saves nothing and costs no gold.</summary>
 public sealed class WorkshopService
 {
     public static IReadOnlyList<WorkshopStation> AllStations { get; } = new[]
     {
-        new WorkshopStation("workbench", "The workbench", "Bram's tools: spare moves, a longer lookout, livelier pops.", 0, WorkshopTarget.Shop),
-        new WorkshopStation("cosmetic_shelf", "The paint shelf", "Skins, bursts and boards found along the way.", 3, WorkshopTarget.Cosmetics),
-        new WorkshopStation("archive_shelf", "The archive shelf", "Everything you have learned, kept where Bram can find it.", 4, WorkshopTarget.Archive),
-        new WorkshopStation("mechanic_bench", "The mechanic's bench", "Careful helpers: they show what is on the board, or give you a second try. They never play for you.", 5, WorkshopTarget.Shop),
-        new WorkshopStation("display_case", "The display case", "Small proofs of things you have done.", 6, WorkshopTarget.Achievements),
-        new WorkshopStation("map_table", "The map table", "Your journey so far, in numbers.", 7, WorkshopTarget.Journal),
-        new WorkshopStation("whole_workshop", "The whole workshop", "Every lamp lit. Nothing left to repair.", 8, WorkshopTarget.None),
+        new WorkshopStation("upgrades", "Upgrades", "Kept for good. They show you more; they never play for you.", 0, WorkshopTab.Upgrades),
+        new WorkshopStation("looks", "Looks", "Skins, bursts, boards, frames and Pip's accessories, found along the way.", 3, WorkshopTab.Looks),
+        new WorkshopStation("supplies", "Supplies", "Careful helpers: they give you a second try or a better colour. They never play for you.", 5, WorkshopTab.Supplies),
+        new WorkshopStation("trophies", "Trophies", "Small proofs of things you have done, and your journey so far in numbers.", 6, WorkshopTab.Trophies),
     };
 
     private readonly CampaignService _campaign;
