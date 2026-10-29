@@ -265,7 +265,7 @@ public class OrbTests
     }
 
     [Fact]
-    public void Orbs_do_not_appear_when_the_rules_say_never_in_a_lesson_or_in_the_story_before_it_is_enabled()
+    public void Orbs_do_not_appear_when_the_rules_say_never_in_a_lesson_or_in_the_story_before_level_40()
     {
         var never = Endless(rules: GameRules.Default with { Orbs = OrbMode.Never });
         Assert.False(never.OrbsActive);
@@ -278,11 +278,14 @@ public class OrbTests
 
         var story = new GameEngine(new ScriptedGenerator());
         story.StartLevel(Story.Level(new[] { "........" }, new[] { "Dot:R" }, new[] { new Goal(GoalKind.PopBlocks, 9) }, moves: 5, number: 60));
-        Assert.False(story.OrbsActive);   // Story Orbs stay off until the solver plays them (RuleFeatures.OrbsInStory)
+        Assert.True(story.OrbsActive);    // level 60 is past RegionRules.OrbIntro and the solver plays Orbs now
+        var early = new GameEngine(new ScriptedGenerator());
+        early.StartLevel(Story.Level(new[] { "........" }, new[] { "Dot:R" }, new[] { new Goal(GoalKind.PopBlocks, 9) }, moves: 5, number: 39));
+        Assert.False(early.OrbsActive);   // and level 39 is not
         var always = new GameEngine(new ScriptedGenerator());
         always.StartLevel(Story.Level(new[] { "........" }, new[] { "Dot:R" }, new[] { new Goal(GoalKind.PopBlocks, 9) }, moves: 5, number: 60),
             GameRules.Default with { Orbs = OrbMode.Always });
-        Assert.True(always.OrbsActive);   // unless the player''s own rules ask for them
+        Assert.True(always.OrbsActive);
     }
 
     [Fact]
@@ -310,9 +313,34 @@ public class OrbTests
     public void The_orb_rules_are_registered_in_the_feature_switch_and_the_rules()
     {
         Assert.True(RuleFeatures.Orbs);
-        Assert.False(RuleFeatures.OrbsInStory);
+        Assert.True(RuleFeatures.OrbsInStory);
         Assert.Equal(40, RegionRules.OrbIntro);
         Assert.Equal(8, GameRules.DefaultOrbTimer);
         Assert.Equal(new[] { 6, 8, 10, 12 }, GameRules.OrbTimerChoices.ToArray());
+    }
+
+    [Fact]
+    public void Putting_an_orb_down_never_loses_a_block_wherever_the_stacks_stand()
+    {
+        // A column with a block only in the Orb's lower row used to push it one row up, into the Orb, and lose it.
+        var random = new Random(77);
+        for (int round = 0; round < 400; round++)
+        {
+            var board = new Board(GameConfig.Columns, 26);
+            for (int x = 0; x < board.Width; x++)
+            {
+                int height = random.Next(0, 12);
+                for (int h = 1; h <= height; h++)
+                    if (random.Next(5) != 0) board[x, board.Height - h] = (CellColour)(1 + random.Next(5));   // gaps too
+            }
+            int before = board.CountOccupied();
+            int x0 = random.Next(0, board.Width - 1), y0 = random.Next(GameConfig.HiddenRows, board.Height - 1);
+            if (!OrbSystem.TryPlace(board, x0, y0)) { Assert.Equal(before, board.CountOccupied()); continue; }
+            Assert.Equal((x0, y0), OrbSystem.Find(board) ?? (-1, -1));
+
+            Assert.Equal(before, board.CountOccupied());
+            GravityResolver.Apply(board);
+            Assert.Equal(before, board.CountOccupied());
+        }
     }
 }

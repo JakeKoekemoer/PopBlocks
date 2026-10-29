@@ -116,15 +116,16 @@ public static class OrbSystem
         var work = board.Clone();
         for (int cx = x; cx <= x + 1; cx++)
         {
-            int inside = 0;
-            for (int r = y; r <= y + 1; r++) if (work[cx, r] != CellColour.Empty) inside++;
-            if (inside == 0) continue;
+            // The lowest block inside the Orb's rows ends up on top of the Orb (row y - 1), and everything above it keeps its
+            // place relative to it: so the whole column from the top down to the Orb's lower row moves up by that much.
+            // (A block only in the lower row has to move two rows, not one, or it would land inside the Orb.)
+            int shift = work[cx, y + 1] != CellColour.Empty ? 2 : work[cx, y] != CellColour.Empty ? 1 : 0;
+            if (shift == 0) continue;
 
-            // Everything from the top of the column down to the Orb's lower row moves up by the number of blocks it displaces.
             for (int r = 0; r <= y + 1; r++)
             {
                 if (work[cx, r] == CellColour.Empty) continue;
-                int to = r - inside;
+                int to = r - shift;
                 if (to < GameConfig.HiddenRows) return false;   // would reach the top of the board
                 Move(work, cx, r, to);
             }

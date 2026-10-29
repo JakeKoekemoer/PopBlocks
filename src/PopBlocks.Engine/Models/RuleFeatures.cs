@@ -17,9 +17,9 @@ public static class RuleFeatures
     public static bool Orbs => true;
 
     /// <summary>
-    /// Orbs appear on their own in every Story level from <c>RegionRules.OrbIntro</c>. Off: the level solver does not yet play
-    /// Orbs (spawn, timer, break, corruption), so a Story level that could have one could no longer be promised solvable.
-    /// Orbs still come in Endless, and in the Story when the player's own rules ask for them (Always).
+    /// Orbs appear on their own in every Story level from <c>RegionRules.OrbIntro</c>. The level solver plays them (spawn, timer,
+    /// break, corruption: see <c>LevelSolver.MaybeSpawnOrb</c> and the tests that compare it with the engine), so a level is still
+    /// proven winnable with them. Switching this off removes Story Orbs without touching Endless or the player's own rules.
     /// </summary>
-    public static bool OrbsInStory => false;
+    public static bool OrbsInStory => true;
 }

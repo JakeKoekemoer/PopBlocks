@@ -53,7 +53,7 @@ Goals: reach a score, pop N blocks, pop N blocks of one colour, make a chain of 
 **Version 1.1** adds, all of it optional and none of it needed to finish the Story:
 
 - **Cracked blocks (Fracture).** A block next to a burst cracks; a second crack breaks it for a reduced share of the gold. Cracks are part of the board, so the level solver plays them too (`Board` keeps a crack level per cell, `GameEngine` applies it after every wave, `LevelSolver` mirrors it).
-- **The Orb.** A 2x2 glass sphere that is never part of a group. Any pop that touches it breaks it, clearing its two rows and two columns for a bonus; if its timer runs out first it cracks the twelve blocks round it. On in Endless and wherever the player's own rules say Always (`RuleFeatures.OrbsInStory` is off, because the solver does not play Orbs).
+- **The Orb.** A 2x2 glass sphere that is never part of a group. Any pop that touches it breaks it, clearing its two rows and two columns for a bonus; if its timer runs out first it cracks the twelve blocks round it. On in Endless, in the Story from level 40 (the level solver plays them) and wherever the player's own rules say Always.
 - **Tall boards.** The standard board is now 24 rows (16 to 32 in the player's own rules; lessons stay at 16) with a camera that follows the stack and a gauge for the rows out of sight (`BoardSpace`, `GameEngine.CameraBottom`).
 - **Pip's Insight.** A shop helper that outlines the best place for the piece in hand (`PlacementAdvisor`, run off the UI thread).
 - **Your own rules.** Settings, Game rules: fall speed, colour count, colour set, shapes, burst size, solid chance, board rows, cracks, Orbs and whether the rules apply in the Story (`GameRules`, `GameRulesStore`).

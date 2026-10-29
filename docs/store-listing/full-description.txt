@@ -13,7 +13,7 @@ STORY MODE
 - Lose a level a few times and the game tells you there is always a way through; lose it often and you can ease it
 
 ENDLESS MODE
-Start from an empty board and keep going. The pieces speed up as your score grows. Beat your personal best, and earn gold for every block you pop. Watch for the Orb, a glass sphere that clears a cross of blocks when you pop beside it, and cracks the blocks around it if you leave it too long. Want the same pieces again? Start a run from a seed.
+Start from an empty board and keep going. The pieces speed up as your score grows. Beat your personal best, and earn gold for every block you pop. Watch for the Orb, a glass sphere that clears a cross of blocks when you pop beside it, and cracks the blocks around it if you leave it too long. Orbs turn up in the Story too, from level 40. Want the same pieces again? Start a run from a seed.
 
 YOUR GAME, YOUR RULES
 Change the fall speed, the colours, the shapes, how many blocks make a burst, and how tall the board is, up to 32 rows with a camera that follows the stack. Turn cracked blocks and Orbs on or off. Easier rules pay half the gold, so the Story stays fair.
