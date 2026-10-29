@@ -1,6 +1,7 @@
 using PopBlocks.Engine.Logic;
 using PopBlocks.Engine.Models;
 using PopBlocks.Engine.Services;
+using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Engine.Levels;
 
@@ -30,9 +31,13 @@ public readonly record struct SolveOptions(int Candidates, bool LookAhead)
 public static class LevelSolver
 {
     private const int W = GameConfig.Columns;
-    private const int H = GameConfig.TotalRows;
+
+    // The board the Story is played on (the default height), so the Orb's windows and the camera that picks them are the same
+    // rows the engine sees. The pile of a level is put on the floor of it, like the engine does.
+    private const int H = GameConfig.DefaultBoardRows + GameConfig.HiddenRows;
     private const int Hidden = GameConfig.HiddenRows;
     private const int ChainSlots = 9;
+    private const byte OrbCell = (byte)CellColour.Orb;
 
     private static int ChainsOfAtLeast(State s, int waves)
     {
@@ -55,17 +60,30 @@ public static class LevelSolver
 
         /// <summary>1 where the block sleeps (a solid piece nothing has joined yet). Mirrors <see cref="Board.IsDormant"/>.</summary>
         public byte[] Dormant = new byte[W * H];
+
+        /// <summary>Cracks on each block (0 to 2, 3 = waiting to break). Mirrors <see cref="Board.FractureAt"/>.</summary>
+        public byte[] Fracture = new byte[W * H];
         public int Score, Popped, BestChain, BestGroup;
         public int[] ByColour = new int[6];
 
         /// <summary>How many finished chains had 1, 2, ... waves (the last slot holds longer ones too).</summary>
         public int[] ChainsByLength = new int[ChainSlots];
 
+        // The Orb (see OrbSystem and GameEngine.MaybeSpawnOrb). OrbPos is the index of its top-left cell, or -1.
+        public int Placed, OrbPos = -1, OrbTimer, PiecesSinceOrb, OrbRolls;
+        public bool OrbEver, OrbBrokeThisResolution;
+
         public State Clone()
         {
-            var c = new State { Score = Score, Popped = Popped, BestChain = BestChain, BestGroup = BestGroup };
+            var c = new State
+            {
+                Score = Score, Popped = Popped, BestChain = BestChain, BestGroup = BestGroup,
+                Placed = Placed, OrbPos = OrbPos, OrbTimer = OrbTimer, PiecesSinceOrb = PiecesSinceOrb, OrbRolls = OrbRolls,
+                OrbEver = OrbEver, OrbBrokeThisResolution = OrbBrokeThisResolution,
+            };
             Array.Copy(Cells, c.Cells, Cells.Length);
             Array.Copy(Dormant, c.Dormant, Dormant.Length);
+            Array.Copy(Fracture, c.Fracture, Fracture.Length);
             Array.Copy(ByColour, c.ByColour, ByColour.Length);
             Array.Copy(ChainsByLength, c.ChainsByLength, ChainsByLength.Length);
             return c;
@@ -97,10 +115,11 @@ public static class LevelSolver
         var state = new State();
         var start = level.CreateBoard();
         int startBlocks = 0;
-        for (int y = 0; y < H; y++)
+        int lift = H - start.Height;   // the pile sits on the floor of the (taller) board
+        for (int y = 0; y < start.Height; y++)
             for (int x = 0; x < W; x++)
             {
-                state.Cells[y * W + x] = (byte)start[x, y];
+                state.Cells[(y + lift) * W + x] = (byte)start[x, y];
                 if (start[x, y] != CellColour.Empty) startBlocks++;
             }
 
@@ -167,6 +186,34 @@ public static class LevelSolver
         }
 
         return new SolveResult(false, maxMoves, plan);
+    }
+
+    /// <summary>
+    /// For the tests: the bot's own copy of the board after each move of a plan, as <c>H</c> rows of cells (colour numbers, the
+    /// Orb as 6) and their cracks, so it can be compared with the real engine move by move. Stops early if a move is not found.
+    /// </summary>
+    public static List<(int[] Cells, int[] Cracks, int Timer, int Score)> Trace(LevelDefinition level, IReadOnlyList<SolvedMove> plan)
+    {
+        var result = new List<(int[], int[], int, int)>();
+        var generator = level.CreateGenerator();
+        var scratch = new Scratch();
+        var state = new State();
+        var start = level.CreateBoard();
+        int lift = H - start.Height;
+        for (int y = 0; y < start.Height; y++)
+            for (int x = 0; x < W; x++)
+                state.Cells[(y + lift) * W + x] = (byte)start[x, y];
+        foreach (var move in plan)
+        {
+            var piece = generator.Next(level.Colours);
+            Placement? chosen = null;
+            foreach (var p in Placements(state, piece))
+                if (p.Rotations == move.Rotations && p.Left == move.LeftColumn) { chosen = p; break; }
+            if (chosen is null) break;
+            state = Apply(state, chosen.Value, level, scratch, false);
+            result.Add((state.Cells.Select(c => (int)c).ToArray(), state.Fracture.Select(c => (int)c).ToArray(), state.OrbTimer, state.Score));
+        }
+        return result;
     }
 
     /// <summary>
@@ -323,16 +370,237 @@ public static class LevelSolver
         {
             s.Cells[p.CellIndexes[i]] = p.Colours[i];
             s.Dormant[p.CellIndexes[i]] = 0;
+            s.Fracture[p.CellIndexes[i]] = 0;
         }
 
         // Like the engine: a piece that is a burst-sized group all by itself does not pop by landing; it sleeps.
         MarkDormant(s, p, sc);
 
-        int chain = Settle(s, sc);
+        bool fracture = FractureOn(level);
+        bool orbs = OrbsOn(level);
+
+        // An Orb counts pieces down; at zero it cracks the blocks round it (GameEngine.LockPiece).
+        s.Placed++;
+        s.OrbBrokeThisResolution = false;
+        if (orbs)
+        {
+            s.PiecesSinceOrb++;
+            if (s.OrbPos >= 0 && --s.OrbTimer <= 0) CorruptOrb(s, fracture);
+        }
+
+        int chain = Settle(s, sc, fracture, orbs);
         if (chain > 0) s.ChainsByLength[Math.Min(chain, ChainSlots - 1)]++;
         if (chain == 0 && level.NoPopPenalty > 0 && s.Score > 0)
             s.Score -= Math.Min(s.Score, level.NoPopPenalty);
+
+        if (orbs) MaybeSpawnOrb(s, level);
         return s;
+    }
+
+    // ------------------------------------------------------------------ the Orb (mirrors GameEngine and OrbSystem)
+
+    /// <summary>Mirrors <c>GameEngine.OrbsActive</c> under the normal rules (the solver only ever plays those).</summary>
+    private static bool OrbsOn(LevelDefinition level) =>
+        RuleFeatures.Orbs && RuleFeatures.OrbsInStory && GameRules.Default.Orbs != OrbMode.Never
+        && !level.IsTutorial && level.Number >= RegionRules.OrbIntro;
+
+    private static Board ToBoard(State s)
+    {
+        var board = new Board(W, H);
+        for (int i = 0; i < W * H; i++)
+        {
+            if (s.Cells[i] == 0) continue;
+            board[i % W, i / W] = (CellColour)s.Cells[i];
+            if (s.Dormant[i] != 0) board.SetDormant(i % W, i / W);
+            if (s.Fracture[i] != 0) board.SetFracture(i % W, i / W, s.Fracture[i]);
+        }
+        return board;
+    }
+
+    private static void FromBoard(State s, Board board)
+    {
+        s.OrbPos = -1;
+        for (int i = 0; i < W * H; i++)
+        {
+            int x = i % W, y = i / W;
+            s.Cells[i] = (byte)board[x, y];
+            s.Dormant[i] = (byte)(board.IsDormant(x, y) ? 1 : 0);
+            s.Fracture[i] = (byte)board.FractureAt(x, y);
+            if (s.OrbPos < 0 && s.Cells[i] == OrbCell) s.OrbPos = i;
+        }
+    }
+
+    /// <summary>Mirrors <c>GameEngine.CorruptOrb</c>: the twelve cells round the Orb take a crack and the Orb goes.</summary>
+    private static void CorruptOrb(State s, bool fracture)
+    {
+        int ox = s.OrbPos % W, oy = s.OrbPos / W;
+        RemoveOrb(s);
+        if (fracture)
+            foreach (var (x, y) in OrbSystem.Ring(ox, oy))
+            {
+                if ((uint)x >= W || (uint)y >= H) continue;
+                int i = y * W + x;
+                if (s.Cells[i] != 0 && s.Cells[i] != OrbCell) s.Fracture[i] = (byte)Math.Min(Board.Broken, s.Fracture[i] + 1);
+            }
+        Gravity(s);
+        s.PiecesSinceOrb = 0;
+        s.OrbBrokeThisResolution = true;
+    }
+
+    /// <summary>
+    /// Is there a 4x4 window on the screen with enough blocks, colours and lonely blocks for an Orb (the same test as the first
+    /// half of <see cref="OrbSystem.Spots"/>, but only asking whether one exists)?
+    /// </summary>
+    private static bool AnyOrbWindow(State s, int viewTop)
+    {
+        int last = Math.Min(H - 1, viewTop + GameConfig.ViewportRows - 1);
+        int rows = last - viewTop + 1;
+        if (rows < OrbSystem.WindowSize) return false;
+
+        // One pass over the screen: for each cell, whether it is a block, whether it is lonely, and its colour bit.
+        Span<byte> blockAt = stackalloc byte[GameConfig.ViewportRows * W];
+        Span<byte> lonelyAt = stackalloc byte[GameConfig.ViewportRows * W];
+        Span<int> colourAt = stackalloc int[GameConfig.ViewportRows * W];
+        int total = 0;
+        for (int r = 0; r < rows; r++)
+        {
+            int y = viewTop + r;
+            for (int x = 0; x < W; x++)
+            {
+                byte c = s.Cells[y * W + x];
+                if (c == 0 || c == OrbCell) continue;
+                total++;
+                int k = r * W + x;
+                blockAt[k] = 1;
+                colourAt[k] = 1 << c;
+                bool same = (x > 0 && s.Cells[y * W + x - 1] == c) || (x < W - 1 && s.Cells[y * W + x + 1] == c)
+                    || (y > 0 && s.Cells[(y - 1) * W + x] == c) || (y < H - 1 && s.Cells[(y + 1) * W + x] == c);
+                if (!same) lonelyAt[k] = 1;
+            }
+        }
+        if (total < OrbSystem.MinBlocksInWindow) return false;
+
+        Span<int> colBlocks = stackalloc int[W], colLonely = stackalloc int[W], colColours = stackalloc int[W];
+        for (int r0 = 0; r0 + OrbSystem.WindowSize <= rows; r0++)
+        {
+            for (int x = 0; x < W; x++)
+            {
+                int b = 0, l = 0, m = 0;
+                for (int r = r0; r < r0 + OrbSystem.WindowSize; r++)
+                {
+                    int k = r * W + x;
+                    b += blockAt[k]; l += lonelyAt[k]; m |= colourAt[k];
+                }
+                colBlocks[x] = b; colLonely[x] = l; colColours[x] = m;
+            }
+            for (int x0 = 0; x0 + OrbSystem.WindowSize <= W; x0++)
+            {
+                int blocks = 0, lonely = 0, colours = 0;
+                for (int x = x0; x < x0 + OrbSystem.WindowSize; x++) { blocks += colBlocks[x]; lonely += colLonely[x]; colours |= colColours[x]; }
+                if (blocks >= OrbSystem.MinBlocksInWindow && System.Numerics.BitOperations.PopCount((uint)colours) >= OrbSystem.MinColoursInWindow
+                    && lonely >= OrbSystem.MinLonelyInWindow) return true;
+            }
+        }
+        return false;
+    }
+
+    private static void RemoveOrb(State s)
+    {
+        int ox = s.OrbPos % W, oy = s.OrbPos / W;
+        for (int cy = oy; cy <= oy + 1; cy++)
+            for (int cx = ox; cx <= ox + 1; cx++)
+                if (s.Cells[cy * W + cx] == OrbCell) s.Cells[cy * W + cx] = 0;
+        s.OrbPos = -1;
+    }
+
+    /// <summary>Mirrors <c>GameEngine.MaybeSpawnOrb</c>. The places and the push-aside are <see cref="OrbSystem"/> itself.</summary>
+    private static void MaybeSpawnOrb(State s, LevelDefinition level)
+    {
+        if (s.OrbBrokeThisResolution || s.OrbPos >= 0) return;
+        bool guarantee = !s.OrbEver && s.Placed >= OrbSystem.GuaranteeByPiece;
+        if (!guarantee && s.PiecesSinceOrb < OrbSystem.PiecesBetween) return;
+
+        int stackTop = 0;
+        for (int i = 0; i < W * H; i++)
+            if (s.Cells[i] != 0) { stackTop = H - i / W; break; }
+        int viewTop = H - GameEngine.CameraFor(stackTop, H - Hidden) - GameConfig.ViewportRows;
+
+        // The engine asks "is there a window?" and only then rolls; both are answered from the arrays here, so no Board is built
+        // unless an Orb is really going down (the search asks millions of times).
+        if (!guarantee)
+        {
+            if (!AnyOrbWindow(s, viewTop)) return;
+            double u = (SeedMix.Mix32(SeedMix.Mix32(level.PieceSeed, 0x0B0B), ++s.OrbRolls) & 0xFFFFFF) / 16777216.0;
+            if (!(u < OrbSystem.SpawnChance)) return;
+        }
+
+        var board = ToBoard(s);
+        var spots = OrbSystem.Spots(board, viewTop, GameConfig.ViewportRows, relaxed: false);
+
+        bool placed = false;
+        foreach (var (x, y) in spots)
+            if (placed = OrbSystem.TryPlace(board, x, y)) break;
+        if (!placed && guarantee)
+            foreach (var (x, y) in OrbSystem.Spots(board, viewTop, GameConfig.ViewportRows, relaxed: true))
+                if (placed = OrbSystem.TryPlace(board, x, y)) break;
+        if (!placed) return;
+
+        GravityResolver.Apply(board);   // what was pushed up settles on the Orb
+        FromBoard(s, board);
+        s.OrbTimer = GameRules.Default.OrbTimer;
+        s.OrbEver = true;
+        s.PiecesSinceOrb = 0;
+    }
+
+    /// <summary>
+    /// Mirrors <c>GravityResolver.Apply</c>: blocks fall; an Orb is a floor for what is above it and falls as one 2x2 unit
+    /// when both cells under it are empty, taking what rests on it along. Repeats until nothing moves.
+    /// </summary>
+    private static void Gravity(State s)
+    {
+        do Compact(s);
+        while (DropOrb(s));
+    }
+
+    private static void Compact(State s)
+    {
+        for (int x = 0; x < W; x++)
+        {
+            int write = H - 1;
+            for (int y = H - 1; y >= 0; y--)
+            {
+                byte c = s.Cells[y * W + x];
+                if (c == 0) continue;
+                if (c == OrbCell)
+                {
+                    write = y - 1;   // blocks above rest on the Orb; the Orb itself does not move here
+                    continue;
+                }
+                if (y != write)
+                {
+                    s.Cells[write * W + x] = c;
+                    s.Cells[y * W + x] = 0;
+                    s.Dormant[write * W + x] = s.Dormant[y * W + x];   // a sleeping block keeps sleeping while it falls
+                    s.Dormant[y * W + x] = 0;
+                    s.Fracture[write * W + x] = s.Fracture[y * W + x];   // and a cracked block keeps its cracks
+                    s.Fracture[y * W + x] = 0;
+                }
+                write--;
+            }
+        }
+    }
+
+    private static bool DropOrb(State s)
+    {
+        if (s.OrbPos < 0) return false;
+        int ox = s.OrbPos % W, oy = s.OrbPos / W, below = oy + 2;
+        if (below >= H || s.Cells[below * W + ox] != 0 || s.Cells[below * W + ox + 1] != 0) return false;
+        RemoveOrb(s);
+        s.OrbPos = (oy + 1) * W + ox;
+        for (int cy = oy + 1; cy <= oy + 2; cy++)
+            for (int cx = ox; cx <= ox + 1; cx++)
+                s.Cells[cy * W + cx] = OrbCell;
+        return true;
     }
 
     /// <summary>
@@ -369,8 +637,12 @@ public static class LevelSolver
         }
     }
 
+    /// <summary>Mirrors <c>GameEngine.FractureActive</c> under the normal rules (the solver only ever plays those).</summary>
+    private static bool FractureOn(LevelDefinition level) =>
+        RuleFeatures.Fracture && !level.IsTutorial && level.Number >= RegionRules.FractureIntro;
+
     /// <summary>Pops groups, applies gravity and repeats until stable. Returns the chain length.</summary>
-    private static int Settle(State s, Scratch sc)
+    private static int Settle(State s, Scratch sc, bool fracture, bool orbs)
     {
         int chain = 0;
         while (true)
@@ -382,7 +654,7 @@ public static class LevelSolver
             for (int i = 0; i < W * H; i++)
             {
                 byte colour = s.Cells[i];
-                if (colour == 0 || sc.Seen[i] != 0) continue;
+                if (colour == 0 || colour == OrbCell || sc.Seen[i] != 0) continue;
 
                 int n = 0, sp = 0;
                 sc.Stack[sp++] = i;
@@ -412,33 +684,84 @@ public static class LevelSolver
                 }
             }
 
-            if (marked == 0) break;
+            // Blocks that cracked a third time in the wave before break now (unless a burst takes them anyway).
+            int brokenNow = 0;
+            if (fracture)
+                for (int i = 0; i < W * H; i++)
+                    if (s.Fracture[i] == Board.Broken && s.Cells[i] != 0 && sc.Mark[i] == 0)
+                    {
+                        sc.Mark[i] = 2;
+                        s.ByColour[s.Cells[i]]++;   // counts for its colour's goals, not for the burst-group goals
+                        brokenNow++;
+                    }
+
+            if (marked == 0 && brokenNow == 0) break;
+
+            // An Orb touched by a pop (a group, or a block that broke) breaks: it takes every block in its two rows and two
+            // columns (GameEngine.ApplyWave). Those count as popped and for their colours, but earn no points.
+            int orbPopped = 0;
+            bool orbGone = false;
+            if (orbs && s.OrbPos >= 0)
+            {
+                int ox = s.OrbPos % W, oy = s.OrbPos / W;
+                bool touched = false;
+                for (int i = 0; i < W * H && !touched; i++)
+                {
+                    if (sc.Mark[i] == 0) continue;
+                    int x = i % W, y = i / W;
+                    touched = (x >= ox - 1 && x <= ox + 2 && y >= oy && y <= oy + 1) || (y >= oy - 1 && y <= oy + 2 && x >= ox && x <= ox + 1);
+                }
+                if (touched)
+                {
+                    orbGone = true;
+                    for (int i = 0; i < W * H; i++)
+                    {
+                        int x = i % W, y = i / W;
+                        bool inCross = y == oy || y == oy + 1 || x == ox || x == ox + 1;
+                        if (!inCross || s.Cells[i] == 0 || s.Cells[i] == OrbCell || sc.Mark[i] != 0) continue;
+                        sc.Mark[i] = 3;
+                        s.ByColour[s.Cells[i]]++;
+                        orbPopped++;
+                    }
+                }
+            }
 
             chain++;
             if (chain > s.BestChain) s.BestChain = chain;
             s.Score += wavePoints * ScoringSystem.Multiplier(chain);
-            s.Popped += marked;
+            s.Popped += marked + brokenNow + orbPopped;
 
             for (int i = 0; i < W * H; i++)
-                if (sc.Mark[i] != 0) { s.Cells[i] = 0; s.Dormant[i] = 0; }
-
-            for (int x = 0; x < W; x++)
+                if (sc.Mark[i] != 0) { s.Cells[i] = 0; s.Dormant[i] = 0; s.Fracture[i] = 0; }
+            if (orbGone)
             {
-                int write = H - 1;
-                for (int y = H - 1; y >= 0; y--)
+                RemoveOrb(s);
+                s.PiecesSinceOrb = 0;
+                s.OrbBrokeThisResolution = true;   // no new Orb in the resolution that broke one
+            }
+
+            // Survivors with a cleared neighbour on two or more different sides take one more crack (once per wave).
+            if (fracture)
+            {
+                int hitCount = 0;
+                for (int i = 0; i < W * H; i++)
                 {
-                    byte c = s.Cells[y * W + x];
-                    if (c == 0) continue;
-                    if (y != write)
-                    {
-                        s.Cells[write * W + x] = c;
-                        s.Cells[y * W + x] = 0;
-                        s.Dormant[write * W + x] = s.Dormant[y * W + x];   // a sleeping block keeps sleeping while it falls
-                        s.Dormant[y * W + x] = 0;
-                    }
-                    write--;
+                    if (s.Cells[i] == 0 || s.Cells[i] == OrbCell) continue;
+                    int x = i % W, y = i / W, sides = 0;
+                    if (x > 0 && sc.Mark[i - 1] != 0) sides++;
+                    if (x < W - 1 && sc.Mark[i + 1] != 0) sides++;
+                    if (y > 0 && sc.Mark[i - W] != 0) sides++;
+                    if (y < H - 1 && sc.Mark[i + W] != 0) sides++;
+                    if (sides >= 2) sc.Stack[hitCount++] = i;   // (Stack is free here: the flood fill is done)
+                }
+                for (int k = 0; k < hitCount; k++)
+                {
+                    int i = sc.Stack[k];
+                    if (s.Fracture[i] < Board.Broken) s.Fracture[i]++;
                 }
             }
+
+            Gravity(s);
         }
         return chain;
     }
@@ -476,6 +799,7 @@ public static class LevelSolver
                 byte here = s.Cells[y * W + x];
                 if (here == 0) continue;
                 if (top < 0) top = y;
+                if (here == OrbCell) continue;   // an Orb is not one of the level's blocks (Board.CountOccupied)
                 cells++;
                 if (bonus is not null && here == (byte)bonus.Colour) bonusColour++;
             }
@@ -523,7 +847,7 @@ public static class LevelSolver
         for (int i = 0; i < W * H; i++)
         {
             byte colour = s.Cells[i];
-            if (colour == 0 || sc.Seen[i] != 0) continue;
+            if (colour == 0 || colour == OrbCell || sc.Seen[i] != 0) continue;
             int n = 0, sp = 0;
             sc.Stack[sp++] = i;
             sc.Seen[i] = 1;

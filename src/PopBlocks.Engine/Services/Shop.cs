@@ -160,6 +160,19 @@ public sealed class ShopService
     /// <summary>Prism Reserve: Prism Shifts per level that cost nothing (0 to 2).</summary>
     public int PrismFreeCharges => Level(ShopCatalog.PrismReserve);
 
+    /// <summary>Pip's Insight: 0 not bought, 1 three uses a level, 2 six uses, 3 unlimited with an Always on switch.</summary>
+    public int InsightLevel => Level(ShopCatalog.Insight);
+
+    /// <summary>Uses of Insight per level at the level owned (<see cref="int.MaxValue"/> when unlimited, 0 when not bought).</summary>
+    public int InsightUsesPerLevel => InsightLevel switch { 0 => 0, 1 => 3, 2 => 6, _ => int.MaxValue };
+
+    /// <summary>Insight level 3 only: show the suggestion for every piece without pressing anything. Off until the player turns it on.</summary>
+    public bool InsightAlwaysOn
+    {
+        get => InsightLevel >= 3 && _settings.GetBool(SaveKeys.InsightAlwaysOn, false);
+        set => _settings.SetBool(SaveKeys.InsightAlwaysOn, value && InsightLevel >= 3);
+    }
+
     public IReadOnlyList<UpgradeInfo> Items() => new[]
     {
         Describe(Upgrade.Preview),

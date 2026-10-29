@@ -1,4 +1,5 @@
 using PopBlocks.Engine.Levels;
+using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Engine.Services;
 
@@ -63,6 +64,44 @@ public sealed class StoryLevels
     /// <summary>Rerolls used on the current level.</summary>
     public int Rerolls(int level) => IsCurrent(level) ? Current.Rerolls : 0;
 
+    // ------------------------------------------------------------------ losses and easing (v1.1)
+
+    /// <summary>How many times this level has been lost, ever. Unlike <see cref="Failures"/> it never resets.</summary>
+    public int Losses(int level) => SeedStore.ReadLosses(_settings, level);
+
+    /// <summary>"There is always a way through" is shown after this many losses on a level (the caller also checks the rules in force).</summary>
+    public bool ShowsSolvableNote(int level) => Losses(level) >= SeedingConfig.LossesForSolvableNote;
+
+    /// <summary>The player chose to ease this level.</summary>
+    public bool IsEased(int level) => _progress.IsEased(level);
+
+    /// <summary>The level on the board is the eased form: it is the player's current level and they eased it.</summary>
+    public bool IsEasedPlay(int level) => IsCurrent(level) && IsEased(level);
+
+    /// <summary>
+    /// Easing is offered on the player's current level after <see cref="SeedingConfig.LossesForEase"/> losses, never on a
+    /// region's finale and not on a level that is already eased.
+    /// </summary>
+    public bool CanEase(int level) =>
+        IsCurrent(level) && !IsEased(level) && Losses(level) >= SeedingConfig.LossesForEase && !IsFinale(level);
+
+    /// <summary>A region's last level (the finale, played without helpers). Never eased.</summary>
+    public static bool IsFinale(int level) => RegionCatalog.For(level) is { } region && region.LastLevel == level;
+
+    /// <summary>
+    /// Swaps the level for an easier one: the same as a free reroll, except the new level is found one difficulty band lower
+    /// and played with more moves, and it will pay no gold. Moves the story on when cleared. Does nothing if easing is not offered.
+    /// </summary>
+    public bool TryEase(int level)
+    {
+        if (!CanEase(level)) return false;
+        SeedStore.SetEased(_settings, level, true);
+        var state = Current;
+        SeedStore.WriteCurrent(_settings, state with { Seed = 0, Rerolls = state.Rerolls + 1, Failures = 0 });
+        Changed?.Invoke();
+        return true;
+    }
+
     // ------------------------------------------------------------------ failures
 
     /// <summary>
@@ -75,6 +114,7 @@ public sealed class StoryLevels
         var state = Current;
         state = state with { Failures = state.Failures + 1 };
         SeedStore.WriteCurrent(_settings, state);
+        SeedStore.AddLoss(_settings, level);
         Changed?.Invoke();
         return state.Failures;
     }
@@ -119,7 +159,9 @@ public sealed class StoryLevels
         // player gets the reroll for free; the other order could take gold and give nothing. Roll is deterministic for a
         // given reroll count, so after a restart the player gets the same new level.
         var state = Current;
-        SeedStore.WriteCurrent(_settings, state with { Seed = 0, Rerolls = state.Rerolls + 1 });
+        // The failure count starts again with the new level (the lifetime count of losses lives in its own key).
+        SeedStore.WriteCurrent(_settings, state with { Seed = 0, Rerolls = state.Rerolls + 1, Failures = 0 });
+        SeedStore.SetEased(_settings, level, false);   // a reroll is a normal level again
         if (price > 0) _progress.TrySpend(price);
         Changed?.Invoke();
         return true;
@@ -143,6 +185,7 @@ public sealed class StoryLevels
                 if (_sessionSeeds.TryGetValue(level, out int s)) return new LevelSeed(s);
                 if (_sessionRerolls.ContainsKey(level)) return null;   // rerolled, not rolled yet
             }
+            if (IsEased(level)) return null;   // cleared in its eased form: a replay plays a normal level, so it is rolled
             return SeedStore.ReadFirstClear(_settings).TryGetValue(level, out int recorded) ? new LevelSeed(recorded) : LevelSeed.Legacy;
         }
 
@@ -184,7 +227,7 @@ public sealed class StoryLevels
     /// <summary>The roll a level needs when it has no known seed: which reroll number to use.</summary>
     private int RerollFor(int level)
     {
-        if (IsCurrent(level)) return Current.Rerolls;
+        if (IsCurrent(level)) return Current.Rerolls + (IsEased(level) ? LevelRoller.EasedRerollOffset : 0);
         lock (_gate) return _sessionRerolls.TryGetValue(level, out int k) ? SessionRerollBase + k : 0;
     }
 
@@ -253,11 +296,23 @@ public sealed class StoryLevels
         Changed?.Invoke();
     }
 
+    /// <summary>Sets how many times the current level has been lost, for the "always a way through" note and easing (development tools).</summary>
+    public void DevSetLosses(int losses)
+    {
+        int level = _progress.NextLevel;
+        var map = new Dictionary<int, int>(SaveCode.ParseSeedList(_settings.GetString(SaveKeys.LevelLosses, "")));
+        if (losses <= 0) map.Remove(level); else map[level] = Math.Min(100_000, losses);
+        _settings.SetString(SaveKeys.LevelLosses, SaveCode.FormatSeedList(map));
+        Changed?.Invoke();
+    }
+
     /// <summary>Forgets every recorded seed, the current level's seed, rerolls and failures. For testing; the name is kept.</summary>
     public void DevReset()
     {
         SeedStore.ResetCurrent(_settings);
         _settings.SetString(SaveKeys.FirstClearSeeds, "");
+        _settings.SetString(SaveKeys.LevelLosses, "");
+        _settings.SetString(SaveKeys.EasedLevels, "");
         lock (_gate)
         {
             _sessionSeeds.Clear();

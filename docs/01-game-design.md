@@ -4,7 +4,7 @@ This document describes the game as the player experiences it, and the product r
 
 ## 1.1 The core loop
 
-1. A piece (2 to 5 coloured cells) appears at the top of an 8-column, 16-row board and falls.
+1. A piece (2 to 5 coloured cells) appears at the top of an 8-column, 24-row board and falls (the screen shows 16 rows and follows the stack; see below).
 2. The player moves it sideways, rotates it, and drops it.
 3. When it lands it locks into the board.
 4. Every group of **four or more** cells of the same colour that touch **sideways or up/down** (never diagonally) bursts.
@@ -69,7 +69,7 @@ You win the moment all goals are met. You lose by running out of pieces, or by o
 
 **Levels are generated per player.** On first launch the player picks an in-game name (or skips; "Traveller"). The name plus a hidden random number is hashed once into a *salt*, and a level's seed comes from that salt, the level number and a reroll count, so two players get different level 40s. The seed changes the pile, the pieces and the colour of a colour goal, and nothing else: goal kinds, goal counts, flips, penalties, finales, speed and colours still come from the level number alone. A generated level is shown only if the bot can win it, a person could play the bot's plan in the real engine, and its difficulty sits in a band for that level number (gentler where a tier or a new mechanic starts). Identical levels on every device and every app version are **not** a goal. The levels of players who finished levels before this existed replay the original, number-based level (the *legacy* seed 0).
 
-**Failing and rerolling.** A *failure* is a loss, or a manual restart after at least one piece was placed, on the player's current level only (leaving to the menu does not count, and replays never do). After the first failure the player can **reroll** the level: swap it for a new seed. A reroll costs the level's first-clear gold × (10 − failures) / 10, rounded up, so it gets cheaper with each failure and is **free from the tenth** (and always free on the opening levels and on replays of cleared levels). The failure count survives an app kill, is not reset by a reroll, and is reset when the level is cleared. Retrying the same seed is always free.
+**Failing and rerolling.** A *failure* is a loss, or a manual restart after at least one piece was placed, on the player's current level only (leaving to the menu does not count, and replays never do). After the first failure the player can **reroll** the level: swap it for a new seed. A reroll costs the level's first-clear gold × (10 − failures) / 10, rounded up, so it gets cheaper with each failure and is **free from the tenth** (and always free on the opening levels and on replays of cleared levels). The failure count survives an app kill, goes back to 0 after a successful reroll (the new level starts counting again), and is reset when the level is cleared. Retrying the same seed is always free.
 
 **Seeds and replays.** The seed a level is first cleared with is recorded once and shown on the Map page (tap to copy; a level cleared before this shows "Original"). Replays use it; any other seed, including one rolled on a replay, is thrown away.
 
@@ -108,6 +108,22 @@ Two levels in each region (offsets 11 and 17 into it, never a finale) carry an *
 
 - **Flipped board.** The picture is turned 180 degrees so pieces enter from the bottom of the screen. The rules are unchanged; only drawing and input are mirrored. See [Graphics](06-graphics.md#66-the-upside-down-view).
 - **No-pop penalty.** When a piece locks and pops nothing, points are removed (never below zero). Because the penalty is about score, a penalty level always has a Score goal.
+
+### The Orb (v1.1)
+
+A 2x2 glass sphere that appears in Endless, in the Story from level 40, and anywhere when the player's own rules say Always. Once per settle, before the next piece: with no Orb on the board and four pieces since the last one left, a window of 4x4 cells on the screen with at least ten blocks, four colours and six "lonely" blocks (no neighbour of their own colour) may take one, on a 35% roll from the engine's own seeded stream. If none has come by the eighth piece, the next settle puts one at the best spot there is. It is placed in the middle of its window; blocks in its two columns are pushed up, in order, and a spot where that would push a block to the top of the board is skipped. Its timer starts at 8 (6, 8, 10 or 12 in the player's rules) and drops by one for every piece locked. **Break it**: any pop that touches it (a burst or a block that breaks) breaks it, and it takes every block in its two rows and two columns across the whole board; those count for goals and pay pop gold with the crack weights, plus a 25 gold bonus (halved by easier rules). **Or let it run out**: at zero each of the twelve cells round it takes a crack (a block with two cracks breaks), the Orb goes, no gold. It falls as one rigid 2x2 unit when both cells under it are empty, blocks rest on it, pieces collide with it, an undo puts it back with its timer, and a block can never be cracked into it. No new Orb appears in the resolution that broke one. In the Story, Orbs appear on their own from level 40 (`RegionRules.OrbIntro`, `RuleFeatures.OrbsInStory`); the solver plays them, so a level is still proven winnable with them (the roll comes from the level's own seed, never the piece stream). A block in the lower row of the Orb's columns is pushed two rows, so it lands on top of the Orb rather than inside it.
+
+### Cracked blocks (v1.1)
+
+From level 36 of the Story (and always in Endless, unless switched off in the player's own rules; never in a lesson) a block cracks when one pop hits it from two sides. After each wave clears its groups, every surviving block that has cleared neighbours on two or more different sides takes one crack (at most one per wave; corners and diagonals do not count; sleeping blocks crack too). A block with two cracks that is hit again breaks: it is removed in the next step of the same resolution, counts for its colour's pop goals (not for burst-group goals), and feeds gravity and chains like any other pop. Cracks travel with a block as it falls and come back with an undo. Gold: intact blocks pay in full, one crack three quarters, two cracks half, and a broken block half. The level solver mirrors every one of these rules, so the promise that every Story level has a way through holds for levels with cracks.
+
+### Tall boards (v1.1)
+
+The standard board is 24 rows tall (16 to 32 in the player's own rules; lessons are always 16), so the board is taller than the screen and the view follows the stack: the screen stays on the floor until the stack is 12 rows high and then keeps 4 empty rows above the top of the stack (`GameConfig.CameraHeadroomRows`), the view drops back as the stack is cleared, and a piece always appears at the top of what you can see. Losing is still a block that reaches the very top of the board, or a piece that has no room to appear. Boards taller than 24 are easier, so they pay half gold.
+
+### Your own rules (v1.1)
+
+Settings, GAME tab: fall speed (0.5× to 2× for the piece in your hand), which of the five colours appear (three at least, each with its own symbol), which piece shapes appear (three at least, one with four blocks or more), how many blocks make a burst (3 to 6), how often a solid piece stays solid, and later board height, cracking and Orbs. The rules always apply to Endless (a run on custom rules never sets the best score). They apply to the Story only with "Use my rules in Story", and never to tutorial lessons or a region's finale. The Story's own promises -- that every level was solved before you saw it -- hold for the normal rules only, so the "there is always a way through" note is hidden while custom rules are on in the Story; goals that name a colour you switched off become any-colour goals. Any rule that is easier than normal pays **half gold everywhere**, first-clear and consolation included; the HUD shows "Custom rules · half gold". See `GameRules` and `GameRulesStore`.
 
 ## 1.6 Gold and the shop
 

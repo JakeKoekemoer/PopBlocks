@@ -1,5 +1,7 @@
 using PopBlocks.Engine.Levels;
 using PopBlocks.Engine.Models;
+using PopBlocks.Engine.Services;
+using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Engine.Logic;
 
@@ -47,7 +49,48 @@ public sealed class GameEngine
         State = GameState.Ready;
     }
 
-    public Board Board { get; }
+    public Board Board { get; private set; }
+
+    // ---- The camera (tall boards) ----
+    // The screen shows ViewportRows of the board. The camera stays at the floor until the stack is taller than
+    // ViewportRows - CameraHeadroomRows, then keeps the top of the stack CameraHeadroomRows below the top of the screen,
+    // between the floor and the highest it can go. It is worked out only when the board has settled, just before a
+    // piece spawns, never while a piece falls, and it depends on nothing but the board. On the standard 16-row board it is
+    // always at the floor, so nothing ever scrolls.
+
+    /// <summary>Playable rows of this board (the hidden spawn rows are extra).</summary>
+    public int BoardRows => Board.Height - GameConfig.HiddenRows;
+
+    /// <summary>How high the stack reaches, in rows up from the floor (0 for an empty board).</summary>
+    public int StackTop
+    {
+        get
+        {
+            for (int y = 0; y < Board.Height; y++)
+                for (int x = 0; x < Board.Width; x++)
+                    if (Board[x, y] != CellColour.Empty) return Board.Height - y;
+            return 0;
+        }
+    }
+
+    /// <summary>Rows between the floor and the bottom of the screen (0 when the screen is at the floor).</summary>
+    public int CameraBottom { get; private set; }
+
+    /// <summary>The highest the camera has been this game: above 0 means the board has scrolled.</summary>
+    public int HighestCamera { get; private set; }
+
+    /// <summary>The board row (y) at the top of the screen. Pieces spawn just above it.</summary>
+    public int ViewTopRow => Board.Height - CameraBottom - GameConfig.ViewportRows;
+
+    /// <summary>Camera rule: <c>clamp(stackTop - (ViewportRows - CameraHeadroomRows), 0, Rows - ViewportRows)</c>.</summary>
+    public static int CameraFor(int stackTop, int boardRows) =>
+        Math.Clamp(stackTop - (GameConfig.ViewportRows - GameConfig.CameraHeadroomRows), 0, Math.Max(0, boardRows - GameConfig.ViewportRows));
+
+    private void UpdateCamera()
+    {
+        CameraBottom = CameraFor(StackTop, BoardRows);
+        if (CameraBottom > HighestCamera) HighestCamera = CameraBottom;
+    }
     public GameState State { get; private set; }
 
     /// <summary>The mode (and Story level) of the current game. Classic until a Story game is started.</summary>
@@ -115,10 +158,27 @@ public sealed class GameEngine
     private int _poppedClassic;
 
     /// <summary>
-    /// Tenths of a gold earned so far in this Classic game (see <see cref="SeedingConfig.ClassicTenthsPerBlock"/>). Always 0
-    /// in Story. The app pays it out through <c>ClassicGold</c>.
+    /// Tenths of a gold earned by popping so far this game (see <see cref="SeedingConfig.ClassicTenthsPerBlock"/>). Endless
+    /// and Story both earn it, at the same rate; lessons and eased levels earn none (<see cref="EarnsPopGold"/>). The app pays
+    /// it out through <c>ClassicGold</c>: when the run ends in Endless, on a win in Story, and as half of it on a loss.
     /// </summary>
     public int ClassicGoldTenths { get; private set; }
+
+    /// <summary>This game pays pop gold: Endless, and a normal Story level. Not a lesson, not a level the player eased.</summary>
+    public bool EarnsPopGold => Story is null || (!Story.IsTutorial && !Story.Eased);
+
+    /// <summary>How far the level's goals are met, 0 to 1: the average of each goal's progress. 0 for Endless.</summary>
+    public double GoalProgress
+    {
+        get
+        {
+            var goals = Goals;
+            if (goals.Count == 0) return 0;
+            double sum = 0;
+            for (int i = 0; i < goals.Count; i++) sum += goals[i].Fraction;
+            return Math.Clamp(sum / goals.Count, 0.0, 1.0);
+        }
+    }
 
     /// <summary>Burst waves so far in the current resolution; returns to 0 when the board stabilises.</summary>
     public int Chain { get; private set; }
@@ -139,7 +199,45 @@ public sealed class GameEngine
     // ---- Story: moves and goals ----
 
     /// <summary>Pieces allowed in this Story level, shop bonus included. 0 when unlimited or not Story.</summary>
-    public int MoveLimit => Story is { MoveLimit: > 0 } s ? s.MoveLimit + (s.IsTutorial ? 0 : _extraMoves) : 0;
+    public int MoveLimit => Story is { MoveLimit: > 0 } s ? s.MoveLimit + (s.IsTutorial ? 0 : _extraMoves) + _continueMoves : 0;
+
+    private int _continueMoves;   // moves bought with continues this attempt
+
+    /// <summary>Continues bought in this attempt (0 to <see cref="ContinuePricing.MaxPerAttempt"/>). A new game, a retry or a reroll starts it again at 0.</summary>
+    public int ContinuesUsed { get; private set; }
+
+    /// <summary>
+    /// The player may buy more moves: a normal Story level (not a lesson, a finale or a level the player eased) that was lost by
+    /// running out of moves, with continues left. An overflow ends the attempt for good; there is nothing to buy.
+    /// </summary>
+    public bool CanContinue
+    {
+        get
+        {
+            if (State != GameState.GameOver || FailReason != FailReason.OutOfMoves) return false;
+            if (Story is not { IsTutorial: false, Eased: false } story) return false;
+            if (RegionCatalog.For(story.Number)?.LastLevel == story.Number) return false;   // a finale is played as it is
+            return ContinuesUsed < ContinuePricing.MaxPerAttempt;
+        }
+    }
+
+    /// <summary>
+    /// Buys <paramref name="moves"/> more moves after running out. Only allowed when <see cref="CanContinue"/>. The game
+    /// goes back to playing: the next piece is the next one from the same stream (nothing is skipped or rerolled) and an undo
+    /// snapshot is taken as for any new piece. The app takes the gold; the engine only knows moves.
+    /// </summary>
+    public bool Continue(int moves = ContinuePricing.ExtraMoves)
+    {
+        if (!CanContinue || moves <= 0) return false;
+        _continueMoves += moves;
+        ContinuesUsed++;
+        FailReason = FailReason.None;
+        State = GameState.Playing;   // overwritten by SpawnNext if the next piece cannot be placed
+        SpawnNext();
+        Raise(GameEvent.Continued);
+        Notify();
+        return true;
+    }
 
     public bool HasMoveLimit => MoveLimit > 0;
 
@@ -157,7 +255,11 @@ public sealed class GameEngine
     /// <summary>Colours pieces may use: fixed by the level in Story mode, rising with the score in Classic.</summary>
     public int ColoursInPlay => Story?.Colours ?? ScoringSystem.ColourCountForLevel(Level);
 
-    public int FallIntervalMs => Story?.FallIntervalMs ?? ScoringSystem.FallIntervalMs(Level);
+    /// <summary>The rules this game is played by. The normal rules unless the player set their own.</summary>
+    public GameRules Rules => Setup.Rules;
+
+    /// <summary>How long the falling piece waits between steps (the rules' fall speed applies to it, not to pops).</summary>
+    public int FallIntervalMs => Rules.FallIntervalMs(Story?.FallIntervalMs ?? ScoringSystem.FallIntervalMs(Level));
 
     /// <summary>How long the application layer should wait before the next <see cref="Tick"/>.</summary>
     public int TimerIntervalMs => State != GameState.ResolvingBursts
@@ -190,32 +292,48 @@ public sealed class GameEngine
     public void Start(GameSetup setup) =>
         StartCore(setup, setup.Mode switch
         {
-            GameMode.Story => LevelCatalog.Get(setup.Level, setup.Seed),
+            GameMode.Story => setup.Eased ? LevelCatalog.Get(setup.Level, setup.Seed).ToEased() : LevelCatalog.Get(setup.Level, setup.Seed),
             GameMode.Tutorial => LevelCatalog.Lesson(setup.Level),
             _ => null,
         });
 
     /// <summary>Starts a game from an explicit level definition (previews, tests). A tutorial level starts as a lesson.</summary>
-    public void StartLevel(LevelDefinition level) =>
-        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number) : GameSetup.Story(level.Number, new LevelSeed(level.Seed)), level);
+    public void StartLevel(LevelDefinition level, GameRules? rules = null) =>
+        StartCore(level.IsTutorial ? GameSetup.Lesson(level.Number)
+            : GameSetup.Story(level.Number, new LevelSeed(level.Seed)) with { Eased = level.Eased, Rules = rules ?? GameRules.Default }, level);
 
     private void StartCore(GameSetup setup, LevelDefinition? level)
     {
         Setup = setup;
+        _orbTimer = _piecesSinceOrb = _orbRolls = 0;
+        _orbEver = _orbBrokeThisResolution = false;
+        _orbSeed = Levels.SeedMix.Mix32(level?.PieceSeed ?? setup.ClassicSeed ?? 0, 0x0B0B);
+        // A lesson is always the 16-row board, so nothing scrolls while someone is learning to play.
+        int wantedHeight = (setup.IsLesson ? GameConfig.VisibleRows : setup.Rules.BoardRows) + GameConfig.HiddenRows;
+        if (Board.Height != wantedHeight && RuleFeatures.TallBoards) Board = new Board(Board.Width, wantedHeight);
         Board.Clear();
+        CameraBottom = 0;
+        HighestCamera = 0;
         Story = level;
         _goals = null;
 
         if (level is not null)
         {
-            Board.CopyFrom(level.CreateBoard());
-            _rewindable = new RewindableGenerator(level.CreateGenerator());
+            // A goal that names a colour the player's rules switched off becomes "any colour": it could never be met otherwise.
+            if (setup.Rules.RemapsColours && level.Goals.Any(g => g.Colour != CellColour.Empty && !setup.Rules.Allows(g.Colour)))
+                level = level with { Goals = level.Goals.Select(g => g.Colour != CellColour.Empty && !setup.Rules.Allows(g.Colour) ? g with { Colour = CellColour.Empty } : g).ToList() };
+            Story = level;
+            var pile = level.CreateBoard();
+            if (pile.Height == Board.Height) Board.CopyFrom(pile); else Board.CopyBottomFrom(pile);
+            _rewindable = new RewindableGenerator(level.CreateGenerator(setup.Rules));
             _goals = new GoalTracker(level.Goals, Board.CountOccupied());
         }
         else
         {
             // A seeded Classic run draws its pieces from the seed; any other starts with the generator the engine was built with.
-            IPieceGenerator source = setup.ClassicSeed is { } classicSeed ? new SeededPieceGenerator(classicSeed) : _defaultGenerator;
+            IPieceGenerator source = setup.ClassicSeed is { } classicSeed ? new SeededPieceGenerator(classicSeed, setup.Rules)
+                : setup.Rules.ChangesPieces ? new PieceGenerator(rules: setup.Rules)
+                : _defaultGenerator;
             _rewindable = new RewindableGenerator(source);
         }
         _generator = _rewindable;
@@ -232,6 +350,8 @@ public sealed class GameEngine
 
         Score = 0;
         PiecesPlaced = 0;
+        _continueMoves = 0;
+        ContinuesUsed = 0;
         _poppedClassic = 0;
         ClassicGoldTenths = 0;
         Chain = 0;
@@ -253,7 +373,7 @@ public sealed class GameEngine
     /// <summary>Starts over with the same setup (the same level gives the same pile and pieces again).</summary>
     public void Restart()
     {
-        if (Story is not null) StartLevel(Story);
+        if (Story is not null) StartCore(Setup, Story);   // the same setup (eased, rules, seed) and the same level
         else Start(Setup);
     }
 
@@ -375,7 +495,7 @@ public sealed class GameEngine
             Board[piece.X + c.X, piece.Y + c.Y] = c.Colour;
 
         // A solid piece (one colour, burst-sized by itself) must not pop just by landing: it sleeps until something joins it.
-        ColourMatcher.MarkDormant(Board, piece.Cells.Select(c => (piece.X + c.X, piece.Y + c.Y)));
+        ColourMatcher.MarkDormant(Board, piece.Cells.Select(c => (piece.X + c.X, piece.Y + c.Y)), Rules.MinGroupSize);
 
         CurrentPiece = null;
         PiecesPlaced++;
@@ -384,8 +504,16 @@ public sealed class GameEngine
         LastPenalty = 0;
         Raise(GameEvent.PieceLocked);
 
-        var groups = ColourMatcher.FindGroups(Board);
-        if (groups.Count == 0)
+        // An Orb counts pieces down; at zero it cracks the blocks round it.
+        _orbBrokeThisResolution = false;
+        if (OrbsActive)
+        {
+            _piecesSinceOrb++;
+            if (OrbSystem.Find(Board) is not null && --_orbTimer <= 0) CorruptOrb();
+        }
+
+        var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
+        if (groups.Count == 0 && !(FractureActive && Board.AnyBroken()))
         {
             ApplyPenalty();
             FinishResolution();
@@ -396,7 +524,7 @@ public sealed class GameEngine
         {
             // First wave resolves straight away; further waves (a chain) are paced by Tick.
             ApplyWave(groups);
-            if (ColourMatcher.FindGroups(Board).Count > 0)
+            if (MoreWaves())
             {
                 _phase = Phase.Instant;
                 State = GameState.ResolvingBursts;
@@ -405,6 +533,13 @@ public sealed class GameEngine
             {
                 FinishResolution();
             }
+        }
+        else if (groups.Count == 0)
+        {
+            // Nothing to highlight: only blocks that broke (an Orb's corruption). They go at once.
+            ApplyWave(groups);
+            if (MoreWaves()) { _phase = Phase.Settle; State = GameState.ResolvingBursts; }
+            else FinishResolution();
         }
         else
         {
@@ -419,6 +554,155 @@ public sealed class GameEngine
         State = GameState.ResolvingBursts;
     }
 
+    // ---- The Orb ----
+
+    private int _orbTimer, _piecesSinceOrb, _orbRolls, _orbSeed;
+    private bool _orbEver, _orbBrokeThisResolution;
+
+    /// <summary>
+    /// Orbs can appear in this game: Endless always (unless the rules say Never), the Story from level 40 once
+    /// <see cref="RuleFeatures.OrbsInStory"/> is on, or on any level but a lesson when the rules say Always.
+    /// </summary>
+    public bool OrbsActive =>
+        RuleFeatures.Orbs && Rules.Orbs != OrbMode.Never
+        && (Rules.Orbs == OrbMode.Always
+            ? Story is not { IsTutorial: true }
+            : Story is null || (RuleFeatures.OrbsInStory && !Story.IsTutorial && Story.Number >= RegionRules.OrbIntro));
+
+    /// <summary>The top-left cell of the Orb on the board, or null.</summary>
+    public (int X, int Y)? OrbAt => OrbSystem.Find(Board);
+
+    /// <summary>
+    /// Where the Orb was (top-left cell) when it last appeared, broke or ran out of time, for the effects that go with those events.
+    /// It is set just before <see cref="GameEvent.OrbSpawned"/>, <see cref="GameEvent.OrbBroken"/> and <see cref="GameEvent.OrbCorrupted"/>.
+    /// </summary>
+    public (int X, int Y)? OrbEventAt { get; private set; }
+
+    /// <summary>Pieces left before the Orb on the board cracks the blocks round it (0 when there is none).</summary>
+    public int OrbTimerLeft => OrbSystem.Find(Board) is null ? 0 : _orbTimer;
+
+    private bool NextOrbRoll()
+    {
+        double u = (Levels.SeedMix.Mix32(_orbSeed, ++_orbRolls) & 0xFFFFFF) / 16777216.0;
+        return u < OrbSystem.SpawnChance;
+    }
+
+    /// <summary>
+    /// Once per settle, before the next piece: an Orb may appear. It needs no Orb on the board and four pieces since the last
+    /// one left (or since the level began); then a screen window with enough blocks, colours and lonely blocks; then a roll of
+    /// 35% (always, when the rules say so). If none has appeared by the eighth piece, the next settle puts one at the best
+    /// spot there is, thresholds or not. The roll comes from the engine's own seeded stream, never from the piece stream.
+    /// </summary>
+    private void MaybeSpawnOrb()
+    {
+        if (!OrbsActive || _orbBrokeThisResolution || OrbSystem.Find(Board) is not null) return;
+        bool guarantee = !_orbEver && PiecesPlaced >= OrbSystem.GuaranteeByPiece;
+        if (!guarantee && _piecesSinceOrb < OrbSystem.PiecesBetween) return;
+
+        UpdateCamera();
+        var spots = OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: false);
+        if (!guarantee)
+        {
+            if (spots.Count == 0) return;
+            if (Rules.Orbs != OrbMode.Always && !NextOrbRoll()) return;
+        }
+
+        bool placed = false;
+        foreach (var (x, y) in spots)
+            if (placed = OrbSystem.TryPlace(Board, x, y)) break;
+        if (!placed && guarantee)
+            foreach (var (x, y) in OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: true))
+                if (placed = OrbSystem.TryPlace(Board, x, y)) break;
+        if (!placed) return;
+
+        GravityResolver.Apply(Board);   // what was pushed up settles on the Orb
+        _orbTimer = Rules.OrbTimer;
+        _orbEver = true;
+        _piecesSinceOrb = 0;
+        OrbEventAt = OrbSystem.Find(Board);
+        Raise(GameEvent.OrbSpawned);
+    }
+
+    /// <summary>
+    /// Puts an Orb with its top-left cell at (x, y) right now, whatever the cooldown, the windows and the roll say (development
+    /// tools and tests). Blocks are pushed up to make room, as for a real spawn. False if there is no room.
+    /// </summary>
+    public bool PlaceOrb(int x, int y, int? timer = null)
+    {
+        if (OrbSystem.Find(Board) is not null || !OrbSystem.TryPlace(Board, x, y)) return false;
+        GravityResolver.Apply(Board);
+        _orbTimer = timer ?? Rules.OrbTimer;
+        _orbEver = true;
+        _piecesSinceOrb = 0;
+        OrbEventAt = OrbSystem.Find(Board);
+        Raise(GameEvent.OrbSpawned);
+        Notify();
+        return true;
+    }
+
+    /// <summary>Gives every block on the board one more crack, up to two (development tools).</summary>
+    public void DevCrackAll()
+    {
+        for (int y = 0; y < Board.Height; y++)
+            for (int x = 0; x < Board.Width; x++)
+                if (Board[x, y] is not (CellColour.Empty or CellColour.Orb))
+                    Board.SetFracture(x, y, Math.Min(2, Board.FractureAt(x, y) + 1));
+        Notify();
+    }
+
+    /// <summary>Fills the bottom <paramref name="rows"/> rows (all but the last column) with blocks that never join, to reach the camera and the overflow (development tools).</summary>
+    public void DevFillRows(int rows)
+    {
+        rows = Math.Clamp(rows, 0, BoardRows - 1);
+        for (int r = 0; r < rows; r++)
+            for (int x = 0; x < Board.Width - 1; x++)
+            {
+                int y = Board.Height - 1 - r;
+                if (Board[x, y] == CellColour.Empty) Board[x, y] = (CellColour)(1 + (x + r * 2) % 3);
+            }
+        UpdateCamera();
+        Notify();
+    }
+
+    /// <summary>Puts an Orb at the best spot there is, ignoring every condition (development tools).</summary>
+    public bool SpawnOrbNow()
+    {
+        UpdateCamera();
+        foreach (var (x, y) in OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: true))
+            if (PlaceOrb(x, y)) return true;
+        return false;
+    }
+
+    /// <summary>The timer ran out: the twelve cells round the Orb take a crack each (they break at the third), the Orb goes, no gold.</summary>
+    private void CorruptOrb()
+    {
+        if (OrbSystem.Find(Board) is not { } o) return;
+        OrbEventAt = o;
+        OrbSystem.Remove(Board, o.X, o.Y);
+        if (FractureActive)
+            foreach (var (x, y) in OrbSystem.Ring(o.X, o.Y))
+                if (Board.IsInside(x, y) && Board[x, y] is not (CellColour.Empty or CellColour.Orb))
+                    Board.SetFracture(x, y, Math.Min(Models.Board.Broken, Board.FractureAt(x, y) + 1));
+        GravityResolver.Apply(Board);
+        _piecesSinceOrb = 0;
+        _orbBrokeThisResolution = true;
+        Raise(GameEvent.OrbCorrupted);
+    }
+
+    /// <summary>Blocks crack in this game: the rules and the feature allow it, and (in the Story) the level is far enough in. Never in a lesson.</summary>
+    public bool FractureActive =>
+        RuleFeatures.Fracture && Rules.Fracture
+        && (Story is null || (!Story.IsTutorial && Story.Number >= RegionRules.FractureIntro));
+
+    /// <summary>Another wave is waiting: a burst-sized group, or a block that cracked a third time.</summary>
+    private bool MoreWaves() => ColourMatcher.FindGroups(Board, Rules.MinGroupSize).Count > 0 || (FractureActive && Board.AnyBroken());
+
+    /// <summary>Gold weight of a block by its cracks: whole when intact, three quarters with one crack, half with two, and half when it breaks.</summary>
+    internal static double CrackGoldFactor(int cracks) => cracks switch { 0 => 1.0, 1 => 0.75, _ => 0.5 };
+
+    /// <summary>The same weights, for the tests.</summary>
+    public static double CrackGoldFactorForTests(int cracks) => CrackGoldFactor(cracks);
+
     /// <summary>Plays the next step of a pop. Timed pops go highlight, then pop, then settle; instant pops just pop.</summary>
     private void AdvanceResolution()
     {
@@ -432,22 +716,23 @@ public sealed class GameEngine
 
             case Phase.Settle:
             {
-                var groups = ColourMatcher.FindGroups(Board);
-                if (groups.Count == 0) FinishResolution();
-                else BeginHighlight(groups);
+                var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
+                if (groups.Count > 0) BeginHighlight(groups);
+                else if (FractureActive && Board.AnyBroken()) ApplyWave(NoGroups);   // a block that cracked a third time breaks now
+                else FinishResolution();
                 break;
             }
 
             default:
             {
-                var groups = ColourMatcher.FindGroups(Board);
-                if (groups.Count == 0)
+                var groups = ColourMatcher.FindGroups(Board, Rules.MinGroupSize);
+                if (groups.Count == 0 && !(FractureActive && Board.AnyBroken()))
                 {
                     FinishResolution();
                     break;
                 }
                 ApplyWave(groups);
-                if (ColourMatcher.FindGroups(Board).Count == 0) FinishResolution();
+                if (!MoreWaves()) FinishResolution();
                 break;
             }
         }
@@ -463,20 +748,130 @@ public sealed class GameEngine
         int points = ScoringSystem.WavePoints(groups.Select(g => g.Size), Chain);
         var cleared = groups.SelectMany(g => g.Cells).ToList();
 
-        // Classic pays by the block, at the Classic level the pop happens at (before this wave's points are counted).
-        // Every wave counts, chain waves included, with no chain multiplier. Drop points never count.
-        if (Story is null) ClassicGoldTenths += cleared.Count * SeedingConfig.ClassicTenthsPerBlock(Level);
+        // Blocks that cracked a third time in the wave before break now, with this one.
+        bool fracture = FractureActive;
+        var broken = fracture ? Board.TakeBrokenList() : new List<BlockCell>();
+        var brokenGold = 0.0;
+        if (broken.Count > 0)
+        {
+            var inGroups = new HashSet<(int, int)>(cleared.Select(c => (c.X, c.Y)));
+            broken.RemoveAll(b => inGroups.Contains((b.X, b.Y)));   // one that is also part of a burst pops with it
+            foreach (var b in broken)
+            {
+                cleared.Add(b);
+                brokenGold += CrackGoldFactor(Board.Broken);
+            }
+        }
+
+        // Pop gold is paid by the block, at the Endless level the pop happens at (before this wave's points are counted).
+        // Every wave counts, chain waves included, with no chain multiplier. Drop points never count. Each group reports
+        // what it paid and where it was, so the app can float the number over it.
+        int rate = EarnsPopGold ? SeedingConfig.ClassicTenthsPerBlock(Level) : 0;
+        bool scaled = Rules.GoldFactor < 1.0;   // easier rules pay half
+        var payouts = new GroupGold[groups.Count + (broken.Count > 0 ? 1 : 0)];
+        for (int g = 0; g < groups.Count; g++)
+        {
+            var cells = groups[g].Cells;
+            float sx = 0, sy = 0;
+            double weight = 0;   // a cracked block pays less (see CrackGoldFactor)
+            for (int c = 0; c < cells.Count; c++)
+            {
+                sx += cells[c].X;
+                sy += cells[c].Y;
+                weight += fracture ? CrackGoldFactor(Board.FractureAt(cells[c].X, cells[c].Y)) : 1.0;
+            }
+            int tenths = (int)Math.Round(weight * rate, MidpointRounding.AwayFromZero);
+            payouts[g] = new GroupGold(sx / cells.Count + 0.5f, sy / cells.Count + 0.5f, cells.Count, multiplier, scaled ? Rules.ScaleTenths(tenths) : tenths, groups[g].Colour);
+            ClassicGoldTenths += payouts[g].GoldTenths;
+        }
+        if (broken.Count > 0)
+        {
+            float bx = 0, by = 0;
+            foreach (var b in broken) { bx += b.X; by += b.Y; }
+            int tenths = (int)Math.Round(brokenGold * rate, MidpointRounding.AwayFromZero);   // half pay for each broken block
+            payouts[^1] = new GroupGold(bx / broken.Count + 0.5f, by / broken.Count + 0.5f, broken.Count, multiplier, scaled ? Rules.ScaleTenths(tenths) : tenths, broken[0].Colour);
+            ClassicGoldTenths += payouts[^1].GoldTenths;
+        }
+
+        // An Orb touched by a pop (a group, or a block that broke) breaks: it takes every block in its two rows and two columns.
+        var orbPopped = new List<BlockCell>();
+        (int X, int Y)? orbAt = OrbSystem.Find(Board);
+        if (orbAt is { } o && cleared.Any(c => (c.X >= o.X - 1 && c.X <= o.X + 2 && c.Y >= o.Y && c.Y <= o.Y + 1) || (c.Y >= o.Y - 1 && c.Y <= o.Y + 2 && c.X >= o.X && c.X <= o.X + 1)))
+        {
+            var already = new HashSet<(int, int)>(cleared.Select(c => (c.X, c.Y)));
+            foreach (var c in OrbSystem.CrossCells(Board, o.X, o.Y))
+                if (!already.Contains((c.X, c.Y))) orbPopped.Add(c);
+            cleared.AddRange(orbPopped);
+        }
+        else
+        {
+            orbAt = null;
+        }
+        if (orbAt is { } hit)
+        {
+            double weight = 0;
+            float ox = 0, oy = 0;
+            foreach (var c in orbPopped) { weight += fracture ? CrackGoldFactor(Board.FractureAt(c.X, c.Y)) : 1.0; ox += c.X; oy += c.Y; }
+            int tenths = (int)Math.Round(weight * rate, MidpointRounding.AwayFromZero) + (rate > 0 ? OrbSystem.BreakBonusGold * 10 : 0);   // the bonus pays whatever the rate
+            float cxm = orbPopped.Count > 0 ? ox / orbPopped.Count + 0.5f : hit.X + 1f, cym = orbPopped.Count > 0 ? oy / orbPopped.Count + 0.5f : hit.Y + 1f;
+            var list = payouts.ToList();
+            list.Add(new GroupGold(cxm, cym, orbPopped.Count, multiplier, scaled ? Rules.ScaleTenths(tenths) : tenths, orbPopped.Count > 0 ? orbPopped[0].Colour : CellColour.Cyan));
+            payouts = list.ToArray();
+            ClassicGoldTenths += payouts[^1].GoldTenths;
+        }
 
         GravityResolver.Clear(Board, cleared);
+        if (orbAt is { } gone)
+        {
+            OrbSystem.Remove(Board, gone.X, gone.Y);
+            _piecesSinceOrb = 0;
+            _orbBrokeThisResolution = true;   // no new Orb in the resolution that broke one
+        }
+        var cracked = fracture ? CrackNeighbours(Board, cleared) : (IReadOnlyList<BlockCell>)Array.Empty<BlockCell>();
         var moves = GravityResolver.Apply(Board);
         Score += points;
         _poppedClassic += cleared.Count;
 
-        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves);
+        var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts, Broken = broken, Cracked = cracked, OrbPopped = orbPopped, OrbBroke = orbAt is not null, OrbAt = orbAt, OrbTimerAtBreak = _orbTimer };
+        if (orbAt is not null) { OrbEventAt = orbAt; Raise(GameEvent.OrbBroken); }
         LastWave = wave;
         _goals?.OnWave(wave);
         WaveResolved?.Invoke(wave);
         Raise(GameEvent.Popped);
+    }
+
+    /// <summary>
+    /// After a wave has cleared its blocks: every surviving block with a cleared neighbour on two or more different sides gets one
+    /// more crack (at most once per wave; corners and diagonals do not count). A third crack leaves the block waiting
+    /// (<see cref="Board.Broken"/>) to break in the next step of the same resolution. Sleeping blocks crack like any other.
+    /// </summary>
+    internal static List<BlockCell> CrackNeighbours(Board board, List<BlockCell> cleared)
+    {
+        var result = new List<BlockCell>();
+        int w = board.Width;
+        var gone = new bool[w * board.Height];
+        foreach (var c in cleared) gone[c.Y * w + c.X] = true;
+
+        var hits = new List<(int X, int Y)>();
+        for (int y = 0; y < board.Height; y++)
+            for (int x = 0; x < w; x++)
+            {
+                if (gone[y * w + x] || board[x, y] is CellColour.Empty or CellColour.Orb) continue;
+                int sides = 0;
+                if (x > 0 && gone[y * w + x - 1]) sides++;
+                if (x < w - 1 && gone[y * w + x + 1]) sides++;
+                if (y > 0 && gone[(y - 1) * w + x]) sides++;
+                if (y < board.Height - 1 && gone[(y + 1) * w + x]) sides++;
+                if (sides >= 2) hits.Add((x, y));
+            }
+
+        foreach (var (x, y) in hits)
+        {
+            int level = Math.Min(PopBlocks.Engine.Models.Board.Broken, board.FractureAt(x, y) + 1);
+            board.SetFracture(x, y, level);
+            result.Add(new BlockCell(x, y, board[x, y]));
+        }
+        return result;
     }
 
     private void ApplyPenalty()
@@ -516,6 +911,7 @@ public sealed class GameEngine
             return;
         }
 
+        MaybeSpawnOrb();
         SpawnNext();
     }
 
@@ -530,15 +926,35 @@ public sealed class GameEngine
     private void FillQueue()
     {
         while (_queue.Count < _previewCount)
-            _queue.Add(_generator.Next(ColoursInPlay));
+            _queue.Add(NextFromGenerator());
+    }
+
+    /// <summary>
+    /// The next piece from the generator. With the player's own colours the generator deals colours 1..n as usual and they are
+    /// then mapped onto the enabled colours in order (so only n of them are dealt, never a disabled one). With the normal five
+    /// the mapping is the identity and this is exactly the old call.
+    /// </summary>
+    private Piece NextFromGenerator()
+    {
+        var rules = Rules;
+        if (!rules.RemapsColours) return _generator.Next(ColoursInPlay);
+
+        var piece = _generator.Next(Math.Min(ColoursInPlay, rules.ColourCount));
+        var cells = new BlockCell[piece.Cells.Count];
+        for (int i = 0; i < cells.Length; i++)
+            cells[i] = new BlockCell(piece.Cells[i].X, piece.Cells[i].Y, rules.MapColour(piece.Cells[i].Colour));
+        return new Piece(cells, piece.X, piece.Y, piece.Pivot2X, piece.Pivot2Y);
     }
 
     private void SpawnNext()
     {
+        UpdateCamera();   // the board has settled: decide what the screen shows before the next piece appears
         var piece = _queue[0];
         _queue.RemoveAt(0);
         FillQueue();
         NextPiece = _queue[0];
+        int lift = ViewTopRow - GameConfig.HiddenRows;   // 0 on a standard board; on a tall one the piece appears at the top of the screen
+        if (lift > 0) piece = piece.Moved(0, lift);
 
         if (!CollisionDetector.IsValid(Board, piece))
         {
@@ -557,9 +973,21 @@ public sealed class GameEngine
 
     private EngineSnapshot Capture(Piece piece) => new(
         Board.Clone(), piece, _queue.ToArray(), Score, PiecesPlaced, _poppedClassic,
-        LastChain, LastPenalty, LastWave, _goals?.Clone(), _rewindable?.Position ?? 0);
+        LastChain, LastPenalty, LastWave, _goals?.Clone(), _rewindable?.Position ?? 0, ClassicGoldTenths,
+        _orbTimer, _piecesSinceOrb, _orbRolls, _orbEver);
 
     // ------------------------------------------------------------------ helpers
+
+    // ---- Pip's Insight ----
+
+    /// <summary>Insight is not given in a lesson or on a region's finale (the helpers are off there too).</summary>
+    public bool InsightAllowed => Story is null || (Story is { IsTutorial: false, AllowAbilities: true } s && RegionCatalog.For(s.Number)?.LastLevel != s.Number);
+
+    /// <summary>A copy of what the advisor needs for the piece in hand, or null if there is no piece in play.</summary>
+    public AdviceRequest? CreateAdviceRequest() =>
+        CurrentPiece is { } piece && State == GameState.Playing
+            ? new AdviceRequest(Board.Clone(), piece, _goals?.Clone(), Score, Rules.MinGroupSize, FractureActive)
+            : null;
 
     /// <summary>Second Chances used this level (0 or 1).</summary>
     public int SecondChanceUsed { get; private set; }
@@ -619,6 +1047,7 @@ public sealed class GameEngine
 
         var snap = _beforeLast!;
         Board.CopyFrom(snap.Board);
+        UpdateCamera();
         _queue.Clear();
         _queue.AddRange(snap.Queue);
         NextPiece = _queue[0];
@@ -626,6 +1055,12 @@ public sealed class GameEngine
         Score = snap.Score;
         PiecesPlaced = snap.PiecesPlaced;
         _poppedClassic = snap.PoppedBlocks;
+        ClassicGoldTenths = snap.GoldTenths;   // a rewound pop pays nothing, so undoing and popping again cannot farm gold
+        _orbTimer = snap.OrbTimer;
+        _piecesSinceOrb = snap.PiecesSinceOrb;
+        _orbRolls = snap.OrbRolls;
+        _orbEver = snap.OrbEver;
+        _orbBrokeThisResolution = false;
         Chain = 0;
         LastChain = snap.LastChain;
         LastPenalty = snap.LastPenalty;
@@ -673,12 +1108,12 @@ public sealed class GameEngine
     {
         var next = NextPiece!;
         var shifted = next.WithNextColourOrder();
-        if (shifted is null || next.IsSolid) return shifted;
+        if (shifted is null || next.IsSolidFor(Rules.MinGroupSize)) return shifted;
 
         // The last colouring wraps round to the current one, so there are DistinctColourOrders - 1 others to try.
-        for (int tried = 1; tried < next.DistinctColourOrders - 1 && shifted!.IsSolid; tried++)
+        for (int tried = 1; tried < next.DistinctColourOrders - 1 && shifted!.IsSolidFor(Rules.MinGroupSize); tried++)
             shifted = shifted.WithNextColourOrder();
-        return shifted!.IsSolid ? null : shifted;
+        return shifted!.IsSolidFor(Rules.MinGroupSize) ? null : shifted;
     }
 
     private void Raise(GameEvent e) => EventRaised?.Invoke(e);

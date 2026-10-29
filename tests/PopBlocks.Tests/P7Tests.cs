@@ -27,6 +27,11 @@ public class P7Tests
         "first_clear_seeds", "classic_gold_carry",
         // Audio settings (the soundtrack update). Sound effects on/off stays the older "sound_effects" key.
         "audio_master", "audio_music", "audio_sfx", "audio_ambience", "audio_mute_master", "audio_mute_music", "audio_mute_ambience", "audio_reduced", "audio_track",
+        // v1.1 (overnight build). Add-only.
+        "stat_rerolls", "stat_continues", "stat_orbs_broken", "stat_fracture_breaks", "stat_shares", "stat_clean_wins", "level_losses", "eased_levels", "consolation_paid",
+        "rule_fall_speed", "rule_colour_count", "rule_colours", "rule_shapes", "rule_min_group", "rule_solid_chance", "rule_board_rows",
+        "rule_fracture", "rule_orbs", "rule_orb_timer", "rule_use_in_story", "settings_tab", "show_hanging", "colour_assist",
+        "cosmetic_mix_cyan", "cosmetic_mix_coral", "cosmetic_mix_yellow", "cosmetic_mix_purple", "cosmetic_mix_lime", "cosmetic_seen", "storybook_tab", "upgrade_insight", "insight_always_on", "seen_orb_intro",
     };
 
     [Fact]
@@ -127,8 +132,10 @@ public class P7Tests
         for (int n = 1; n <= RegionCatalog.LastCampaignLevel; n++) run.Clear(n);
         int earned = run.Progress.Gold;   // level gold and region rewards only: achievements are a bonus on top
 
-        int shop = ShopCatalog.Items.SelectMany(i => i.Tiers).Sum(t => t.Price);
-        int looks = CosmeticCatalog.TotalPrice;
+        // Pip's Insight (1,500 over three tiers) is a v1.1 sink financed by pop gold, like the new looks; the rest is story-paced.
+        int shop = ShopCatalog.Items.Where(i => i.Id != ShopCatalog.Insight).SelectMany(i => i.Tiers).Sum(t => t.Price);
+        // The v1.1 looks (CosmeticCatalog.NewPrice) are long-term sinks for pop gold and Endless income, not part of this story-paced budget.
+        int looks = CosmeticCatalog.OriginalPrice;
         Assert.True(shop + looks <= earned, $"everything for sale costs {shop + looks}, the campaign pays {earned}");
 
         // Every requirement is met by finishing the campaign: nothing waits on a replay or an optional collectible.

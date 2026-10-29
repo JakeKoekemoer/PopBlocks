@@ -30,7 +30,7 @@ public sealed class BlastEffects
         public float CentreX, CentreY;      // centroid of the cleared cells, in board cells
         public CellColour Dominant;
         /// <summary>Rows each cell fell, indexed [y * Columns + x] by its final position.</summary>
-        public int[] Drop = new int[GameConfig.Columns * GameConfig.TotalRows];
+        public int[] Drop = new int[GameConfig.Columns * (GameConfig.MaxBoardRows + GameConfig.HiddenRows)];
     }
 
     private const int SlotCount = 4;
@@ -39,6 +39,7 @@ public sealed class BlastEffects
 
     private long _chainStartMs = long.MinValue;
     private string _chainText = string.Empty;
+    private int _chainGoldTenths;   // gold paid by the chain so far, for the banner
     private long _shakeStartMs = long.MinValue;
     private int _shakeFlair;
 
@@ -69,6 +70,8 @@ public sealed class BlastEffects
             Reduced = ReducedMotion,
         };
         burst.DurationMs = burst.Flair >= 3 ? 1000 : VisualDesign.BurstDurationMs;
+        // Petals drift for about a second and shards are done in under half of one; they draw themselves (BurstParticles).
+        if (Style is BurstStyle.Petals or BurstStyle.Shards) burst.DurationMs = BurstParticles.LifeMs(Style, ReducedMotion);
         if (ReducedMotion) burst.DurationMs = Math.Min(burst.DurationMs, 450);
 
         foreach (var move in wave.Moves)
@@ -86,10 +89,13 @@ public sealed class BlastEffects
         _slots[_nextSlot] = burst;
         _nextSlot = (_nextSlot + 1) % SlotCount;
 
+        _chainGoldTenths = wave.ChainIndex <= 1 ? wave.GoldTenths : _chainGoldTenths + wave.GoldTenths;
         if (wave.ChainIndex >= 2)
         {
             _chainStartMs = nowMs;
-            _chainText = $"CHAIN ×{wave.Multiplier}";
+            _chainText = _chainGoldTenths > 0
+                ? $"CHAIN ×{wave.Multiplier}  +{FloatingText.FormatGold(_chainGoldTenths)} gold"
+                : $"CHAIN ×{wave.Multiplier}";
         }
 
         if (burst.Flair >= 2)
@@ -263,6 +269,78 @@ public sealed class BlastEffects
         }
     }
 
+    private static readonly IReadOnlyList<BlockCell> NoCells = Array.Empty<BlockCell>();
+    private const int CrackTickMs = 120;
+    private const int BreakMs = 400;
+
+    /// <summary>
+    /// Cracks and breaks. A block that has just cracked gets a 120 ms white tick and two specks of dust; a block that breaks
+    /// splits into three grey-tinted chunks that fall away over 400 ms. Under Reduced motion the tick is all there is.
+    /// </summary>
+    private static void DrawCracking(ICanvas canvas, Burst burst, float originX, float originY, float cell, bool flip, long age)
+    {
+        var wave = burst.Wave;
+        if (age < CrackTickMs)
+        {
+            float k = 1f - age / (float)CrackTickMs;
+            for (int ci = 0; ci < wave.Cracked.Count; ci++)
+            {
+                var c = wave.Cracked[ci];
+                // Where the block ended up after the wave's gravity.
+                int y = c.Y;
+                for (int mi = 0; mi < wave.Moves.Count; mi++)
+                {
+                    var m = wave.Moves[mi];
+                    if (m.X == c.X && m.FromY == c.Y) { y = m.ToY; break; }
+                }
+                if (BoardSpace.AboveView(y)) continue;
+                float px = BoardSpace.ScreenX(c.X, flip, originX, cell), py = BoardSpace.ScreenY(y, flip, originY, cell);
+                canvas.Alpha = 0.85f * k;
+                canvas.FillColor = Colors.White;
+                canvas.FillRoundedRectangle(px + 2f, py + 2f, cell - 4f, cell - 4f, cell * 0.2f);
+                if (!burst.Reduced)
+                {
+                    canvas.Alpha = k;
+                    float r = MathF.Max(1.2f, cell * 0.04f);
+                    for (int d = 0; d < 2; d++)
+                    {
+                        float ang = (BoardSpace.Noise(c.X * 7 + c.Y, d) * 2f - 1f) * MathF.PI;
+                        float dist = cell * (0.25f + 0.35f * (1f - k));
+                        canvas.FillEllipse(px + cell / 2f + MathF.Cos(ang) * dist - r, py + cell / 2f + MathF.Sin(ang) * dist - r, r * 2f, r * 2f);
+                    }
+                }
+            }
+        }
+
+        if (burst.Reduced || age >= BreakMs) { canvas.Alpha = 1f; return; }
+        float t = age / (float)BreakMs;
+        float dir = flip ? -1f : 1f;
+        for (int bi = 0; bi < wave.Broken.Count; bi++)
+        {
+            var c = wave.Broken[bi];
+            if (BoardSpace.AboveView(c.Y)) continue;
+            float cx = BoardSpace.ScreenX(c.X, flip, originX, cell) + cell / 2f, cy = BoardSpace.ScreenY(c.Y, flip, originY, cell) + cell / 2f;
+            for (int p = 0; p < 3; p++)
+            {
+                float angle = -MathF.PI / 2f + (p - 1) * 0.9f + (BoardSpace.Noise(c.X + p, c.Y) - 0.5f) * 0.4f;
+                float speed = cell * (1.2f + 0.8f * BoardSpace.Noise(p, c.X));
+                float x = cx + MathF.Cos(angle) * speed * t;
+                float y = cy + (MathF.Sin(angle) * speed * t + cell * 4.5f * t * t) * dir;
+                float s = cell * (0.30f - 0.05f * p);
+                canvas.Alpha = 1f - t * t;
+                canvas.FillColor = Mix(VisualDesign.BaseColour(c.Colour), Color.FromArgb("#808890"), 0.6f);
+                canvas.SaveState();
+                canvas.Translate(x, y);
+                canvas.Rotate(t * (200f + 90f * p));
+                canvas.FillRectangle(-s / 2f, -s / 2f, s, s * 0.8f);
+                canvas.RestoreState();
+            }
+        }
+        canvas.Alpha = 1f;
+    }
+
+    private static Color Mix(Color a, Color b, float t) => new(a.Red + (b.Red - a.Red) * t, a.Green + (b.Green - a.Green) * t, a.Blue + (b.Blue - a.Blue) * t, 1f);
+
     private static void DrawBurst(ICanvas canvas, Burst burst, float originX, float originY, float cell, bool flip, long age, float boardWidth)
     {
         float t = MathF.Min(1f, age / (float)VisualDesign.BurstDurationMs);   // the core burst
@@ -270,12 +348,17 @@ public sealed class BlastEffects
         float inset = cell * VisualDesign.CellInset;
         int flair = burst.Flair;
         var wave = burst.Wave;
+        if (wave.Cracked.Count > 0 || wave.Broken.Count > 0) DrawCracking(canvas, burst, originX, originY, cell, flip, age);
+
+        // Petals and shards are whole particle systems of their own and replace the neon swell and the sparks.
+        bool particles = burst.Style is BurstStyle.Petals or BurstStyle.Shards;
+        if (particles) BurstParticles.Draw(canvas, burst.Style, wave, burst.Reduced, originX, originY, cell, flip, age);
 
         int index = 0;
-        foreach (var c in wave.ClearedCells)
+        foreach (var c in particles ? NoCells : wave.ClearedCells)
         {
             index++;
-            if (c.Y < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(c.Y)) continue;
 
             float px = BoardSpace.ScreenX(c.X, flip, originX, cell);
             float py = BoardSpace.ScreenY(c.Y, flip, originY, cell);
@@ -348,7 +431,7 @@ public sealed class BlastEffects
             for (int i = 0; i < pieces; i++)
             {
                 var source = wave.ClearedCells[i % wave.ClearedCells.Count];
-                if (source.Y < GameConfig.HiddenRows) continue;
+                if (BoardSpace.AboveView(source.Y)) continue;
 
                 float ox = BoardSpace.ScreenX(source.X, flip, originX, cell) + cell / 2f;
                 float oy = BoardSpace.ScreenY(source.Y, flip, originY, cell) + cell / 2f;
@@ -372,7 +455,7 @@ public sealed class BlastEffects
         }
 
         // Score tag rising from the pop.
-        if (wave.Points > 0 && burst.CentreY >= GameConfig.HiddenRows - 1)
+        if (wave.Points > 0 && burst.CentreY >= BoardSpace.ViewTop - 1)
         {
             float life = age / (float)burst.DurationMs;
             float alpha = life < 0.12f ? life / 0.12f : MathF.Max(0f, 1f - (life - 0.12f) / 0.88f);

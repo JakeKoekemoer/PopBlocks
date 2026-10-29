@@ -129,6 +129,9 @@ public sealed class GoalTracker
             _poppedByColour[(int)g.Colour] += g.Size;
             BestGroup = Math.Max(BestGroup, g.Size);
         }
+        // A block that broke from its third crack counts for its colour, but it is not a group.
+        foreach (var b in wave.Broken) _poppedByColour[(int)b.Colour]++;
+        foreach (var b in wave.OrbPopped) _poppedByColour[(int)b.Colour]++;   // blocks an Orb cleared count for their colours too
     }
 
     /// <summary>Separate chains so far (the one still open included) with at least this many waves.</summary>

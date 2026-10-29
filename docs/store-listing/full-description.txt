@@ -9,16 +9,26 @@ STORY MODE
 - Goals include reaching a score, popping a number of blocks, popping one colour, making a chain, popping one big group, clearing the board and making separate chains. Some levels combine several goals
 - Every level is checked to be winnable, and you never need upgrades to finish the campaign
 - Stuck? Swap a level for a new one with a reroll. It costs a little gold, less after every try, and it is free after 10 tries
-- Later regions bring new twists, including boards that are drawn upside down
+- Later regions bring new twists, including boards that are drawn upside down and blocks that crack before they break
+- Lose a level a few times and the game tells you there is always a way through; lose it often and you can ease it
 
-CLASSIC MODE
-Start from an empty board and keep going. The pieces speed up as your score grows. Beat your personal best, and earn gold for every block you pop. Want the same pieces again? Start a run from a seed.
+ENDLESS MODE
+Start from an empty board and keep going. The pieces speed up as your score grows. Beat your personal best, and earn gold for every block you pop. Watch for the Orb, a glass sphere that clears a cross of blocks when you pop beside it, and cracks the blocks around it if you leave it too long. Orbs turn up in the Story too, from level 40. Want the same pieces again? Start a run from a seed.
+
+YOUR GAME, YOUR RULES
+Change the fall speed, the colours, the shapes, how many blocks make a burst, and how tall the board is, up to 32 rows with a camera that follows the stack. Turn cracked blocks and Orbs on or off. Easier rules pay half the gold, so the Story stays fair.
+
+PIP'S INSIGHT
+A helper from Bram's workshop that outlines the best place for the piece in your hand. Buy it in three steps, from a few uses a level to always on.
+
+THE STORY BOOK
+The scenes and memories you have found, kept in one place and ready to read again.
 
 LEARN AT YOUR OWN PACE
 Ten short coached lessons teach moving, rotating, dropping, chains, moves and goals. You are offered them once, and you can replay them any time from the menu.
 
 GROW YOUR WORKSHOP
-Clear a level for the first time to earn gold, pop blocks in Classic to earn more, and earn more still by restoring regions and unlocking achievements. Spend it in Bram's workshop on helpers such as seeing more of the next pieces, extra moves, taking back your last block and shifting the colours of the next piece. You can also spend it on how the game looks: block skins, burst styles, boards, piece frames and accessories for Pip. Gold can only be earned by playing.
+Clear a level for the first time to earn gold, pop blocks in Endless to earn more, and earn more still by restoring regions and unlocking achievements. Spend it in Bram's workshop on helpers such as seeing more of the next pieces, extra moves, taking back your last block and shifting the colours of the next piece. You can also spend it on how the game looks: block sets, burst styles (petals or shards), boards, piece frames and looks for Pip. Share how a level went as a short text message. Gold can only be earned by playing.
 
 MADE FOR EVERYONE
 - Every colour also has its own symbol on the block, so colour is never the only clue

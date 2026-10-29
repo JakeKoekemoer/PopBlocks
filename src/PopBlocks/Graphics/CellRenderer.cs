@@ -47,11 +47,11 @@ public static class CellRenderer
         DrawLayer(canvas, BlockLayer.Detail, x, y, size, colour, links);
     }
 
-    public static void DrawLayer(ICanvas canvas, BlockLayer layer, float x, float y, float size, CellColour colour, CellLinks links)
+    public static void DrawLayer(ICanvas canvas, BlockLayer layer, float x, float y, float size, CellColour colour, CellLinks links, int cracks = 0)
     {
         float inset = size * VisualDesign.CellInset;
-        float border = size * VisualDesign.Border;
-        float radius = size * VisualDesign.Corner;
+        float border = size * VisualDesign.BorderFor(colour);
+        float radius = size * VisualDesign.CornerFor(colour);
         float half = size / 2f;
 
         float left = x + inset;
@@ -102,7 +102,7 @@ public static class CellRenderer
 
             default:
             {
-                var style = VisualDesign.Highlight;
+                var style = VisualDesign.HighlightFor(colour);
 
                 // Top highlight, only where the cell has an exposed top edge. (Faceted skins draw facets instead.)
                 if (!links.HasFlag(CellLinks.Up) && style != HighlightStyle.Facet)
@@ -134,7 +134,14 @@ public static class CellRenderer
                 }
 
                 if (style == HighlightStyle.Facet) DrawFacets(canvas, innerLeft, innerTop, innerSpan);
-                if (VisualDesign.Pattern != SkinPattern.None && size >= 14f) DrawPattern(canvas, VisualDesign.Pattern, innerLeft, innerTop, innerSpan);
+                var pattern = VisualDesign.PatternFor(colour);
+                if (pattern != SkinPattern.None && size >= 14f)
+                {
+                    if (pattern >= SkinPattern.Stars) PatternCache.Draw(canvas, pattern, colour, innerLeft, innerTop, innerSpan);
+                    else DrawPattern(canvas, pattern, innerLeft, innerTop, innerSpan);
+                }
+                if (VisualDesign.BevelFor(colour)) DrawBevel(canvas, innerLeft, innerTop, innerSpan);
+                if (cracks > 0 && size >= 12f) DrawCracks(canvas, innerLeft, innerTop, innerSpan, Math.Min(cracks, 2), radius - border);
 
                 DrawSymbol(canvas, x + half, y + half, size, colour);
                 break;
@@ -169,6 +176,54 @@ public static class CellRenderer
         canvas.FillColor = Colors.Black.WithAlpha(0.12f);
         canvas.FillPath(FacetDark, WindingMode.NonZero);
         canvas.RestoreState();
+    }
+
+    /// <summary>
+    /// A cracked block. One crack: a three-segment dark line from the top-left corner with a one-pixel light edge beside it. Two
+    /// cracks: a second line from the opposite corner that meets the first, and the face a tenth darker. The lines keep to the
+    /// corners, away from the middle where the symbol sits.
+    /// </summary>
+    private static void DrawCracks(ICanvas canvas, float left, float top, float span, int cracks, float corner)
+    {
+        if (cracks >= 2)
+        {
+            canvas.FillColor = Colors.Black.WithAlpha(0.10f);
+            canvas.FillRoundedRectangle(left, top, span, span, MathF.Max(0f, corner));
+        }
+
+        canvas.StrokeLineCap = LineCap.Round;
+        canvas.StrokeSize = MathF.Max(1f, span * 0.035f);
+        DrawCrackLine(canvas, left, top, span, 0.04f, 0.03f, 0.22f, 0.20f, 0.17f, 0.36f, 0.40f, 0.46f);
+        if (cracks >= 2) DrawCrackLine(canvas, left, top, span, 0.96f, 0.97f, 0.78f, 0.80f, 0.84f, 0.64f, 0.60f, 0.54f);
+    }
+
+    /// <summary>One crack: four points in a unit square, drawn dark with a light line a pixel to one side.</summary>
+    private static void DrawCrackLine(ICanvas canvas, float left, float top, float span,
+        float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3)
+    {
+        float ax = left + x0 * span, ay = top + y0 * span, bx = left + x1 * span, by = top + y1 * span;
+        float cx = left + x2 * span, cy = top + y2 * span, dx = left + x3 * span, dy = top + y3 * span;
+        canvas.StrokeColor = Colors.White.WithAlpha(0.30f);
+        canvas.DrawLine(ax + 1f, ay + 1f, bx + 1f, by + 1f);
+        canvas.DrawLine(bx + 1f, by + 1f, cx + 1f, cy + 1f);
+        canvas.DrawLine(cx + 1f, cy + 1f, dx + 1f, dy + 1f);
+        canvas.StrokeColor = Colors.Black.WithAlpha(0.45f);
+        canvas.DrawLine(ax, ay, bx, by);
+        canvas.DrawLine(bx, by, cx, cy);
+        canvas.DrawLine(cx, cy, dx, dy);
+    }
+
+    /// <summary>A one-pixel light edge along the top and left of the face and a dark one along the bottom and right (Pure Solid).</summary>
+    private static void DrawBevel(ICanvas canvas, float left, float top, float span)
+    {
+        canvas.StrokeSize = 1f;
+        canvas.StrokeLineCap = LineCap.Butt;
+        canvas.StrokeColor = Colors.White.WithAlpha(0.35f);
+        canvas.DrawLine(left + 1f, top + 1f, left + span - 1f, top + 1f);
+        canvas.DrawLine(left + 1f, top + 1f, left + 1f, top + span - 1f);
+        canvas.StrokeColor = Colors.Black.WithAlpha(0.25f);
+        canvas.DrawLine(left + 1f, top + span - 1f, left + span - 1f, top + span - 1f);
+        canvas.DrawLine(left + span - 1f, top + 1f, left + span - 1f, top + span - 1f);
     }
 
     /// <summary>
@@ -218,7 +273,7 @@ public static class CellRenderer
         float span = size - 2f * inset;
         float left = x + inset;
         float top = y + inset;
-        float radius = size * VisualDesign.Corner;
+        float radius = size * VisualDesign.CornerFor(colour);
         float half = size / 2f;
         var neon = VisualDesign.NeonColour(colour);
 
@@ -322,8 +377,9 @@ public static class CellRenderer
 
     public static void DrawSymbol(ICanvas canvas, float cx, float cy, float size, CellColour colour)
     {
+        if (VisualDesign.HidesSymbol(colour)) return;   // a clean set (Pure Solid), unless colour assist puts the symbols back
         float r = size * VisualDesign.SymbolRadius;
-        canvas.FillColor = VisualDesign.SymbolNow;
+        canvas.FillColor = VisualDesign.SymbolFor(colour);
 
         switch (colour)
         {

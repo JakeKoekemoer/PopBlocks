@@ -214,7 +214,7 @@ public class LifetimeStatsTests
         Assert.Equal(1, reopened.LevelsWon);
 
         foreach (var key in SaveKeys.StatKeys) Assert.Contains(key, SaveKeys.All);
-        Assert.Equal(8 + 1 + 8, SaveKeys.StatKeys.Count);   // the eight originals, most-goals, and one play counter per region
+        Assert.Equal(8 + 1 + 8 + 2 + 4, SaveKeys.StatKeys.Count);   // the eight originals, most-goals, one play counter per region, and rerolls and continues (v1.1)
     }
 
     [Fact]

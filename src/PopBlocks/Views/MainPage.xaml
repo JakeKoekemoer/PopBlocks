@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:views="clr-namespace:PopBlocks.Views"
              x:Class="PopBlocks.Views.MainPage"
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
@@ -12,7 +13,7 @@
                          VerticalOptions="Center"
                          Padding="32,0"
                          Spacing="18">
-        <GraphicsView x:Name="StartLogoView"
+        <GraphicsView x:Name="StartLogoView" InputTransparent="True"
                       HeightRequest="64"
                       WidthRequest="320"
                       HorizontalOptions="Center" />
@@ -40,7 +41,7 @@
                 Clicked="OnPlayClicked" />
 
         <Button x:Name="MoreButton"
-                Text="MORE"
+                Text="MENU"
                 Style="{StaticResource SecondaryButton}"
                 WidthRequest="260"
                 HorizontalOptions="Center"
@@ -66,7 +67,7 @@
                     <RoundRectangle CornerRadius="20" />
                 </Border.StrokeShape>
                 <HorizontalStackLayout Spacing="8">
-                    <GraphicsView x:Name="CoinView" WidthRequest="22" HeightRequest="22" VerticalOptions="Center" />
+                    <GraphicsView x:Name="CoinView" InputTransparent="True" WidthRequest="22" HeightRequest="22" VerticalOptions="Center" />
                     <Label x:Name="GoldLabel"
                            FontSize="16"
                            FontAttributes="Bold"
@@ -75,7 +76,7 @@
                 </HorizontalStackLayout>
             </Border>
 
-            <GraphicsView x:Name="LogoView"
+            <GraphicsView x:Name="LogoView" InputTransparent="True"
                           HeightRequest="64"
                           WidthRequest="320"
                           HorizontalOptions="Center"
@@ -93,35 +94,50 @@
                    HorizontalTextAlignment="Center"
                    HorizontalOptions="Center" />
 
-            <!-- Story: continue where you left off -->
-            <Border Style="{StaticResource Glass}" Padding="22,20" Margin="0,8,0,0">
-                <VerticalStackLayout Spacing="6">
-                    <Label Text="STORY" Style="{StaticResource CaptionLabel}" TextColor="{StaticResource Accent}" />
-                    <Label x:Name="NextLevelLabel"
-                           FontSize="34"
-                           FontAttributes="Bold"
-                           TextColor="{StaticResource TextPrimary}" />
-                    <Label x:Name="NextLevelDetail" Style="{StaticResource BodyLabel}" />
-                    <Button x:Name="PlayButton"
-                            Text="PLAY"
-                            Style="{StaticResource PrimaryButton}"
-                            Margin="0,12,0,0"
-                            Clicked="OnPlayClicked" />
-                </VerticalStackLayout>
+            <!-- Story: continue where you left off. The region picture behind the card is drawn once and cached. -->
+            <Border x:Name="StoryCard" Style="{StaticResource Glass}" Padding="0" Margin="0,8,0,0" StrokeThickness="2">
+                <Grid>
+                    <GraphicsView x:Name="StoryCardScene" InputTransparent="True" />
+                    <BoxView InputTransparent="True">
+                        <BoxView.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#0007101F" Offset="0.0" />
+                                <GradientStop Color="#B307101F" Offset="1.0" />
+                            </LinearGradientBrush>
+                        </BoxView.Background>
+                    </BoxView>
+                    <VerticalStackLayout Spacing="6" Padding="22,20">
+                        <Label x:Name="StoryCaption" Text="STORY" Style="{StaticResource CaptionLabel}" TextColor="{StaticResource Accent}" />
+                        <BoxView HeightRequest="56" Color="Transparent" InputTransparent="True" />
+                        <Label x:Name="NextLevelLabel"
+                               FontSize="34"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource TextPrimary}" />
+                        <Label x:Name="NextLevelDetail" Style="{StaticResource BodyLabel}" TextColor="{StaticResource TextPrimary}" />
+                        <Button x:Name="PlayButton"
+                                Text="CONTINUE"
+                                Style="{StaticResource PrimaryButton}"
+                                Margin="0,12,0,0"
+                                Clicked="OnPlayClicked" />
+                    </VerticalStackLayout>
+                </Grid>
             </Border>
 
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
-                <Button Grid.Row="0" Grid.Column="0" Text="MAP" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnMapClicked" />
-                <Button Grid.Row="0" Grid.Column="1" Text="CLASSIC" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnClassicClicked" />
-                <Button Grid.Row="1" Grid.Column="0" Text="WORKSHOP" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnShopClicked" />
-                <Button Grid.Row="1" Grid.Column="1" Text="ARCHIVE" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnArchiveClicked" />
-                <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="TUTORIAL" Style="{StaticResource GhostButton}"
-                        HorizontalOptions="Center" Clicked="OnTutorialClicked" />
+            <!-- Settings sits right under CONTINUE: pop effects, landing guide, motion, sound, board style, rules, name and saved data
+                 all live on their own page. -->
+            <views:IconButton Icon="Settings" Text="SETTINGS" Clicked="OnSettingsClicked" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="12">
+                <views:IconButton Grid.Row="0" Grid.Column="0" Icon="Map" Text="MAP" Clicked="OnMapClicked" />
+                <views:IconButton Grid.Row="0" Grid.Column="1" Icon="Infinity" Text="ENDLESS" Clicked="OnClassicClicked" />
+                <views:IconButton Grid.Row="1" Grid.Column="0" Icon="Cart" Text="WORKSHOP" Clicked="OnShopClicked" />
+                <views:IconButton Grid.Row="1" Grid.Column="1" Icon="Book" Text="STORY BOOK" Clicked="OnArchiveClicked" />
+                <views:IconButton Grid.Row="2" Grid.Column="0" Icon="Help" Text="TUTORIAL" Clicked="OnTutorialClicked" />
+                <views:IconButton Grid.Row="2" Grid.Column="1" Icon="Info" Text="ABOUT" Clicked="OnAboutClicked" />
+                <views:IconButton Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Icon="Share" Text="SHARE" Clicked="OnShareClicked"
+                                  SemanticProperties.Description="Share PopBlocks with a friend" />
             </Grid>
+
 
             <Label x:Name="BestLabel"
                    FontSize="14"
@@ -129,21 +145,21 @@
                    TextColor="{StaticResource TextSecondary}"
                    HorizontalOptions="Center" />
 
-            <!-- Classic seed: optional, and out of the way. A seed gives the same pieces again. It never touches the Story. -->
+            <!-- Endless seed: optional, and out of the way. A seed gives the same pieces again. It never touches the Story. -->
             <VerticalStackLayout Spacing="6">
                 <Button x:Name="SeedLink"
                         Text="SEED"
                         Style="{StaticResource GhostButton}"
                         HorizontalOptions="Center"
                         Clicked="OnSeedLinkClicked"
-                        SemanticProperties.Description="Classic seed. Optional: play Classic with a seed to get the same pieces again." />
+                        SemanticProperties.Description="Endless seed. Optional: play Endless with a seed to get the same pieces again." />
                 <Grid x:Name="SeedPanel" IsVisible="False" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                     <Entry x:Name="SeedEntry"
                            Keyboard="Numeric"
-                           Placeholder="Classic seed (empty is random)"
+                           Placeholder="Endless seed (empty is random)"
                            MaxLength="10"
                            TextColor="{StaticResource TextPrimary}"
-                           SemanticProperties.Description="Classic seed, a number from 0 to 2147483647. Leave empty for a random one." />
+                           SemanticProperties.Description="Endless seed, a number from 0 to 2147483647. Leave empty for a random one." />
                     <Button Grid.Column="1" Text="CLEAR" Style="{StaticResource GhostButton}" Clicked="OnSeedClearClicked" />
                 </Grid>
                 <Label x:Name="SeedNote"
@@ -154,25 +170,8 @@
                        Text="A run with a seed still pays gold, but it never sets your best score." />
             </VerticalStackLayout>
 
-            <!-- Settings: pop effects, landing guide, motion, sound, board style, name and saved data all live on their own page -->
-            <Button Text="SETTINGS"
-                    Style="{StaticResource SecondaryButton}"
-                    HorizontalOptions="Center"
-                    WidthRequest="260"
-                    Margin="0,4,0,0"
-                    Clicked="OnSettingsClicked" />
-
-            <Button Text="ABOUT" Style="{StaticResource GhostButton}" HorizontalOptions="Center" Clicked="OnAboutClicked" />
             <Button x:Name="DevButton" Text="DEV MENU" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
                     HorizontalOptions="Center" IsVisible="False" Clicked="OnDevClicked" />
-
-            <VerticalStackLayout Spacing="4" HorizontalOptions="Center" Margin="0,8,0,0">
-                <Label Text="HOW TO PLAY" Style="{StaticResource CaptionLabel}" HorizontalOptions="Center" />
-                <Label Style="{StaticResource BodyLabel}"
-                       FontSize="13"
-                       HorizontalTextAlignment="Center"
-                       Text="Tap the board to rotate. Drag sideways to move. Drag down to soften the fall, or flick down to drop. The buttons below the board do the same, and can be folded away." />
-            </VerticalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>

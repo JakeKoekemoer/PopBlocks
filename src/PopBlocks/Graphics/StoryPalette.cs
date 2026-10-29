@@ -25,6 +25,23 @@ public static class StoryPalette
     /// <summary>The five colours in the brief's order, for streams, orbit lights and anything that cycles through them.</summary>
     public static readonly Color[] Spectrum = { Cyan, Magenta, Amber, Lime, Violet };
 
+    /// <summary>The accent of each region (index 0 is region 1), for the menu's Story card and anything else that says "where".</summary>
+    private static readonly Color[] RegionAccents =
+    {
+        Lime, Cyan, Color.FromArgb("#4FD6A8"), Amber, Color.FromArgb("#FF8A5C"), Violet, Magenta, Color.FromArgb("#FDE68A"),
+    };
+
+    /// <summary>The accent for a region number (1..8). Anything else gets the Heart's.</summary>
+    public static Color RegionAccent(int regionNumber) =>
+        RegionAccents[regionNumber >= 1 && regionNumber <= RegionAccents.Length ? regionNumber - 1 : RegionAccents.Length - 1];
+
+    /// <summary>Dark text on a light background, white on a dark one.</summary>
+    public static Color TextOn(Color background)
+    {
+        float luminance = 0.2126f * background.Red + 0.7152f * background.Green + 0.0722f * background.Blue;
+        return luminance > 0.55f ? Color.FromArgb("#07101F") : Colors.White;
+    }
+
     public static Color Mix(Color a, Color b, float t) => new(
         a.Red + (b.Red - a.Red) * t,
         a.Green + (b.Green - a.Green) * t,

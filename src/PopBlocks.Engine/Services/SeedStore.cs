@@ -45,6 +45,37 @@ public static class SeedStore
         settings.SetInt(SaveKeys.CurrentLevelFailures, 0);
     }
 
+    // ---- v1.1: losses and eased levels (level:value lists, the same text format as the first-clear seeds) ----
+
+    /// <summary>How many times a level has been lost, ever. Never resets: clearing the level does not clear it.</summary>
+    public static int ReadLosses(ILocalSettings settings, int level) =>
+        SaveCode.ParseSeedList(settings.GetString(SaveKeys.LevelLosses, "")).TryGetValue(level, out int n) ? n : 0;
+
+    /// <summary>Adds one loss to a level. Returns the new count.</summary>
+    public static int AddLoss(ILocalSettings settings, int level)
+    {
+        if (level < 1) return 0;
+        var map = new Dictionary<int, int>(SaveCode.ParseSeedList(settings.GetString(SaveKeys.LevelLosses, "")));
+        if (!map.ContainsKey(level) && map.Count >= MaxPairs) return 0;
+        int next = Math.Min(100_000, (map.TryGetValue(level, out int n) ? n : 0) + 1);
+        map[level] = next;
+        settings.SetString(SaveKeys.LevelLosses, SaveCode.FormatSeedList(map));
+        return next;
+    }
+
+    /// <summary>The levels the player has chosen to ease.</summary>
+    public static bool IsEased(ILocalSettings settings, int level) =>
+        SaveCode.ParseSeedList(settings.GetString(SaveKeys.EasedLevels, "")).ContainsKey(level);
+
+    public static void SetEased(ILocalSettings settings, int level, bool eased)
+    {
+        if (level < 1) return;
+        var map = new Dictionary<int, int>(SaveCode.ParseSeedList(settings.GetString(SaveKeys.EasedLevels, "")));
+        if (eased) { if (map.Count >= MaxPairs && !map.ContainsKey(level)) return; map[level] = 1; }
+        else if (!map.Remove(level)) return;
+        settings.SetString(SaveKeys.EasedLevels, SaveCode.FormatSeedList(map));
+    }
+
     /// <summary>The seed each cleared level was first cleared with. A cleared level missing here replays the original (legacy) level.</summary>
     public static IReadOnlyDictionary<int, int> ReadFirstClear(ILocalSettings settings) =>
         SaveCode.ParseSeedList(settings.GetString(SaveKeys.FirstClearSeeds, ""));

@@ -17,4 +17,9 @@ internal sealed record EngineSnapshot(
     int LastPenalty,
     BurstWave? LastWave,
     GoalTracker? Goals,
-    int GeneratorPosition);
+    int GeneratorPosition,
+    int GoldTenths,
+    int OrbTimer,
+    int PiecesSinceOrb,
+    int OrbRolls,
+    bool OrbEver);

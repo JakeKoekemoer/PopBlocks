@@ -35,8 +35,14 @@
 
                 <VerticalStackLayout x:Name="Body" Spacing="18">
 
-                    <!-- The game -->
-                    <Border Style="{StaticResource Glass}" Padding="18,8">
+                    <!-- Tabs: GAME, DISPLAY, SOUND, PLAYER, SAVE -->
+                    <Grid x:Name="TabBar" ColumnSpacing="4" />
+
+                    <!-- GAME: the player's own rules (built in code) -->
+                    <ContentView x:Name="GameTab" />
+
+                    <!-- DISPLAY: how things look -->
+                    <Border x:Name="DisplayCard" Style="{StaticResource Glass}" Padding="18,8">
                         <VerticalStackLayout Spacing="2">
                             <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
                                 <VerticalStackLayout VerticalOptions="Center">
@@ -75,13 +81,23 @@
                             </Grid>
                             <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
                                 <VerticalStackLayout VerticalOptions="Center">
-                                    <Label Text="Sound effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
-                                    <Label Text="Sounds for turning, placing, dropping and popping" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                    <Label Text="Hanging drops" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="A faint column under blocks that hang over a gap, with an arrow where they would land" FontSize="12" TextColor="{StaticResource TextSecondary}" />
                                 </VerticalStackLayout>
-                                <Switch x:Name="SoundSwitch"
+                                <Switch x:Name="HangingSwitch"
                                         Grid.Column="1"
                                         OnColor="{StaticResource Accent}"
-                                        Toggled="OnSoundToggled" />
+                                        Toggled="OnHangingToggled" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Colour assist" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="A symbol on every block, whatever block set you use" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="AssistSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnAssistToggled" />
                             </Grid>
                             <Grid x:Name="BoardStyleRow" ColumnDefinitions="*,Auto" MinimumHeightRequest="48" IsVisible="False">
                                 <VerticalStackLayout VerticalOptions="Center">
@@ -102,9 +118,20 @@
                     </Border>
 
                     <!-- Music and sound: nothing here leaves the phone, and the game plays the same with all of it off -->
-                    <Border Style="{StaticResource Glass}" Padding="18,12">
+                    <Border x:Name="SoundCard" Style="{StaticResource Glass}" Padding="18,12">
                         <VerticalStackLayout Spacing="6">
                             <Label Text="MUSIC AND SOUND" Style="{StaticResource CaptionLabel}" Margin="0,0,0,2" />
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Sound effects" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Sounds for turning, placing, dropping and popping" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="SoundSwitch"
+                                        Grid.Column="1"
+                                        OnColor="{StaticResource Accent}"
+                                        Toggled="OnSoundToggled" />
+                            </Grid>
+
                             <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="48">
                                 <VerticalStackLayout VerticalOptions="Center">
                                     <Label Text="All sound" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
@@ -205,7 +232,7 @@
                     </Border>
 
                     <!-- The in-game name: local only, travels only inside the player's own save -->
-                    <Border Style="{StaticResource Glass}" Padding="24,20">
+                    <Border x:Name="PlayerCard" Style="{StaticResource Glass}" Padding="24,20">
                         <VerticalStackLayout Spacing="12">
                             <Label Text="YOUR NAME" Style="{StaticResource CaptionLabel}" />
                             <Label x:Name="NameLabel"
@@ -229,7 +256,7 @@
                     </Border>
 
                     <!-- Save data: a file that survives an uninstall, plus the save code for moving by hand -->
-                    <Border Style="{StaticResource Glass}" Padding="24,20">
+                    <Border x:Name="SaveCard" Style="{StaticResource Glass}" Padding="24,20">
                         <VerticalStackLayout Spacing="12">
                             <Label Text="SAVE DATA" Style="{StaticResource CaptionLabel}" />
                             <Label x:Name="SaveStatusTitle"

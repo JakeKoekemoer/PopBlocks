@@ -15,12 +15,22 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
     private readonly CosmeticShop _shop;
     private readonly CosmeticLoadout _loadout;
     private CosmeticSlot _slot = CosmeticSlot.Skin;
+    private List<Cosmetic> _shownNew = new();   // new looks on screen now: their NEW ribbon goes when the tab is left
 
     public WardrobePanel(CosmeticShop shop, CosmeticLoadout loadout)
     {
         InitializeComponent();
         _shop = shop;
         _loadout = loadout;
+        Unloaded += (_, _) => MarkShownAsSeen();
+    }
+
+    /// <summary>The looks that wore a NEW ribbon have now been looked at.</summary>
+    private void MarkShownAsSeen()
+    {
+        if (_shownNew.Count == 0) return;
+        _loadout.MarkSeen(_shownNew);
+        _shownNew = new List<Cosmetic>();
     }
 
     public event Action? Changed;
@@ -36,6 +46,7 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
 
     public void Refresh()
     {
+        MarkShownAsSeen();   // a ribbon stays until you have moved on from the look it is on
         TabsHost.Children.Clear();
         foreach (CosmeticSlot slot in Enum.GetValues<CosmeticSlot>())
         {
@@ -50,10 +61,13 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
         Host.Children.Clear();
         Host.Children.Add(Ui.Body("Looks only. Nothing here changes how the game plays.", 13));
         foreach (var entry in _shop.Entries(_slot).OrderBy(e => e.State == CosmeticState.Locked))
+        {
+            if (_loadout.IsUnseen(entry.Item)) _shownNew.Add(entry.Item);
             Host.Children.Add(MakeCard(entry));
+        }
 
-        Host.Children.Add(Ui.Body("Looks are found by restoring regions and earning achievements. Gold is only ever asked for " +
-                                  "looks you have already found, and never for anything the story or settings need.", 12));
+        Host.Children.Add(Ui.Body("Most looks are found by restoring regions and earning achievements. A few are on sale from the " +
+                                  "start. Gold is only ever asked for looks you have already found, and never for anything the story or settings need.", 12));
     }
 
     /// <summary>After a purchase or an equip: tell the workshop (the gold chip) and redraw.</summary>
@@ -70,7 +84,28 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
 
         // Locked looks keep their name and picture hidden behind the hint, so discovery stays a surprise.
         bool locked = entry.State == CosmeticState.Locked;
-        stack.Children.Add(Ui.Heading(locked ? "Not found yet" : item.Name, 18));
+        var heading = Ui.Heading(locked ? "Not found yet" : item.Name, 18);
+        if (_loadout.IsUnseen(item))
+        {
+            // A small NEW ribbon beside the name, written out in words so it never depends on colour.
+            var ribbon = new Label
+            {
+                Text = "NEW",
+                FontSize = 10,
+                FontAttributes = FontAttributes.Bold,
+                CharacterSpacing = 1.2,
+                Padding = new Thickness(8, 2),
+                BackgroundColor = Ui.Res("Accent", Colors.Cyan),
+                TextColor = Ui.Res("AccentText", Colors.Black),
+                VerticalOptions = LayoutOptions.Center,
+            };
+            SemanticProperties.SetDescription(ribbon, "New");
+            stack.Children.Add(new HorizontalStackLayout { Spacing = 8, Children = { heading, ribbon } });
+        }
+        else
+        {
+            stack.Children.Add(heading);
+        }
         stack.Children.Add(Ui.Body(locked ? "" : item.Description, 13));
         if (stack.Children[^1] is Label empty && string.IsNullOrEmpty(empty.Text)) stack.Children.RemoveAt(stack.Children.Count - 1);
 
@@ -78,6 +113,7 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
         {
             var preview = MakePreview(item);
             if (preview is not null) stack.Children.Add(preview);
+            if (item.Id == CosmeticCatalog.PatchworkSkin && entry.State == CosmeticState.Owned) stack.Children.Add(PatchworkEditor());
         }
 
         switch (entry.State)
@@ -183,19 +219,93 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
         TextColor = Ui.Res("TextPrimary", Colors.White),
     };
 
-    private static View? MakePreview(Cosmetic item)
+    /// <summary>Patchwork, once bought: five rows (one per block colour), each a strip of the block sets you own to pick from.</summary>
+    private View PatchworkEditor()
+    {
+        var owned = CosmeticCatalog.In(CosmeticSlot.Skin).Where(c => c.Id != CosmeticCatalog.PatchworkSkin && _loadout.IsOwned(c)).ToList();
+        var rows = new VerticalStackLayout { Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
+        var names = new Dictionary<PopBlocks.Engine.Models.CellColour, string>
+        {
+            [PopBlocks.Engine.Models.CellColour.Cyan] = "BLUE",
+            [PopBlocks.Engine.Models.CellColour.Coral] = "RED",
+            [PopBlocks.Engine.Models.CellColour.Yellow] = "YELLOW",
+            [PopBlocks.Engine.Models.CellColour.Purple] = "PURPLE",
+            [PopBlocks.Engine.Models.CellColour.Lime] = "GREEN",
+        };
+        foreach (var (colour, name) in names)
+        {
+            var strip = new HorizontalStackLayout { Spacing = 6 };
+            string current = _loadout.Mix(colour);
+            foreach (var skin in owned)
+            {
+                bool selected = skin.Id == current;
+                var chip = Ui.Chip(skin.Name.ToUpperInvariant(), selected);
+                string id = skin.Id;
+                var chosenColour = colour;
+                chip.Clicked += (_, _) =>
+                {
+                    _loadout.SetMix(chosenColour, id);
+                    Applied();
+                };
+                SemanticProperties.SetDescription(chip, $"{name} blocks: {skin.Name}{(selected ? ", selected" : "")}");
+                strip.Children.Add(chip);
+            }
+            rows.Children.Add(Ui.Caption(name));
+            rows.Children.Add(new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Never });
+        }
+        return rows;
+    }
+
+    private View? MakePreview(Cosmetic item)
     {
         switch (item.Slot)
         {
             case CosmeticSlot.Skin:
-                return new GraphicsView { Drawable = new SkinPreviewDrawable { Skin = CosmeticCatalog.SkinOf(item.Id) }, HeightRequest = 52, Margin = new Thickness(0, 4, 0, 0) };
+                return new GraphicsView
+                {
+                    InputTransparent = true,   // decoration: a drag that starts on it must still scroll the page
+                    Drawable = new SkinPreviewDrawable
+                    {
+                        Skin = CosmeticCatalog.SkinOf(item.Id),
+                        Patchwork = item.Id == CosmeticCatalog.PatchworkSkin ? _loadout.PatchworkSources() : null,
+                    },
+                    HeightRequest = 52,
+                    Margin = new Thickness(0, 4, 0, 0),
+                };
+
+            case CosmeticSlot.Burst:
+            {
+                // The tile plays the real burst on a loop, but only while it is on screen.
+                var view = new GraphicsView
+                {
+                    InputTransparent = true,   // decoration: a drag that starts on it must still scroll the page
+                    Drawable = new BurstPreviewDrawable { Style = CosmeticCatalog.BurstOf(item.Id) },
+                    HeightRequest = 64,
+                    Margin = new Thickness(0, 4, 0, 0),
+                };
+                IDispatcherTimer? timer = null;
+                view.Loaded += (_, _) =>
+                {
+                    timer = view.Dispatcher.CreateTimer();
+                    timer.Interval = TimeSpan.FromMilliseconds(33);
+                    timer.Tick += (_, _) => view.Invalidate();
+                    timer.Start();
+                };
+                view.Unloaded += (_, _) =>
+                {
+                    timer?.Stop();
+                    timer = null;
+                };
+                return view;
+            }
 
             case CosmeticSlot.Board:
-                return new GraphicsView { Drawable = new BoardPreviewDrawable { BoardId = item.Id }, HeightRequest = 64, Margin = new Thickness(0, 4, 0, 0) };
+                return new GraphicsView { InputTransparent = true, Drawable = new BoardPreviewDrawable { BoardId = item.Id }, HeightRequest = 64, Margin = new Thickness(0, 4, 0, 0) };
 
             case CosmeticSlot.Accessory:
                 return new GraphicsView
                 {
+                    InputTransparent = true,   // decoration: a drag that starts on it must still scroll the page
                     Drawable = new PipDrawable { Brightness = 0.9f, Mood = PipMood.Happy, Accessory = CosmeticCatalog.AccessoryOf(item.Id) },
                     HeightRequest = 80,
                     WidthRequest = 80,

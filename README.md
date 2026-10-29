@@ -16,7 +16,7 @@ src/
     Graphics/           VisualDesign (palette, skins), CellRenderer, GameDrawable (board, neon pops, flip, boards, frames), BlastEffects (burst styles, flair), Pip and the story pictures
     ViewModels/         GameViewModel (observable state, commands, game timer, tutorial coaching)
     Views/              MainPage (menu), WorldMapPage (the Story map: each region with its levels), GamePage (board, HUD, goals, helpers, controls drawer, overlays), WorkshopPage (the four workshop tabs: ShopPanel for
-                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage, SettingsPage (settings, name, saved data), AboutPage,
+                        upgrades and supplies, WardrobePanel, TrophiesPanel with AchievementsPanel and JournalPanel), ArchivePage (the Story Book), SettingsPage (settings, name, saved data), AboutPage,
                         DevMenuPage (development builds)
     Services/           LocalSettingsService (MAUI Preferences)
 tests/
@@ -50,11 +50,22 @@ Each region has its own character (big groups, colour goals, tight moves, chains
 
 Goals: reach a score, pop N blocks, pop N blocks of one colour, make a chain of N, pop one group of N, leave N blocks or fewer ("clear the board" when N is 0), or make N separate chains. Several can be combined.
 
+**Version 1.1** adds, all of it optional and none of it needed to finish the Story:
+
+- **Cracked blocks (Fracture).** A block next to a burst cracks; a second crack breaks it for a reduced share of the gold. Cracks are part of the board, so the level solver plays them too (`Board` keeps a crack level per cell, `GameEngine` applies it after every wave, `LevelSolver` mirrors it).
+- **The Orb.** A 2x2 glass sphere that is never part of a group. Any pop that touches it breaks it, clearing its two rows and two columns for a bonus; if its timer runs out first it cracks the twelve blocks round it. On in Endless, in the Story from level 40 (the level solver plays them) and wherever the player's own rules say Always.
+- **Tall boards.** The standard board is now 24 rows (16 to 32 in the player's own rules; lessons stay at 16) with a camera that follows the stack and a gauge for the rows out of sight (`BoardSpace`, `GameEngine.CameraBottom`).
+- **Pip's Insight.** A shop helper that outlines the best place for the piece in hand (`PlacementAdvisor`, run off the UI thread).
+- **Your own rules.** Settings, Game rules: fall speed, colour count, colour set, shapes, burst size, solid chance, board rows, cracks, Orbs and whether the rules apply in the Story (`GameRules`, `GameRulesStore`).
+- **Looks.** More block sets, boards, frames and Pip looks, the Story Book (the Archive's new name), petals or shards for bursts, level-end cards, rerolls, loss support, continues, floating pop gold, and sharing a result as text (no permission needed).
+
+Developer builds (Debug, or `DEVMENU`) add a Dev Menu and, on the pause card, buttons to spawn an Orb, crack every block, and fill the board to 12 or 20 rows. The Dev Menu can also set the losses on the current level and unlock every look. None of it exists in a Release build.
+
 Every generated level is **proven winnable**: a bot plays it first, and the move limit is set from the number of pieces the bot needed plus slack that shrinks as the tiers get harder (`LevelCatalog.cs`, `LevelSolver.cs`). The bot plays with **no upgrades and no helpers**, so the whole campaign can be finished without buying anything. The test suite replays the bot's plan through the real engine for every level.
 
 **The tutorial** is separate from the Story. It is ten hand-made, coached lessons (moving, rotating, dropping, speed, mixed colours, chains, moves, goals) with their own progress and no gold. A new player is asked once, on Story level 1, whether they want it; it can also be played any time from **More → TUTORIAL**. Lessons never move Story progress, play story scenes or count towards achievements and lifetime bests (`LevelCatalog.Lesson`, `GameSetup.Lesson`, `TutorialProgress`).
 
-**The menu** opens on just **PLAY** (continue the Story; level 1 for a new player) and **MORE**, which shows the full menu: Story card, map (regions and their levels together), Classic, workshop, archive, tutorial, settings and about.
+**The menu** opens on just **PLAY** (continue the Story; level 1 for a new player) and **MENU**, which shows the full menu: Story card (with the picture of the next level's region behind it), map (regions and their levels together), Endless, workshop, Story Book, tutorial, settings and about.
 
 **Gold and Bram's workshop.** Clearing a non-tutorial level for the **first time** pays gold; harder tiers pay more, restoring a region pays a one-off reward, and achievements pay small amounts. Replaying a level pays nothing. The workshop is one screen with four tabs, and each tab has a lamp that lights as you restore regions (Upgrades from the start, Looks at region 3, Supplies at region 5, Trophies at region 6). Every tab is open from the start; the lamps only show the workshop growing. The Archive is not in the workshop: it opens from the menu.
 
@@ -71,7 +82,7 @@ A locked item tells you how to find it and never shows a price. Prices, rewards 
 
 **Saved data.** Progress is also kept in a small text file, `Documents/PopBlocks/popblocks-save.txt`, so uninstalling and reinstalling PopBlocks does not lose it (Android 10 or newer; no permission is needed, and nothing is uploaded). Settings shows its state, can back it up on demand, find it by hand if a reinstall did not pick it up, and delete it or erase all progress. The same Settings section can copy progress as one line of text (the **save code**) and restore it on another phone. The app keeps no cloud backup, by design.
 
-**Classic** starts from an empty board and speeds up with your score. It keeps a personal best and **earns gold** for every block popped (paid when the run ends, when you leave, or when the app goes to the background). An optional **seed** (the SEED link in the menu) gives the same pieces again; a run on a typed seed pays gold but never sets the best score.
+**Endless** starts from an empty board and speeds up with your score. It keeps a personal best and **earns gold** for every block popped (paid when the run ends, when you leave, or when the app goes to the background). An optional **seed** (the SEED link in the menu) gives the same pieces again; a run on a typed seed pays gold but never sets the best score.
 
 **Pops.** A match first lights up in its own colour, turns solid neon, and then bursts. Pop effects can be switched off in Settings (pops are then instant).
 
@@ -133,7 +144,7 @@ Haptics (would need the VIBRATE permission), Burst Charge, online features of an
 
 ## Sound
 
-A procedural soundtrack, **The Shattered Spectrum**: a quiet theme for the menu and map, the Garden for Classic, and one piece for each of the eight regions that fades, recovers and is restored along with the region, plus a scripted finale. The effects (rotate, place, hard drop, and a pop per colour that sings in the region's key) are played by the same mixer. Everything is computed on the phone as you play (`PopBlocks.Engine/Audio/`), so there are no audio files, and the sound reaches the speaker through Android's `AudioTrack` (`Platforms/Android/AndroidAudioOutput.cs`). Any song earned along the way can be picked on the pause screen. **Settings, Music and sound** has master, music, effects and ambience volumes, switches, and a reduced-audio mode; the game plays the same with all of it off. The older `ToneSynth` and `SoundPool` player remain only as a fallback if the new output cannot start. No permission is needed. Details: [`docs/11-audio.md`](docs/11-audio.md).
+A procedural soundtrack, **The Shattered Spectrum**: a quiet theme for the menu and map, the Garden for Endless, and one piece for each of the eight regions that fades, recovers and is restored along with the region, plus a scripted finale. The effects (rotate, place, hard drop, and a pop per colour that sings in the region's key) are played by the same mixer. Everything is computed on the phone as you play (`PopBlocks.Engine/Audio/`), so there are no audio files, and the sound reaches the speaker through Android's `AudioTrack` (`Platforms/Android/AndroidAudioOutput.cs`). Any song earned along the way can be picked on the pause screen. **Settings, Music and sound** has master, music, effects and ambience volumes, switches, and a reduced-audio mode; the game plays the same with all of it off. The older `ToneSynth` and `SoundPool` player remain only as a fallback if the new output cannot start. No permission is needed. Details: [`docs/11-audio.md`](docs/11-audio.md).
 
 ## License
 

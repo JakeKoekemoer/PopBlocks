@@ -11,6 +11,16 @@ public sealed record LevelDefinition
 {
     public int Number { get; init; }
 
+    /// <summary>The player eased this level (see <see cref="ToEased"/>): more moves, and it pays no gold.</summary>
+    public bool Eased { get; init; }
+
+    /// <summary>The same level with <see cref="SeedingConfig.EasedMoveFactor"/> times the moves (rounded up), marked eased. A level without a move limit is unchanged except for the mark.</summary>
+    public LevelDefinition ToEased() => this with
+    {
+        Eased = true,
+        MoveLimit = MoveLimit > 0 ? (int)Math.Ceiling(MoveLimit * SeedingConfig.EasedMoveFactor) : 0,
+    };
+
     /// <summary>The <see cref="LevelSeed"/> value this level was built from. 0 is the original, number-based level.</summary>
     public int Seed { get; init; }
 
@@ -68,9 +78,9 @@ public sealed record LevelDefinition
     public Board CreateBoard() =>
         StartRows is not null ? Board.FromRows(StartRows) : BoardGenerator.Generate(BoardSeed, Profile);
 
-    public IPieceGenerator CreateGenerator()
+    public IPieceGenerator CreateGenerator(GameRules? rules = null)
     {
-        var random = new PieceGenerator(new Random(PieceSeed), ExoticShare);
+        var random = new PieceGenerator(new Random(PieceSeed), ExoticShare, rules: rules is { IsDefault: false } ? rules : null);
         return Script.Count > 0 ? new ScriptedPieceGenerator(Script, random) : random;
     }
 }

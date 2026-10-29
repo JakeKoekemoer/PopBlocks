@@ -226,3 +226,31 @@ Other numbers live in `SeedingConfig.cs`: the number of attempts (24) and time b
 A band change affects only levels rolled *after* it. A level already assigned keeps its stored seed, so retuning cannot change a level a player is on. The flip side: a level found to be broken after release cannot be fixed by retuning alone.
 
 If you change a rule the solver mirrors (9.9), also rerun the sweep: `weakNeed` and `fullNeed` come from the solver.
+
+---
+
+## 9.16 Add a `GameRules` field
+
+`GameRules` (`Models/GameRules.cs`) is the player's own rule set. Every field has a default that equals the normal game, so a save with no rule keys plays exactly as before.
+
+1. Add the field to the record with its default, and clamp it in `GameRules.Normalized()` (the engine never trusts a stored value).
+2. Add a `rule_*` key to `SaveKeys` (and to `SaveKeys.All` and `SaveCode.Keys`; both lists are add-only and the frozen-key test in `P7Tests` gets the new name), and read and write it in `GameRulesStore`.
+3. Decide whether it is "easier than normal" (`GameRules.IsEasierThanDefault`, which halves gold through `GoldFactor`) and whether it can apply in the Story (`RuleFeatures`, `GameSetup.Rules`). The Story's promise that a level was solved applies to the normal rules only.
+4. If the rule changes how the board plays, **the solver must mirror it** (see 9.18), or the "proven winnable" claim and the snapshot set stop meaning anything.
+5. UI: a row in `GameRulesPanel`; a chip in `RuleChipDrawables` if the HUD should show it.
+
+## 9.17 Tall boards and the camera
+
+The board is `BoardRows` rows of play plus the hidden rows above them. When `BoardRows` is more than fits on the screen, the engine keeps a camera (`GameEngine.CameraBottom`, the row at the bottom of the view) that follows the stack; the drawing converts rows with `BoardSpace` (`ViewTop`, `AboveView`, `BelowView`) and draws only the rows on screen plus one either side. Rules: the camera moves only between pieces; it eases over 300 ms and repaints only while it moves; the depth gauge shows how many rows of stack are below the view. A new feature that draws on the board must go through `BoardSpace` and skip rows out of view.
+
+## 9.18 Cracks and Orbs: what the solver must mirror
+
+`LevelSolver` has its own copy of the board rules (`State`, `Settle`), checked against the real engine by the tests that replay every bot plan, so a rule that changes the board must be written twice. A rule that lives only in the app layer (drawing, sounds, floating gold) is free:
+
+- **Fracture.** `Board` keeps a crack level (0, 1, 2; `Board.Broken` is 3) per cell, and it moves with the block in gravity (`GravityResolver`) and is copied by `Board.Clone`; the solver keeps the same array in `State.Fracture`. `GameEngine.ApplyWave` cracks the neighbours of a burst; a block that reaches `Board.Broken` is removed and counts for goals.
+- **Orbs.** `OrbSystem` owns where an Orb can appear, how blocks are pushed aside, what it clears and what happens when its timer runs out. The Story spawns Orbs on its own from level 40 (`RuleFeatures.OrbsInStory`), so `LevelSolver` carries them in its `State` (`Placed`, `OrbPos`, `OrbTimer`, `PiecesSinceOrb`, `OrbRolls`, `OrbEver`): the timer and corruption at the lock, the break inside the wave (touched by a burst or a broken block, cross cleared, counted for goals, no points), rigid gravity (`Gravity`, `DropOrb`), and `MaybeSpawnOrb`. The window test and the 35% roll run on the arrays; the placing itself calls `OrbSystem` and `GravityResolver` on a `Board`, so the engine and the bot cannot disagree about where an Orb goes. `SolverOrbMirrorTests` plays plans through the engine and compares the two boards after every move. The solver board is the 24-row default, so the camera that picks the Orb's window is the same.
+- After a deliberate change to a rule, regenerate the frozen level snapshots with `POPBLOCKS_WRITE_SNAPSHOT=1` and read the diff; a snapshot that changes without a rule change is a bug.
+
+## 9.19 Development tools
+
+Debug builds (and builds with `DEVMENU`) have a Dev Menu (`DevMenuPage`, backed by `Services/DevTools`) and, on the pause card, board tools (`GameViewModel.ShowDevBoardTools`): spawn an Orb now, crack every block (`GameEngine.DevCrackAll`), fill the board to 12 or 20 rows (`DevFillRows`). The Dev Menu sets the failures and the losses on the current level, plays a level with a typed seed, times the level gate and unlocks every look. `DevMenu.Enabled` is false in Release, the buttons are hidden, and nothing in a Release build can call these methods from the UI. Put new development helpers behind the same switch.

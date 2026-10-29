@@ -23,6 +23,12 @@ public sealed class LifetimeStats
         CellsPopped = Read(SaveKeys.StatCellsPopped);
         LevelsWon = Read(SaveKeys.StatLevelsWon);
         MostGoalsOnClearedLevel = Read(SaveKeys.StatMostGoals);
+        Rerolls = Read(SaveKeys.StatRerolls);
+        Continues = Read(SaveKeys.StatContinues);
+        OrbsBroken = Read(SaveKeys.StatOrbsBroken);
+        FractureBreaks = Read(SaveKeys.StatFractureBreaks);
+        Shares = Read(SaveKeys.StatShares);
+        CleanWins = Read(SaveKeys.StatCleanWins);
     }
 
     public int LargestGroup { get; private set; }
@@ -41,6 +47,32 @@ public sealed class LifetimeStats
 
     /// <summary>The most goals a level you cleared asked for at once.</summary>
     public int MostGoalsOnClearedLevel { get; private set; }
+
+    /// <summary>Levels rerolled, in total (free rerolls of cleared levels count too).</summary>
+    public int Rerolls { get; private set; }
+
+    /// <summary>Continues bought, in total.</summary>
+    public int Continues { get; private set; }
+
+    /// <summary>Orbs broken, blocks broken by a third crack, times the share sheet was opened, and Story wins without a continue.</summary>
+    public int OrbsBroken { get; private set; }
+    public int FractureBreaks { get; private set; }
+    public int Shares { get; private set; }
+    public int CleanWins { get; private set; }
+
+    /// <summary>The share sheet was opened.</summary>
+    public void AddShare()
+    {
+        Shares = Grow(SaveKeys.StatShares, Shares, 1);
+        Changed?.Invoke();
+    }
+
+    /// <summary>One more level has been rerolled.</summary>
+    public void AddReroll()
+    {
+        Rerolls = Grow(SaveKeys.StatRerolls, Rerolls, 1);
+        Changed?.Invoke();
+    }
 
     /// <summary>Story levels played (started and at least one piece placed) in a region, 1 to 8.</summary>
     public int PlaysInRegion(int region) =>
@@ -68,6 +100,10 @@ public sealed class LifetimeStats
         MostClearedByOnePiece = Raise(SaveKeys.StatMostCleared, MostClearedByOnePiece, run.MostClearedByOnePiece);
         CellsPopped = Grow(SaveKeys.StatCellsPopped, CellsPopped, run.CellsPopped);
         AbilitiesUsed = Grow(SaveKeys.StatAbilitiesUsed, AbilitiesUsed, run.AbilitiesUsed);
+        Continues = Grow(SaveKeys.StatContinues, Continues, run.Continues);
+        OrbsBroken = Grow(SaveKeys.StatOrbsBroken, OrbsBroken, run.OrbsBroken);
+        FractureBreaks = Grow(SaveKeys.StatFractureBreaks, FractureBreaks, run.FractureBreaks);
+        if (run.Completed && level is { IsTutorial: false } && run.Continues == 0) CleanWins = Grow(SaveKeys.StatCleanWins, CleanWins, 1);
 
         if (run.Completed)
         {
@@ -83,7 +119,7 @@ public sealed class LifetimeStats
     {
         foreach (var key in SaveKeys.StatKeys) _settings.SetInt(key, 0);
         LargestGroup = LongestChain = MostClearedByOnePiece = MostMovesLeft = 0;
-        AbilitiesUsed = BoardsCleared = CellsPopped = LevelsWon = MostGoalsOnClearedLevel = 0;
+        AbilitiesUsed = BoardsCleared = CellsPopped = LevelsWon = MostGoalsOnClearedLevel = Rerolls = Continues = OrbsBroken = FractureBreaks = Shares = CleanWins = 0;
         Changed?.Invoke();
     }
 

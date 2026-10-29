@@ -42,11 +42,21 @@ public sealed class GameViewModel : ObservableObject
     private readonly TutorialProgress _tutorial;
     private readonly StoryLevels _levels;
     private readonly ClassicGold _classicGold;
+    private readonly Consolation _consolation;
+    private readonly GameRulesStore _rules;
+    private int _popGoldPaid;                // Story: the pop gold banked on a win
+    private ConsolationResult _lossPaid;     // Story: what a loss paid
+    private bool _lossHandled;
+    private int _chipHold;                   // gold already paid that the HUD chip has not counted up to yet
     private readonly UnlockStore _unlocks;
     private List<Achievement> _earned = new();
     private bool _checkAchievements;
 
     private IDispatcherTimer? _timer;
+    private IDispatcher? _dispatcher;
+    private IDispatcherTimer? _beatTimer;   // the hold after the last pop, before the result card fades in
+    private bool _endBeat;                  // true while the board is being held
+    private bool _beatStarted;              // the hold for this finish has begun (it runs once per finish)
     private bool _droppedHard;   // the lock that follows a hard drop gets the whoosh instead of the plain thud
     private GameState _lastState = GameState.Ready;
     private int _bestAtStart;
@@ -84,8 +94,10 @@ public sealed class GameViewModel : ObservableObject
     public GameViewModel(HighScoreService highScores, PlayerProgress progress, ShopService shop, GameSettings settings, GameAudio audio, AudioSettings audioSettings,
         CampaignService campaign, CosmeticLoadout loadout, DevTools dev, LifetimeStats lifetime, EndingService ending,
         AchievementService achievements, ConsumableInventory stock, TutorialProgress tutorial,
-        StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks)
+        StoryLevels levels, ClassicGold classicGold, UnlockStore unlocks, Consolation consolation, GameRulesStore rules)
     {
+        _rules = rules;
+        _consolation = consolation;
         _levels = levels;
         _classicGold = classicGold;
         _unlocks = unlocks;
@@ -135,10 +147,25 @@ public sealed class GameViewModel : ObservableObject
         ChoiceDoneCommand = new Command(FinishChoice);
         SecondChanceCommand = new Command(UseSecondChance);
         PrismShiftCommand = new Command(UsePrismShift);
+        InsightCommand = new Command(() => RunInsight(countUse: true));
+        InsightAlwaysCommand = new Command(() =>
+        {
+            _shop.InsightAlwaysOn = !_shop.InsightAlwaysOn;
+            RaiseInsight();
+            if (_shop.InsightAlwaysOn) RunInsight(countUse: false);
+        });
         RerollCommand = new Command(Reroll);
         ToggleRerollHintCommand = new Command(() => { RerollHintOpen = !RerollHintOpen; });
         DismissLoadingCommand = new Command(DismissLoading);
         CopySeedCommand = new Command(CopySeed);
+        EaseCommand = new Command(() => EaseRequested?.Invoke());
+        ShopCommand = new Command(() => ShopRequested?.Invoke());
+        ShareCommand = new Command(() =>
+        {
+            _lifetime.AddShare();       // opening the share sheet is itself an achievement
+            _achievements.CheckNow();
+            ShareRequested?.Invoke(ShareMessage);
+        });
 
         _levels.Changed += RaiseReroll;
         _progress.Changed += RaiseReroll;
@@ -171,6 +198,9 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>A burst wave just resolved (for visual effects).</summary>
     public event Action<BurstWave>? WaveResolved;
 
+    /// <summary>The Orb appeared, broke or ran out of time, and where (its top-left cell): the board draws the effect that goes with it.</summary>
+    public event Action<GameEvent, int, int>? OrbHappened;
+
     /// <summary>A new game (or level) has just started: the view should refresh anything that depends on the level.</summary>
     public event Action? GameStarted;
 
@@ -200,6 +230,23 @@ public sealed class GameViewModel : ObservableObject
     public ICommand ToggleRerollHintCommand { get; }
     public ICommand DismissLoadingCommand { get; }
     public ICommand CopySeedCommand { get; }
+    public ICommand ShopCommand { get; }
+    public ICommand InsightCommand { get; }
+    public ICommand InsightAlwaysCommand { get; }
+    public ICommand EaseCommand { get; }
+
+    /// <summary>The player pressed EASE THIS LEVEL. The page asks them to confirm, then calls <see cref="ConfirmEase"/>.</summary>
+    public event Action? EaseRequested;
+    public ICommand ShareCommand { get; }
+
+    /// <summary>The player asked for the workshop from a result card. The page decides how to get there.</summary>
+    public event Action? ShopRequested;
+
+    /// <summary>The player asked to share a result. Carries the text for the system share sheet.</summary>
+    public event Action<string>? ShareRequested;
+
+    /// <summary>The board is being held after the last pop. The page pulses the move counter (or flashes the top row).</summary>
+    public event Action<EndBeatKind>? EndBeatStarted;
 
     // ---------------------------------------------------------------- helpers (Second Chance, Prism Shift)
     // A button shows only when the level allows helpers and the player brought one in. It is switched off, with a short
@@ -272,6 +319,13 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>Dev shortcuts on the pause / failed card. False in normal Release builds.</summary>
     public bool ShowDevTools => DevMenu.Enabled && _setup.HasLevel && (_isPaused || _isFailed);
 
+    /// <summary>The board tools (spawn an Orb, crack every block, fill rows) work in Endless too, from the pause card. Development builds only.</summary>
+    public bool ShowDevBoardTools => DevMenu.Enabled && _isPaused;
+
+    public ICommand DevSpawnOrbCommand => new Command(() => { _game.SpawnOrbNow(); Redraw?.Invoke(); });
+    public ICommand DevCrackAllCommand => new Command(() => { _game.DevCrackAll(); Redraw?.Invoke(); });
+    public ICommand DevFillRowsCommand => new Command<string>(n => { if (int.TryParse(n, out int rows)) _game.DevFillRows(rows); Redraw?.Invoke(); });
+
     /// <summary>Dev: wins the current Story level now; the normal completion path (gold, story, rewards) then runs.</summary>
     private void DevSkipLevel()
     {
@@ -300,18 +354,18 @@ public sealed class GameViewModel : ObservableObject
 
     public int BestScore { get => _bestScore; private set { if (SetProperty(ref _bestScore, value)) RaiseHeader(); } }
 
-    /// <summary>"LEVEL 12 · EASY" or "CLASSIC".</summary>
+    /// <summary>"LEVEL 12 · EASY" or "ENDLESS".</summary>
     public string TitleText => _setup.IsLesson ? $"LESSON {_setup.Level} OF {StoryConfig.LessonCount}"
         : _setup.IsStory ? $"LEVEL {_setup.Level} · {StoryConfig.Name(StoryConfig.TierFor(_setup.Level)).ToUpperInvariant()}"
-        : "CLASSIC";
+        : "ENDLESS";
 
-    /// <summary>Best score in Classic, gold in Story, "TUTORIAL" in a lesson.</summary>
-    public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{_progress.Gold:N0} gold" : $"BEST {_bestScore:N0}  ·  {RunGoldText}";
+    /// <summary>Best score in Endless, gold in Story, "TUTORIAL" in a lesson.</summary>
+    public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{Math.Max(0, _progress.Gold - _chipHold):N0} gold" : $"BEST {_bestScore:N0}  ·  {RunGoldText}";
 
     public string ChainText { get => _chainText; private set { if (SetProperty(ref _chainText, value)) OnPropertyChanged(nameof(HasChain)); } }
     public bool HasChain => _chainText.Length > 0;
 
-    public bool HasMoves => _game.HasMoveLimit;
+    public bool HasMoves => _game.HasMoveLimit && !_isLoading;
     public string MovesText => _game.MovesLeft.ToString();
 
     public Color MovesColour => !_game.HasMoveLimit ? Colors.White
@@ -324,7 +378,7 @@ public sealed class GameViewModel : ObservableObject
 
     // ---------------------------------------------------------------- bindable state: optional memory objective
 
-    private BonusObjective? Bonus => _game.Story?.Bonus;
+    private BonusObjective? Bonus => _isLoading ? null : _game.Story?.Bonus;
 
     /// <summary>This level carries an optional objective that uncovers a memory.</summary>
     public bool HasBonus => Bonus is not null;
@@ -364,10 +418,12 @@ public sealed class GameViewModel : ObservableObject
     public string RetryText => _isFailed ? "TRY AGAIN" : "PLAY AGAIN";
 
     public bool IsPlaying => _game.State is GameState.Playing or GameState.ResolvingBursts;
-    public bool IsOverlayVisible => _isPaused || _isFailed || _isComplete || _isClassicOver;
+    public bool IsOverlayVisible => !_endBeat && (_isPaused || _isFailed || _isComplete || _isClassicOver);
 
-    public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : "LEVEL COMPLETE")
-        : _isFailed ? (_game.FailReason == FailReason.OutOfMoves ? "OUT OF MOVES" : "BOARD FULL")
+    public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : $"LEVEL {_setup.Level} COMPLETE")
+        : _isFailed ? (_game.FailReason == FailReason.OutOfMoves
+            ? (_setup.IsLesson ? "OUT OF MOVES" : $"LEVEL {_setup.Level} — OUT OF MOVES")
+            : (_setup.IsLesson ? "BOARD FULL" : $"LEVEL {_setup.Level} — STACK REACHED THE TOP"))
         : _isClassicOver ? "GAME OVER"
         : "PAUSED";
 
@@ -386,13 +442,199 @@ public sealed class GameViewModel : ObservableObject
         }
     }
 
+    // ---- help after losing (v1.1) ----
+
+    /// <summary>
+    /// "There is always a way through": from the fifth loss on a level, on the failed card. Only while the level is the
+    /// solved, normal one: an eased level, a lesson, and (later) a level played on the player's own rules do not get it.
+    /// </summary>
+    public bool ShowSolvableNote => _isFailed && _setup.IsStory && !_setup.Eased && _setup.Rules.IsDefault && _levels.ShowsSolvableNote(_setup.Level);
+
+    /// <summary>"Custom rules" (or "Custom rules · half gold") on the HUD while the player's own rules are in force.</summary>
+    public bool HasRulesChip => !_setup.Rules.IsDefault;
+    public string RulesChipText => _setup.Rules.IsEasierThanDefault ? "Custom rules · half gold" : "Custom rules";
+
+    /// <summary>EASE THIS LEVEL: from the fifteenth loss, on the current level only (never a finale).</summary>
+    public bool ShowEase => _isFailed && _setup.IsStory && _levels.CanEase(_setup.Level);
+
+    public string EaseNoteText => "Want an easier version of this level? You'll still move on in the story, but this level won't pay any gold.";
+
+    /// <summary>The player confirmed: swap in an easier version of the level (more moves, one band lower, no gold).</summary>
+    public void ConfirmEase()
+    {
+        if (!_setup.IsStory || _isLoading || !_levels.TryEase(_setup.Level)) return;
+        _failureCounted = true;   // leaving the run to ease it is the player's choice, not another loss
+        _seedPinned = false;
+        RerollHintOpen = false;
+        _setup = GameSetup.Story(_setup.Level);
+        NewGame();
+    }
+
+    /// <summary>SHOP beside NEXT LEVEL on a cleared level, under TRY AGAIN on a failed one. Lessons have no shop button.</summary>
+    public bool ShowShop => _isComplete && !_setup.IsLesson;
+    public bool ShowShopOnFailed => _isFailed && !_setup.IsLesson;
+
+    /// <summary>The share button: on a cleared Story level and on the Endless game-over card.</summary>
+    public bool ShowShare => (_isComplete && _setup.IsStory) || _isClassicOver;
+
+    private string ShareMessage => _isClassicOver
+        ? ShareText.Build(new ShareContext(ShareKind.Endless, Score: _score, BestChain: _run.LongestChain))
+        : ShareText.Build(new ShareContext(ShareKind.StoryWin, Level: _setup.Level,
+            Region: RegionCatalog.For(_setup.Level)?.Title ?? string.Empty, MovesLeft: _game.MovesLeft));
+
     /// <summary>"+25 gold", shown when a level is cleared for the first time.</summary>
     public bool HasGoldReward => _isComplete && _result.GoldAwarded > 0;
     public string GoldRewardText => $"+{_result.GoldAwarded:N0} gold";
+    public int GoldRewardValue => _result.GoldAwarded;
+
+    // ---- pop gold and consolation (v1.1) ----
+
+    /// <summary>The pop gold of a won Story level, banked with the win (shown on its own line next to the first-clear gold).</summary>
+    public bool HasPopGold => _isComplete && _popGoldPaid > 0;
+    public int PopGoldValue => _popGoldPaid;
+    public string PopGoldText => $"Pop gold  +{_popGoldPaid:N0}";
+
+    /// <summary>A lost Story level keeps half the pop gold and part of the first-clear reward; with none of either it says so.</summary>
+    public bool ShowConsolation => _isFailed && _setup.IsStory && !_setup.Eased;
+    public int ConsolationValue => _lossPaid.Total;
+    public string ConsolationText => _lossPaid.Total > 0 ? "Kept half your gold" : "No gold this time";
+
+    /// <summary>The HUD gold chip counts up to the gold just paid instead of jumping: the page releases it as coins land.</summary>
+    public void SetChipHold(int remaining)
+    {
+        int hold = Math.Min(remaining, Math.Max(0, _progress.Gold));   // a negative hold shows the chip above the real gold: it counts down after a purchase
+        if (hold == _chipHold) return;
+        _chipHold = hold;
+        OnPropertyChanged(nameof(SubText));
+    }
+
+    // ---- Pip's Insight (v1.1) ----
+    // A button below the board (and, at the top level, an Always on switch). It asks the advisor where the piece in hand
+    // would do the most good and the board draws that spot. It never plays the move. Off in lessons and finales.
+
+    private PlacementSuggestion? _insight;
+    private int _insightIndex = -1;      // the piece (by how many have been placed) the suggestion is for
+    private int _insightUses;            // uses spent on this level
+    private bool _insightUsedInRun;      // Insight was shown this run: an Endless run like that never sets a best score
+    private int _insightRequest;
+
+    /// <summary>The suggestion changed (or was taken away). The page hands it to the board to draw.</summary>
+    public event Action<PlacementSuggestion?>? InsightChanged;
+
+    public bool InsightRowVisible => _shop.InsightLevel > 0 && _game.InsightAllowed && !_isComplete && !_isFailed && !SceneVisible;
+    public bool AlwaysOnActive => _shop.InsightAlwaysOn && _game.InsightAllowed;
+    public bool ShowInsightButton => InsightRowVisible && !AlwaysOnActive;
+    public bool ShowAlwaysOn => InsightRowVisible && _shop.InsightLevel >= 3;
+    public int InsightUsesLeft => _shop.InsightUsesPerLevel == int.MaxValue ? int.MaxValue : Math.Max(0, _shop.InsightUsesPerLevel - _insightUses);
+    public bool CanInsight => ShowInsightButton && InsightUsesLeft > 0 && _game.State == GameState.Playing;
+    public string InsightText => InsightUsesLeft == int.MaxValue ? "INSIGHT" : $"INSIGHT · {InsightUsesLeft} LEFT";
+    public string AlwaysOnText => _shop.InsightAlwaysOn ? "ALWAYS ON: ON" : "ALWAYS ON: OFF";
+
+    private void RaiseInsight()
+    {
+        OnPropertyChanged(nameof(InsightRowVisible));
+        OnPropertyChanged(nameof(AlwaysOnActive));
+        OnPropertyChanged(nameof(ShowInsightButton));
+        OnPropertyChanged(nameof(ShowAlwaysOn));
+        OnPropertyChanged(nameof(InsightUsesLeft));
+        OnPropertyChanged(nameof(CanInsight));
+        OnPropertyChanged(nameof(InsightText));
+        OnPropertyChanged(nameof(AlwaysOnText));
+    }
+
+    /// <summary>Asks the advisor (off the UI thread) where the piece in hand should go. A suggestion already made for this piece is shown again for free.</summary>
+    private async void RunInsight(bool countUse)
+    {
+        if (!_game.InsightAllowed || _shop.InsightLevel == 0 || _game.State != GameState.Playing) return;
+        int index = _game.PiecesPlaced;
+
+        if (_insight is not null && _insightIndex == index)
+        {
+            InsightChanged?.Invoke(_insight);   // already worked out for this piece: show it again, no use spent
+            return;
+        }
+        if (countUse && InsightUsesLeft <= 0) return;
+
+        var request = _game.CreateAdviceRequest();
+        if (request is null) return;
+        int ticket = ++_insightRequest;
+        var result = await Task.Run(() => PlacementAdvisor.Best(request));
+        if (ticket != _insightRequest || _game.PiecesPlaced != index || _game.State != GameState.Playing) return;   // stale: the piece moved on
+
+        _insight = result;
+        _insightIndex = index;
+        if (countUse && _shop.InsightUsesPerLevel != int.MaxValue) _insightUses++;
+        _insightUsedInRun = true;
+        RaiseInsight();
+        InsightChanged?.Invoke(result);
+    }
+
+    /// <summary>A new piece has appeared: the old suggestion goes, and the new one is made at once if Always on is set.</summary>
+    private void OnPieceChangedForInsight()
+    {
+        if (_insightIndex == _game.PiecesPlaced && _insight is not null) return;
+        if (_insight is not null)
+        {
+            _insight = null;
+            InsightChanged?.Invoke(null);
+        }
+        RaiseInsight();
+        if (AlwaysOnActive && _game.State == GameState.Playing) RunInsight(countUse: false);
+    }
+
+    // ---- continues (v1.1) ----
+
+    /// <summary>Five more moves for gold, on a Story level lost by running out of moves (not a finale, not an eased level).</summary>
+    public bool ShowContinue => _isFailed && _setup.IsStory && _game.CanContinue;
+    public int ContinuePrice => ContinuePricing.Price(_game.ContinuesUsed + 1);
+    public bool CanAffordContinue => ShowContinue && _progress.Gold >= ContinuePrice;
+    public string ContinueText => $"+{ContinuePricing.ExtraMoves} MOVES · {ContinuePrice} GOLD";
+    public bool ShowContinueHint => ShowContinue && !CanAffordContinue;
+    public string ContinueHintText => "Earn gold in Endless mode";
+    public int ContinuesLeft => ContinuePricing.MaxPerAttempt - _game.ContinuesUsed;
+    public string ContinuesLeftText => $"{ContinuesLeft} of {ContinuePricing.MaxPerAttempt} continues left";
+
+    /// <summary>
+    /// Buys the continue: takes the gold once, then gives five more moves. Nothing is taken if the engine will not continue.
+    /// The loss is not paid out again; if the level is then lost once more, only what is new is paid.
+    /// </summary>
+    public bool BuyContinue()
+    {
+        if (!ShowContinue || _buyingContinue) return false;
+        _buyingContinue = true;
+        try
+        {
+            int price = ContinuePrice;
+            if (price <= 0 || !_progress.TrySpend(price)) return false;
+            if (!_game.Continue(ContinuePricing.ExtraMoves))
+            {
+                _progress.AwardGold(price);
+                return false;
+            }
+
+            _lossHandled = false;   // a second loss pays only the difference
+            _chipHold = -price;     // the chip shows the gold from before and counts down
+            OnPropertyChanged(nameof(SubText));
+            return true;
+        }
+        finally
+        {
+            _buyingContinue = false;
+        }
+    }
+
+    private bool _buyingContinue;
+
+    /// <summary>One tick of the count-up (a coin sound).</summary>
+    public void PlayCoinTick() => _audio.Ui(UiSound.Coin);
+
+    /// <summary>How far the HUD chip is held away from the real gold (negative: above it, counting down after a purchase).</summary>
+    public int ChipHoldNow => _chipHold;
 
     /// <summary>Small note under the card explaining why no gold was paid.</summary>
     public string GoldNote => !_isComplete ? string.Empty
         : _result.GoldAwarded > 0 ? string.Empty
+        : _setup.Eased ? "This was the easier version, so it paid no gold. Win the normal level any time to earn it."
         : _setup.IsLesson ? "Lessons don't pay gold."
         : _setup.Level <= StoryConfig.TutorialLastLevel ? "The first few levels don't pay gold."
         : "Gold is only paid the first time a level is cleared.";
@@ -406,8 +648,29 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(NextText));
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(RetryText));
+        OnPropertyChanged(nameof(ShowShop));
+        OnPropertyChanged(nameof(ShowShopOnFailed));
+        OnPropertyChanged(nameof(ShowShare));
+        OnPropertyChanged(nameof(ShowContinue));
+        OnPropertyChanged(nameof(ContinuePrice));
+        OnPropertyChanged(nameof(CanAffordContinue));
+        OnPropertyChanged(nameof(ContinueText));
+        OnPropertyChanged(nameof(ShowContinueHint));
+        OnPropertyChanged(nameof(ContinuesLeft));
+        OnPropertyChanged(nameof(ContinuesLeftText));
+        OnPropertyChanged(nameof(ShowSolvableNote));
+        OnPropertyChanged(nameof(HasRulesChip));
+        OnPropertyChanged(nameof(RulesChipText));
+        OnPropertyChanged(nameof(ShowEase));
         OnPropertyChanged(nameof(HasGoldReward));
         OnPropertyChanged(nameof(GoldRewardText));
+        OnPropertyChanged(nameof(GoldRewardValue));
+        OnPropertyChanged(nameof(HasPopGold));
+        OnPropertyChanged(nameof(PopGoldValue));
+        OnPropertyChanged(nameof(PopGoldText));
+        OnPropertyChanged(nameof(ShowConsolation));
+        OnPropertyChanged(nameof(ConsolationValue));
+        OnPropertyChanged(nameof(ConsolationText));
         OnPropertyChanged(nameof(GoldNote));
         OnPropertyChanged(nameof(HasGoldNote));
         OnPropertyChanged(nameof(HasRegionProgress));
@@ -418,6 +681,7 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(BonusResultText));
         OnPropertyChanged(nameof(HasBonusResult));
         OnPropertyChanged(nameof(ShowDevTools));
+        OnPropertyChanged(nameof(ShowDevBoardTools));
         OnPropertyChanged(nameof(ClassicOverGoldText));
         OnPropertyChanged(nameof(HasClassicOverGold));
         OnPropertyChanged(nameof(ClassicSeedText));
@@ -474,7 +738,7 @@ public sealed class GameViewModel : ObservableObject
             if (_foundLore.Any(l => l.Kind == LoreKind.Memory)) return string.Empty;   // already shown as a reward line
             var memory = StoryContent.FindLore(b.MemoryId);
             return memory is not null && _campaign.HasLore(memory)
-                ? "The memory on this level is already in your Archive."
+                ? "The memory on this level is already in your Story Book."
                 : $"Optional memory not found: {b.Describe()}.";
         }
     }
@@ -946,7 +1210,7 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>The "?" button appears only when the player cannot pay. It explains where gold comes from and is never the only way forward.</summary>
     public bool ShowRerollHint => ShowReroll && !CanReroll;
 
-    public string RerollHintText => "Short on gold? Pop blocks in Classic mode to earn some.";
+    public string RerollHintText => "Short on gold? Pop blocks in Endless mode to earn some.";
 
     public bool RerollHintOpen { get => _rerollHintOpen; set { if (SetProperty(ref _rerollHintOpen, value)) OnPropertyChanged(nameof(ShowRerollHintText)); } }
     public bool ShowRerollHintText => _rerollHintOpen && ShowRerollHint;
@@ -978,6 +1242,8 @@ public sealed class GameViewModel : ObservableObject
             return;
         }
 
+        _lifetime.AddReroll();
+
         // Abandoning the run to reroll is the player's choice, not another failure.
         _failureCounted = true;
         _seedPinned = false;
@@ -992,6 +1258,18 @@ public sealed class GameViewModel : ObservableObject
         if (_failureCounted || !_setup.IsStory) return;
         _failureCounted = true;
         if (_levels.RecordFailure(_setup.Level) > 0) _levels.PrefetchReroll(_setup.Level);
+    }
+
+    /// <summary>A lost Story level keeps half its pop gold and part of the first-clear reward (see <see cref="Consolation"/>). Once per run.</summary>
+    private void PayConsolation()
+    {
+        if (_lossHandled || !_setup.IsStory || _game.Story is not { IsTutorial: false } story) return;
+        _lossHandled = true;
+        var due = _consolation.Pay(story.Number, _game.ClassicGoldTenths / 10, _game.GoalProgress,
+            levelCleared: _progress.IsCleared(story.Number), eased: story.Eased, alreadyPaid: _lossPaid, goldFactor: _setup.Rules.GoldFactor);
+        _lossPaid = new ConsolationResult(_lossPaid.PopPart + due.PopPart, _lossPaid.ProgressPart + due.ProgressPart);
+        _chipHold = due.Total;
+        UpdateOverlay();
     }
 
     /// <summary>Restarting a level after placing at least one piece counts as a failure; leaving to the menu does not.</summary>
@@ -1047,6 +1325,7 @@ public sealed class GameViewModel : ObservableObject
         _isLoading = true;
         _recap = PopBlocks.Engine.Story.LoadingRecap.Build(_unlocks);
         RaiseLoading();
+        LoadLevelState();   // the old level's goals, moves and objective must not stay up while the new level is found
 
         try
         {
@@ -1078,7 +1357,7 @@ public sealed class GameViewModel : ObservableObject
             _loadCts = null;
             RaiseLoading();
 
-            _setup = _setup with { Seed = seed };
+            _setup = _setup with { Seed = seed, Eased = _levels.IsEasedPlay(_setup.Level) };
             NewGame();
         }
         catch (OperationCanceledException)
@@ -1152,6 +1431,7 @@ public sealed class GameViewModel : ObservableObject
     public void Attach(IDispatcher dispatcher)
     {
         if (_timer is not null) return;
+        _dispatcher = dispatcher;
         _timer = dispatcher.CreateTimer();
         _timer.IsRepeating = true;
         _timer.Tick += (_, _) =>
@@ -1175,13 +1455,61 @@ public sealed class GameViewModel : ObservableObject
         var piece = _game.CurrentPiece;
         if (piece is null) return true;
         foreach (var cell in piece.BoardCells())
-            if (cell.Y < PopBlocks.Engine.GameConfig.HiddenRows) return false;
+            if (cell.Y < _game.ViewTopRow) return false;
         return true;
+    }
+
+    /// <summary>
+    /// After the last pop of a level or run the board is held for a beat (the move counter pulses; an overflow flashes the
+    /// top row) before the result card fades in. Input is already closed because the game is over; a tap skips the wait.
+    /// </summary>
+    private void BeginEndBeat()
+    {
+        _beatStarted = true;
+        if (_dispatcher is null) return;
+
+        bool overflow = _game.State == GameState.GameOver && _game.FailReason == FailReason.StackOverflow;
+        bool reduced = _settings.ReducedMotion;
+        var kind = reduced ? EndBeatKind.Still
+            : overflow ? EndBeatKind.Overflow
+            : _game.State == GameState.LevelComplete ? EndBeatKind.Win : EndBeatKind.OutOfMoves;
+
+        _beatTimer ??= _dispatcher.CreateTimer();
+        _beatTimer.IsRepeating = false;
+        _beatTimer.Interval = TimeSpan.FromMilliseconds(EndBeat.HoldMs(overflow, reduced));
+        _beatTimer.Tick -= OnEndBeatTick;
+        _beatTimer.Tick += OnEndBeatTick;
+        _endBeat = true;
+        _beatTimer.Start();
+        EndBeatStarted?.Invoke(kind);
+    }
+
+    private void OnEndBeatTick(object? sender, EventArgs e) => SkipEndBeat();
+
+    /// <summary>Ends the hold now (its time is up, or the player tapped). The result card shows.</summary>
+    public void SkipEndBeat()
+    {
+        _beatTimer?.Stop();
+        if (!_endBeat) return;
+        _endBeat = false;
+        UpdateOverlay();
+    }
+
+    /// <summary>Adds the run that is ending to the lifetime bests, if that has not happened yet (a lesson never counts).</summary>
+    private void RecordPendingRun()
+    {
+        if (_runRecorded || _run.PiecesPlaced == 0 || _game.Story?.IsTutorial == true) return;
+        _runRecorded = true;
+        _lifetime.Add(_run, _game.Story);
     }
 
     /// <summary>Stops the timer and pauses. Safe to call repeatedly.</summary>
     public void Detach()
     {
+        if (_game.State is GameState.GameOver or GameState.LevelComplete) RecordPendingRun();   // a level just lost or won counts even if the page is left at once
+        _beatTimer?.Stop();
+        _endBeat = false;
+        _chipHold = 0;
         Pause();
         _timer?.Stop();
         BankClassicGold();   // leaving Classic pays out what the run earned
@@ -1204,7 +1532,12 @@ public sealed class GameViewModel : ObservableObject
                 BeginLoad();
                 return;
             }
-            _setup = _setup with { Seed = ready };
+            // An eased level is the player's current level that they chose to ease; anything else is played as rolled.
+            _setup = _setup with { Seed = ready, Eased = _levels.IsEasedPlay(_setup.Level) };
+        }
+        else if (_setup.IsStory)
+        {
+            _setup = _setup with { Eased = false };
         }
         CancelLoad();
 
@@ -1219,6 +1552,17 @@ public sealed class GameViewModel : ObservableObject
         }
         _failureCounted = false;
         RerollHintOpen = false;
+        _insight = null;
+        _insightIndex = -1;
+        _insightUses = 0;
+        _insightUsedInRun = false;
+        _insightRequest++;
+        InsightChanged?.Invoke(null);
+        if (_setup.IsStory) _classicGold.BeginRun();   // Story pops pay too: this run starts with nothing banked
+        _popGoldPaid = 0;
+        _lossPaid = default;
+        _lossHandled = false;
+        _chipHold = 0;
 
         // Shop upgrades and settings apply from the start of each game.
         _game.PreviewCount = _shop.PreviewCount;
@@ -1229,9 +1573,12 @@ public sealed class GameViewModel : ObservableObject
             : PopTiming.Instant;
 
         // A level left half-played still counts towards the player's personal bests (once). Tutorial lessons never do.
-        if (!_runRecorded && _run.PiecesPlaced > 0 && _game.Story?.IsTutorial != true) _lifetime.Add(_run, _game.Story);
+        RecordPendingRun();
         _run.Reset();
         _runRecorded = false;
+        _beatTimer?.Stop();
+        _endBeat = false;
+        _beatStarted = false;
         _earned = new List<Achievement>();
         _checkAchievements = false;
         _foundLore = new List<LoreEntry>();
@@ -1280,15 +1627,32 @@ public sealed class GameViewModel : ObservableObject
         if (_setup.IsStory && !_promptOpen && !SceneVisible && _campaign.ReplayRemark(_setup.Level) is { } remark)
             Banner?.Invoke(remark);
 
+        _setup = _setup with { Rules = _rules.EffectiveFor(_setup) };   // the player's own rules, where they apply
         _game.Start(_setup);
 
-        RaiseHeader();
-        UpdateOverlay();
-        RaiseBonus();
-        RaiseChoice();
-        RaiseHelpers();
+        LoadLevelState();
         PrefetchNextLevel();
         GameStarted?.Invoke();
+    }
+
+    /// <summary>
+    /// The one place that makes every level-dependent binding match the engine: goals (rebuilt from scratch, never diffed
+    /// against the previous level), the optional objective, the move counter, the header, the result card, the choice panel
+    /// and the helper buttons. A new game, a reroll and the loading card all go through it, so none of them can leave the
+    /// previous level's goal bar behind.
+    /// </summary>
+    private void LoadLevelState()
+    {
+        _goalSignature = string.Empty;
+        UpdateGoals();
+        RaiseBonus();
+        OnPropertyChanged(nameof(HasMoves));
+        OnPropertyChanged(nameof(MovesText));
+        OnPropertyChanged(nameof(MovesColour));
+        RaiseHeader();
+        UpdateOverlay();
+        RaiseChoice();
+        RaiseHelpers();
     }
 
     public void GoToNextLevel()
@@ -1339,6 +1703,8 @@ public sealed class GameViewModel : ObservableObject
     private void OnGameEvent(GameEvent e)
     {
         PlaySound(e);
+        if (e is GameEvent.OrbSpawned or GameEvent.OrbBroken or GameEvent.OrbCorrupted && _game.OrbEventAt is { } at)
+            OrbHappened?.Invoke(e, at.X, at.Y);
         _coach?.Notify(e);
         if (e == GameEvent.PenaltyApplied)
             Toast?.Invoke($"No pop!  −{_game.LastPenalty}");
@@ -1360,6 +1726,23 @@ public sealed class GameViewModel : ObservableObject
         {
             case GameEvent.Rotated:
                 _audio.Rotated();
+                break;
+
+            case GameEvent.OrbSpawned:
+                _audio.OrbSound(OrbSoundKind.Appeared);
+                if (_settings.SeenOrbIntro) break;
+                _settings.SeenOrbIntro = true;
+                Toast?.Invoke(_setup.IsStory
+                    ? "An Orb! Pop a block touching it to break it and clear its rows and columns. If its timer runs out, it cracks the blocks around it."
+                    : "An Orb! Pop a block touching it to break it and clear its rows and columns for a big gold bonus. If its timer runs out, it cracks the blocks around it.");
+                break;
+
+            case GameEvent.OrbBroken:
+                _audio.OrbSound(OrbSoundKind.Broke);
+                break;
+
+            case GameEvent.OrbCorrupted:
+                _audio.OrbSound(OrbSoundKind.Corrupted);
                 break;
 
             case GameEvent.HardDropped:
@@ -1392,9 +1775,9 @@ public sealed class GameViewModel : ObservableObject
         {
             // Save the personal best the moment it is beaten, so an unexpected exit cannot lose it. A run on a seed the
             // player typed in pays gold like any other, but never sets a record (an easy seed would make it meaningless).
-            if (_setup.CountsForBest && _highScores.Submit(_setup.BestScoreKey, _game.Score))
+            if (_setup.CountsForBest && !_insightUsedInRun && _highScores.Submit(_setup.BestScoreKey, _game.Score))
                 BestScore = _highScores.GetBest(_setup.BestScoreKey);
-            IsNewBest = _setup.CountsForBest && _highScores.GetBest(_setup.BestScoreKey) > _bestAtStart;
+            IsNewBest = _setup.CountsForBest && !_insightUsedInRun && _highScores.GetBest(_setup.BestScoreKey) > _bestAtStart;
 
             // Game over pays out what the run earned, once, and says how much.
             if (_game.State == GameState.GameOver && !_classicBanked)
@@ -1412,11 +1795,13 @@ public sealed class GameViewModel : ObservableObject
         else if (_game.State == GameState.GameOver)
         {
             CountLoss();   // a failed Story level: counted once, on the player's current level only
+            PayConsolation();
         }
 
         // The run is over (won, lost, or Classic game over): add it to the lifetime bests, once.
-        if (_game.State is GameState.GameOver or GameState.LevelComplete && !_runRecorded)
+        if (_game.State is GameState.GameOver or GameState.LevelComplete && !_runRecorded && !(_setup.IsStory && _game.CanContinue))
         {
+            // (A level lost by running out of moves may still be continued; its run is recorded when the attempt really ends.)
             _runRecorded = true;
             if (!_setup.IsLesson)   // a tutorial lesson is practice: it adds nothing to the bests or the achievements
             {
@@ -1425,8 +1810,14 @@ public sealed class GameViewModel : ObservableObject
             }
         }
 
+        // The first time a finish is seen, hold the board for a beat before any result card shows.
+        bool finished = _game.State is GameState.LevelComplete or GameState.GameOver;
+        if (finished && !_beatStarted) BeginEndBeat();
+        else if (!finished) _beatStarted = false;
+
         HandleCompletion();
         RaiseBonus();
+        OnPieceChangedForInsight();
 
         IsPaused = _game.State == GameState.Paused;
         IsFailed = _setup.HasLevel && _game.State == GameState.GameOver;
@@ -1449,7 +1840,7 @@ public sealed class GameViewModel : ObservableObject
 
     private void UpdateGoals()
     {
-        var goals = _game.Goals;
+        IReadOnlyList<GoalState> goals = _isLoading ? Array.Empty<GoalState>() : _game.Goals;
         string signature = string.Join(",", goals.Select(g => g.Current));
         if (signature == _goalSignature && goals.Count == _goals.Count) return;
         _goalSignature = signature;
@@ -1485,7 +1876,12 @@ public sealed class GameViewModel : ObservableObject
             return;
         }
 
-        _result = _progress.Complete(_game.Story);
+        _result = _progress.Complete(_game.Story, _setup.Rules.GoldFactor);
+        int banked = _game.EarnsPopGold ? _classicGold.Bank(_game.ClassicGoldTenths) : 0;   // pop gold on top of the first clear, replays too
+        int credit = Math.Min(banked, _lossPaid.PopPart);   // the attempt was lost once before a continue: that half was already paid
+        if (credit > 0) _progress.TrySpend(credit);
+        _popGoldPaid = banked - credit;
+        _chipHold = _result.GoldAwarded + _popGoldPaid;                                      // the chip counts up to it as the coins land
 
         // Story rewards are granted here, before any scene is shown, so skipping a scene can never lose one.
         _outcome = _campaign.OnLevelCompleted(_game.Story.Number, _result);
@@ -1527,4 +1923,20 @@ public sealed class GameViewModel : ObservableObject
             _timer.Start();
         }
     }
+}
+
+/// <summary>How the board is held at the end of a level or run (the page animates the matching cue).</summary>
+public enum EndBeatKind
+{
+    /// <summary>The move counter pulses.</summary>
+    Win,
+
+    /// <summary>The move counter pulses red.</summary>
+    OutOfMoves,
+
+    /// <summary>The top row flashes once.</summary>
+    Overflow,
+
+    /// <summary>Reduced motion: a short hold with no pulse.</summary>
+    Still,
 }

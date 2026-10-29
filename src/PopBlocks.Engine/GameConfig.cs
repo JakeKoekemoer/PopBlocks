@@ -12,6 +12,28 @@ public static class GameConfig
     public const int HiddenRows = 2;
     public const int TotalRows = VisibleRows + HiddenRows;
 
+    // ---- Tall boards (v1.1): the board can be taller than the screen; the camera follows the stack ----
+    /// <summary>Rows the screen shows at once.</summary>
+    public const int ViewportRows = VisibleRows;
+
+    /// <summary>
+    /// Empty rows the camera keeps above the top of the stack. The screen scrolls only once the stack is taller than
+    /// <c>ViewportRows - CameraHeadroomRows</c> (12 rows), and then keeps the top of the stack that far below the top of the screen,
+    /// so the player always sees the stack's top three quarters and still has room above it to steer a piece. (Half the screen,
+    /// 8 rows, scrolled too early and hid too much of the stack.)
+    /// </summary>
+    public const int CameraHeadroomRows = 4;
+
+    /// <summary>The standard board height and the shortest and tallest a player can ask for (rows, not counting the hidden spawn rows).</summary>
+    public const int MinBoardRows = 16;
+    public const int MaxBoardRows = 32;
+
+    /// <summary>
+    /// Board height when the player has not chosen one: 24 rows, of which the screen shows 16 and follows the stack. A solved Story
+    /// level is still winnable here (the solver plays on 16 rows, and extra room never takes a move away). Lessons stay at 16.
+    /// </summary>
+    public const int DefaultBoardRows = 24;
+
     // ---- Matching ----
     public const int MinGroupSize = 4;
     public const int ColourFamilies = 5;

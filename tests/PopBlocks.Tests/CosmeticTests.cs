@@ -174,8 +174,10 @@ public class CosmeticCatalogTests
     [Fact]
     public void Spend_budget_is_in_line_with_the_economy()
     {
-        Assert.InRange(CosmeticCatalog.TotalPrice, 2500, 3500);
-        Assert.All(CosmeticCatalog.All.Where(c => c.Price > 0), c => Assert.True(c.Price <= 400));
+        // The original looks keep the story-paced budget; the v1.1 looks are long-term sinks for pop gold (economy.md).
+        Assert.InRange(CosmeticCatalog.OriginalPrice, 2500, 3500);
+        Assert.All(CosmeticCatalog.All.Where(c => c.Price > 0 && !CosmeticCatalog.IsNew(c)), c => Assert.True(c.Price <= 400));
+        Assert.All(CosmeticCatalog.All.Where(CosmeticCatalog.IsNew), c => Assert.True(c.Price is > 0 and <= 900, c.Id));
     }
 
     [Fact]
@@ -184,7 +186,7 @@ public class CosmeticCatalogTests
         foreach (CosmeticSlot slot in new[] { CosmeticSlot.Skin, CosmeticSlot.Burst, CosmeticSlot.Board })
         {
             int last = 0, lastRegion = 0;
-            foreach (var c in CosmeticCatalog.In(slot).Where(c => c.Price > 0).OrderBy(c => c.Discover.Region))
+            foreach (var c in CosmeticCatalog.In(slot).Where(c => c.Price > 0 && !CosmeticCatalog.IsNew(c)).OrderBy(c => c.Discover.Region))
             {
                 Assert.True(c.Price > last, c.Id);
                 Assert.True(c.Discover.Region > lastRegion, c.Id);
@@ -197,7 +199,8 @@ public class CosmeticCatalogTests
     [Fact]
     public void Frames_and_accessories_are_only_ever_earned_never_sold()
     {
-        foreach (var c in CosmeticCatalog.All.Where(c => c.Slot is CosmeticSlot.Frame or CosmeticSlot.Accessory))
+        // (The v1.1 frames and Pip looks are the exception: they are sold from the first day.)
+        foreach (var c in CosmeticCatalog.All.Where(c => c.Slot is CosmeticSlot.Frame or CosmeticSlot.Accessory && !CosmeticCatalog.IsNew(c)))
             Assert.Equal(0, c.Price);
     }
 

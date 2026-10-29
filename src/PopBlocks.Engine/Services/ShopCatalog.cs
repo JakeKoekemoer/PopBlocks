@@ -83,6 +83,7 @@ public static class ShopCatalog
     public const string ColourLens = "colourlens";
     public const string ChainSense = "chainsense";
     public const string PrismReserve = "prismreserve";
+    public const string Insight = "insight";
 
     private static ShopTier T(int price, string effect, Requirement? requires = null) =>
         new(price, effect, requires ?? Requirement.None);
@@ -120,6 +121,16 @@ public static class ShopCatalog
         new ShopItem(ChainSense, "Chain Sense", "The landing outline glows when dropping where the piece is now would start a chain.", ItemCategory.Gameplay,
             SaveKeys.UpgradeChainSense, "Off",
             new[] { T(700, "Landing glow on chains", Requirement.RegionRestored(3)) }),
+
+        // ---- Pip's Insight (v1.1): shows where the piece in hand would do the most good. It never plays the move. ----
+        new ShopItem(Insight, "Pip's Insight", "Pip points to the best place for the piece in your hand. It never plays the move for you.", ItemCategory.Gameplay,
+            SaveKeys.UpgradeInsight, "Off",
+            new[]
+            {
+                T(250, "A button below the board, 3 uses per level"),
+                T(450, "6 uses per level"),
+                T(800, "Unlimited uses, and an Always on switch"),
+            }),
 
         // ---- Prism Shift's upgrade. The shift itself is a consumable (see ConsumableCatalog); this adds free ones each level. ----
         new ShopItem(PrismReserve, "Prism Reserve", "Free Prism Shifts on every level that allows helpers, with no stock needed.", ItemCategory.Gameplay,

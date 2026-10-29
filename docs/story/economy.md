@@ -6,9 +6,10 @@ checked by tests (`P4ShopTests`, `P4GateTests`, `AchievementTests`); change them
 
 ## Rules
 
-1. **Gold is paid on first clear only, with one exception: Classic.** Replaying a Story level, reloading a save or
-   skipping a scene never pays again. Classic pays by the block popped (see Income), in whole gold, once per banking
-   event, with the leftover tenths carried in `classic_gold_carry`.
+1. **First-clear gold is paid once per level.** Replaying a Story level, reloading a save or skipping a scene never
+   pays it again. Since v1.1 popping blocks pays gold too, in Endless and in Story alike (see Income), in whole gold,
+   once per banking event, with the leftover tenths carried in `classic_gold_carry`. Lessons and levels the player eased
+   pay no pop gold, no first-clear gold and no consolation.
 2. **Nothing needed to finish the game costs gold.** Every level 1-200 is winnable by the bot solver with zero
    purchases and zero abilities (`AllLevels_1_to_200_BotWinnable_WithNoUpgrades`). The ending does not depend on any
    optional collectible.
@@ -33,7 +34,14 @@ On top of that:
   50, 75, 100, 125, 150, 175, 200, 225. Total **1,100**.
 * **Achievements** (13, one-off): total **910** (`AchievementCatalog.TotalGold`).
 * "Beyond the Spectrum" levels above 200 keep paying level gold, so a finished game still earns.
-* **Classic** (`SeedingConfig.ClassicTenthsPerBlock`, `ClassicGold`): tenths of a gold per block popped, by Classic level
+* **Pop gold in Story** (v1.1): the same rate as Endless, by the score level the pop happens at, banked when the level is
+  won (replays too), on top of the unchanged first-clear gold. A normal winning run of 60 to 100 blocks pays roughly
+  8 to 20 gold. Pop gold floats up from each popped group as `+0.6` (one decimal under 10, whole numbers from 10), and
+  the win card counts pop gold and first-clear gold up on two lines.
+* **Loss consolation** (v1.1, `Consolation`): a lost level pays `floor(popGold / 2) + floor(firstClearReward x goalProgress / 2)`.
+  The second term is paid only while the level is uncleared and is capped for good per level at that level's first-clear
+  reward (`consolation_paid`), so losing can never out-earn winning. Eased levels and lessons pay none.
+* **Classic** (`SeedingConfig.ClassicTenthsPerBlock`, `ClassicGold`), now called Endless in the app: tenths of a gold per block popped, by Classic level
   (`1 + score / 800`): 1 for levels 1-4, 2 for 5-8, 3 for 9-12, 4 for 13-16 and 5 from 17. Every wave counts, chain
   waves included, with no chain multiplier; drop points never count. A decent early run pays about 15 gold, roughly one
   early reroll. Paid when the game ends, when the player leaves Classic and when the app goes to the background; a
@@ -42,6 +50,32 @@ On top of that:
 
 A player who finishes the campaign has earned about **14,000** gold from the Story alone; Classic is extra, and is
 what a stuck player can turn to for the price of a reroll.
+
+## Achievements (v1.1)
+
+Sixteen more, 930 gold in all (`AchievementCatalog.TotalGold` is now 1,840 over 29): Orb Breaker 30, Crystal Collector 120, Close Call 60, Hairline 20, Shatterer 100, Fault Lines 80, Not Done Yet 40, Full of Heart 50, Roll With It 40, Stubborn 80, Gold Rush 60, Deep Dive 60, Endless Night 100, Rule Maker 20, Dressed Up 50 and Spread the Word 20. An eased clear never counts as a win (`RunStats.Completed` stays false), so none of the win rules is met by one. New counters: `stat_orbs_broken`, `stat_fracture_breaks`, `stat_shares` and `stat_clean_wins` (Story wins without a continue; not in the plan's list, needed for Full of Heart). Several of these (Orb, Shatterer, Fault Lines, Close Call) can only be earned in Endless or on the player's own rules while Orbs are off in the Story. The total is still well under a quarter of the campaign's level gold.
+
+## Orbs (v1.1)
+
+Breaking an Orb pays a 25 gold bonus on top of the pop gold for the blocks it clears (the crack weights apply), and the bonus is halved by easier rules. A timer that runs out pays nothing. Orbs appear in Endless, so this is Endless income; the Story has none until Orbs are played by the solver.
+
+## Pip's Insight (v1.1)
+
+Shop item `insight` (key `upgrade_insight`), Gameplay, no requirement: level 1 costs 250 (a button below the board, 3 uses per level), level 2 450 more (6 uses), level 3 800 more (unlimited, and an Always on switch, key `insight_always_on`, off by default): **1,500** in all. Like the new looks it is a long-term sink financed by pop gold and Endless income, so it is left out of the story-paced budget that `P7Tests` checks (level and region gold alone still buy every other upgrade and original look). It is off in lessons and on finales, and an Endless run that used it never sets the best score. It shows where the piece in hand does the most good and never plays the move.
+
+## Easier rules pay half (v1.1)
+
+`GameRules.GoldFactor` is 0.5 when any custom rule is easier than the normal one (slower falling, fewer colours or shapes, smaller bursts, no cracking, no Orbs, a taller board). It halves pop gold (per group, to the nearest tenth), first-clear gold (rounded down) and the consolation, on every level the rules apply to. The solver-guaranteed promise still only covers the normal rules.
+
+## Looks sold from the first day (v1.1)
+
+`CosmeticCatalog.NewPrice` (block sets, boards, frames and Pip looks added in v1.1) is separate from the story-paced budget (`OriginalPrice`, 2,960): those looks need no story step, cost 150 to 900 gold each, and are meant to be bought over time from Endless and Story pop gold. They are never required for anything.
+
+## Sinks (continues)
+
+| Phase | What | Gold |
+|---|---|---|
+| v1.1 | **Continue**: five more moves on a Story level lost by running out of moves (30, 42, 55; at most three per attempt; never on a finale or an eased level) | recurring, never needed to finish the game |
 
 ## Sinks
 

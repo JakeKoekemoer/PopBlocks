@@ -6,7 +6,10 @@ using PopBlocks.Engine.Story;
 namespace PopBlocks.Engine.Audio;
 
 /// <summary>The small user-interface sounds.</summary>
-public enum UiSound { Tap, MenuOpen, MenuClose, Locked, SettingsChange }
+public enum UiSound { Tap, MenuOpen, MenuClose, Locked, SettingsChange, Coin }
+
+/// <summary>What happened to the Orb (see <see cref="GameAudio.OrbSound"/>).</summary>
+public enum OrbSoundKind { Appeared, Broke, Corrupted }
 
 /// <summary>
 /// The one object the app talks to for sound. It owns the engine, the director and the platform output, turns game events into
@@ -21,6 +24,7 @@ public sealed class GameAudio : IDisposable
 {
     private const double TickSeconds = 0.1;
     private const double PopGapSeconds = 0.035;
+    private const double OrbGapSeconds = 0.25;
     private const double RotateGapSeconds = 0.045;
     private const double PlaceGapSeconds = 0.06;
     private const double ComboGapSeconds = 2.5;
@@ -40,7 +44,7 @@ public sealed class GameAudio : IDisposable
     private bool _routePaused;           // headphones came out: wait for the player to do something
     private bool _outputPaused;
     private float _focusGain = 1f;
-    private double _lastPop = -99, _lastRotate = -99, _lastPlace = -99, _lastCombo = -99, _lastTick;
+    private double _lastPop = -99, _lastRotate = -99, _lastPlace = -99, _lastCombo = -99, _lastTick, _lastOrb = -99;
     private bool _disposed;
 
     public GameAudio(AudioSettings settings, IAudioOutput output, ISoundPlayer? fallback = null,
@@ -357,6 +361,18 @@ public sealed class GameAudio : IDisposable
         }
     });
 
+    /// <summary>The Orb appeared, broke, or ran out of time. Each is played at most once every few tenths of a second.</summary>
+    public void OrbSound(OrbSoundKind kind) => Post(() =>
+    {
+        Wake();
+        double now = _clock();
+        if (now - _lastOrb < OrbGapSeconds) return;
+        _lastOrb = now;
+        var cue = kind switch { OrbSoundKind.Broke => SfxLibrary.OrbBreak, OrbSoundKind.Corrupted => SfxLibrary.OrbCorrupt, _ => SfxLibrary.OrbAppear };
+        if (_available) Play(cue, kind == OrbSoundKind.Appeared ? 0.8f : 1f, Cues.KeyOffset);
+        else FallbackPlay(kind == OrbSoundKind.Broke ? SoundEffect.Pop : SoundEffect.Place, kind == OrbSoundKind.Appeared ? 1.5f : 0.7f);
+    });
+
     /// <summary>A Story level began.</summary>
     public void LevelStarted() => Post(() => Play(Cues.LevelStart, 0.8f));
 
@@ -380,7 +396,8 @@ public sealed class GameAudio : IDisposable
             UiSound.SettingsChange => SfxLibrary.SettingsChange,
             _ => SfxLibrary.ButtonTap,
         };
-        Play(cue, 1f, Cues.KeyOffset);
+        // The coin tick is the button tap an octave up and a little quieter, so a run of them reads as coins counting.
+        Play(cue, sound == UiSound.Coin ? 0.7f : 1f, Cues.KeyOffset + (sound == UiSound.Coin ? 12f : 0f));
     });
 
     private void FallbackPlay(SoundEffect effect, float pitch = 1f)

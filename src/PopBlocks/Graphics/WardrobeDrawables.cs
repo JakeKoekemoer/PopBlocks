@@ -15,6 +15,9 @@ public sealed class SkinPreviewDrawable : IDrawable
 
     public SkinSpec Skin { get; set; } = CosmeticCatalog.Classic;
 
+    /// <summary>For Patchwork: the block set each colour is drawn with.</summary>
+    public IReadOnlyDictionary<CellColour, SkinSpec>? Patchwork { get; set; }
+
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
         float size = MathF.Min(dirtyRect.Width / 5f, dirtyRect.Height);
@@ -24,7 +27,7 @@ public sealed class SkinPreviewDrawable : IDrawable
         float top = dirtyRect.Y + (dirtyRect.Height - size) / 2f;
 
         // The skin is switched for this picture only and put back straight after.
-        using (VisualDesign.Preview(Skin))
+        using (VisualDesign.Preview(Skin, Patchwork))
         {
             for (int i = 0; i < Five.Length; i++)
                 CellRenderer.DrawBlock(canvas, left + i * size, top, size, Five[i]);

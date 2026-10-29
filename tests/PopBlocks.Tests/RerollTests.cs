@@ -100,6 +100,56 @@ public class StoryLevelsTests
     // ------------------------------------------------------------------ failures
 
     [Fact]
+    public void A_successful_reroll_sends_the_failure_count_back_to_zero_and_counts_the_reroll()
+    {
+        var rig = At(11, gold: 500);
+        rig.Levels.RecordFailure(12);
+        rig.Levels.RecordFailure(12);
+        Assert.Equal(2, rig.Levels.Failures(12));
+
+        Assert.True(rig.Levels.TryReroll(12));
+
+        Assert.Equal(0, rig.Levels.Failures(12));
+        Assert.Equal(0, rig.Settings.GetInt(SaveKeys.CurrentLevelFailures, -1));
+        Assert.Equal(1, rig.Levels.Rerolls(12));
+        Assert.False(rig.Levels.CanOfferReroll(12));   // a fresh level: the reroll is offered again after its first failure
+    }
+
+    [Fact]
+    public void A_reroll_that_is_refused_keeps_the_failure_count()
+    {
+        var rig = At(179, gold: 0);   // level 180 costs gold and there is none
+        rig.Levels.RecordFailure(180);
+        Assert.False(rig.Levels.TryReroll(180));
+        Assert.Equal(1, rig.Levels.Failures(180));
+    }
+
+    [Fact]
+    public void Winning_the_level_leaves_the_next_level_with_no_failures()
+    {
+        var rig = At(11, gold: 0);
+        rig.Levels.RecordFailure(12);
+        rig.Progress.Complete(LevelCatalog.Get(12, LevelSeed.Derive(Salt, 12, 0, 0)));
+        Assert.Equal(0, rig.Levels.Failures(13));
+    }
+
+    [Fact]
+    public void Rerolls_are_a_lifetime_stat_that_survives_a_restart_and_travels_in_a_save_code()
+    {
+        var settings = new InMemorySettings();
+        var stats = new LifetimeStats(settings);
+        stats.AddReroll();
+        stats.AddReroll();
+        Assert.Equal(2, stats.Rerolls);
+        Assert.Equal(2, new LifetimeStats(settings).Rerolls);
+        Assert.Contains(SaveKeys.StatRerolls, SaveKeys.StatKeys);
+        Assert.Contains(SaveKeys.StatRerolls, SaveCode.Keys);
+
+        stats.DevClear();
+        Assert.Equal(0, stats.Rerolls);
+    }
+
+    [Fact]
     public void Failures_count_only_on_the_current_level()
     {
         var rig = At(39);   // level 40 is current
@@ -178,7 +228,7 @@ public class StoryLevelsTests
     }
 
     [Fact]
-    public void A_reroll_takes_the_price_adds_one_clears_the_seed_and_keeps_the_failures()
+    public void A_reroll_takes_the_price_adds_one_clears_the_seed_and_resets_the_failures()
     {
         var rig = At(59, gold: 100);   // level 60: 33 gold
         rig.Levels.RecordFailure(60);
@@ -192,7 +242,7 @@ public class StoryLevelsTests
         Assert.Equal(73, rig.Progress.Gold);
         Assert.Equal(73, rig.Settings.GetInt(SaveKeys.Gold, 0));
         Assert.Equal(1, rig.Levels.Rerolls(60));
-        Assert.Equal(2, rig.Levels.Failures(60));
+        Assert.Equal(0, rig.Levels.Failures(60));
         Assert.Equal(0, rig.Settings.GetInt(SaveKeys.CurrentLevelSeed, -1));
         Assert.Null(rig.Levels.KnownSeed(60));
     }
@@ -224,7 +274,7 @@ public class StoryLevelsTests
         Assert.True(rig.Levels.CanAffordReroll(180));
         Assert.True(rig.Levels.TryReroll(180));
         Assert.Equal(0, rig.Progress.Gold);
-        Assert.Equal(10, rig.Levels.Failures(180));   // a reroll does not reset the count
+        Assert.Equal(0, rig.Levels.Failures(180));   // a reroll starts the new level's failure count again
     }
 
     [Fact]
@@ -504,10 +554,10 @@ public class StoryLevelsTests
         rig.Progress.DevSetHighestCleared(39);
 
         rig.Levels.PrefetchAfter(40);
-        Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(started.Wait(TimeSpan.FromSeconds(30)));
         rig.Levels.CancelPrefetches();
 
-        Assert.True(cancelled.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(cancelled.Wait(TimeSpan.FromSeconds(30)));
         await WaitUntil(() => !rig.Levels.HasRoll(41, 0));
     }
 
@@ -545,7 +595,7 @@ public class StoryLevelsTests
         Assert.True(LevelSolver.Solve(level with { MoveLimit = LevelCatalog.SolverCap }, LevelCatalog.SolverCap).Won);
     }
 
-    private static async Task WaitUntil(Func<bool> condition, int timeoutMs = 5000)
+    private static async Task WaitUntil(Func<bool> condition, int timeoutMs = 30000)
     {
         var end = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (!condition())

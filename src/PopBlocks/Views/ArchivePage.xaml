@@ -5,16 +5,19 @@
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" RowSpacing="12">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="20,16,20,0" RowSpacing="12">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
             <Button Grid.Column="0" Text="←" Style="{StaticResource RoundButton}" FontSize="18" Clicked="OnBackClicked" />
             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="0">
-                <Label Text="Spectrum Archive" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                <Label Text="Story Book" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                 <Label x:Name="SummaryLabel" Style="{StaticResource CaptionLabel}" />
             </VerticalStackLayout>
         </Grid>
 
-        <ScrollView Grid.Row="1">
+        <!-- Tabs: STORY, MEMORIES, PEOPLE, WORLD -->
+        <Grid x:Name="TabBar" Grid.Row="1" ColumnSpacing="4" />
+
+        <ScrollView Grid.Row="2">
             <VerticalStackLayout x:Name="Host" Spacing="12" Padding="0,0,0,28" />
         </ScrollView>
     </Grid>

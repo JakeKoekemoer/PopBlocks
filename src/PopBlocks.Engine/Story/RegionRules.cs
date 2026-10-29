@@ -65,6 +65,12 @@ public static class RegionRules
     public const int DualGoalIntro = 32;
     public const int TripleGoalIntro = 161;
 
+    /// <summary>From this level on, Story blocks can crack when a pop hits them from two sides (Phase 13). Endless always has it; lessons never do.</summary>
+    public const int FractureIntro = 36;
+
+    /// <summary>From this level on, Orbs appear in every Story level (Phase 14).</summary>
+    public const int OrbIntro = 40;
+
     /// <summary>The final puzzle of the campaign: it uses the chain-set goal.</summary>
     public const int FinalLevel = 200;
 
@@ -210,6 +216,9 @@ public static class RegionRules
                 break;
             case BigGroupIntro:
                 cards.Add(Card("Big groups", "Join lots of same-coloured blocks together and pop them in one go."));
+                break;
+            case FractureIntro:
+                cards.Add(Card("Cracked blocks!", "When a pop hits a block from two sides, it cracks. A third crack breaks it. Cracked blocks pay a little less gold."));
                 break;
             case DualGoalIntro:
                 cards.Add(Card("Double goals", "Now you must meet two goals at once. Both bars have to fill before your moves run out."));

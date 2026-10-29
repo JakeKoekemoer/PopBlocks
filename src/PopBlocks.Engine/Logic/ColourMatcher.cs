@@ -22,7 +22,7 @@ public static class ColourMatcher
             {
                 int start = y * width + x;
                 var colour = board[x, y];
-                if (colour == CellColour.Empty || visited[start]) continue;
+                if (colour == CellColour.Empty || colour == CellColour.Orb || visited[start]) continue;
 
                 var cells = new List<BlockCell>();
                 bool live = false;   // true once the group has a block that is not dormant
@@ -65,10 +65,10 @@ public static class ColourMatcher
     /// piece that touches nothing of its colour) is put to sleep, so landing does not pop it. A group that also holds
     /// older blocks is left awake: the piece connected to something, so it pops as usual, sleeping blocks included.
     /// </summary>
-    public static void MarkDormant(Board board, IEnumerable<(int X, int Y)> placed)
+    public static void MarkDormant(Board board, IEnumerable<(int X, int Y)> placed, int minSize = GameConfig.MinGroupSize)
     {
         var own = new HashSet<(int, int)>(placed.Select(p => (p.X, p.Y)));
-        foreach (var group in FindGroups(board))
+        foreach (var group in FindGroups(board, minSize))
         {
             if (group.Cells.All(c => own.Contains((c.X, c.Y))))
                 foreach (var c in group.Cells)
@@ -81,10 +81,10 @@ public static class ColourMatcher
     /// The Colour Lens uses this to outline groups that are a block or two short. Read-only, like
     /// <see cref="FindGroups"/>.
     /// </summary>
-    public static IReadOnlyList<ColourGroup> FindNearGroups(Board board, int minSize, int maxSize)
+    public static IReadOnlyList<ColourGroup> FindNearGroups(Board board, int minSize, int maxSize, int burstSize = GameConfig.MinGroupSize)
     {
-        if (maxSize >= GameConfig.MinGroupSize) maxSize = GameConfig.MinGroupSize - 1;
+        if (maxSize >= burstSize) maxSize = burstSize - 1;
         if (minSize < 2) minSize = 2;
-        return FindGroups(board, minSize).Where(g => g.Size <= maxSize).ToList();
+        return FindGroups(board, minSize).Where(g => g.Size <= maxSize).ToList();   // (minSize here is the smallest near-group, not the burst size)
     }
 }

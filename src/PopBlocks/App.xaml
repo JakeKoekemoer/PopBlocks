@@ -51,7 +51,7 @@
 
             <Style x:Key="CaptionLabel" TargetType="Label">
                 <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
-                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontSize" Value="12" />
                 <Setter Property="FontAttributes" Value="Bold" />
                 <Setter Property="CharacterSpacing" Value="1.2" />
             </Style>
@@ -115,7 +115,7 @@
                 <Setter Property="FontAttributes" Value="Bold" />
                 <Setter Property="CharacterSpacing" Value="1" />
                 <Setter Property="Padding" Value="12,0" />
-                <Setter Property="HeightRequest" Value="34" />
+                <Setter Property="HeightRequest" Value="44" />
             </Style>
 
             <!-- Round icon button (pause, back) -->

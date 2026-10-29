@@ -31,7 +31,7 @@ Code: `src/PopBlocks/Graphics/`. Everything on the board is drawn from vector op
 
 The picture is built in this order, all clipped to the board rectangle so falling cells never poke out:
 
-1. Board surface: soft outer glow, a vertical gradient panel, a rim.
+1. Board surface: soft outer glow, a vertical gradient panel, a rim. The grid lines and the empty cells are two vector paths cached by board size (`EnsureGridPaths`) and drawn with one call each.
 2. Empty-cell slots, grid lines, and a glowing floor line.
 3. The tutorial hint column (a pulsing highlight), if any.
 4. The hanging-block cue (below), under the blocks.
@@ -68,6 +68,44 @@ With **pop effects off** (`GameSettings.BlastEffects`), the app gives the engine
 The board does not repaint on a fixed schedule. `GamePage` repaints when the view model raises `Redraw` (engine state changed), and starts a ~16 ms animation timer only while `GameDrawable.NeedsAnimation(now)` is true (pending groups exist, effects are active, or a hint is pulsing). When nothing is animating, no timer runs. All timings are in `VisualDesign` (`HighlightMs`, `GlowShare`, `SettleMs`, `BurstDurationMs`, `FallDurationMs`, `ChainAccentMs`, `ShakeMs`).
 
 `GameDrawable.Clock` is a replaceable `Func<long>` (default: `Environment.TickCount64`). Replace it to render a specific animation moment deterministically.
+
+### The Orb (v1.1)
+
+`Graphics/OrbDrawable.cs` draws it over its four cells: a sphere in three round steps from `#2B1E6E` to `#8C7CFF` to `#F4F7FF`, a swirl of the five block colours at 35% turning once in six seconds, a white highlight, a 4-wide timer ring that empties (white, amber at 3, red at 1) with the number of pieces left drawn bold in the middle, and from two pieces left a small shiver and dark veins. Under Reduced motion nothing turns or shivers. `GameDrawable` repaints for it (at about 15 fps with the other slow movement) only while a game is being played. The blocks it clears pop with the normal burst. `Graphics/OrbEffects.cs` adds the three moments round it, drawn from the clock alone in a pool of three slots (`GameViewModel.OrbHappened` carries the event and `GameEngine.OrbEventAt` the place): it **grows in** (a back-out ease with a little overshoot, `GrowFactor`, applied by `GameDrawable.DrawOrb`) with a ring of light; it **breaks** with bands of light along its two rows and two columns, a shockwave ring and ten glass shards in the five block colours; it **runs out** with a dark ring closing on it and the twelve blocks round it flashing dark. They follow the Blast effects switch, and under Reduced motion each is one short fade in place. Sounds: see 11.6.
+
+### Cracked blocks (v1.1)
+
+`CellRenderer.DrawLayer` takes the block's crack level (`Board.FractureAt`): one crack is a three-segment dark line from the top-left corner with a one-pixel light edge, two cracks add a second line from the opposite corner that meets it and darken the face by a tenth. A block that has just cracked gets a 120 ms white tick and two specks of dust (`BlastEffects.DrawCracking`); a block that breaks splits into three grey-tinted chunks over 400 ms. Under Reduced motion only the tick remains.
+
+### Pip's Insight (v1.1)
+
+`GameDrawable.DrawInsight` draws the suggestion as a dashed 2-unit outline where the piece would land (each block in its own colour at 70%, pulsing unless Reduced motion), an arrow above the column and a turn glyph with the number of quarter turns. It stops when the piece in hand is in position or after four seconds. The suggestion is made by `PlacementAdvisor` on a background task and cached per piece in `GameViewModel`.
+
+### Tall boards (v1.1)
+
+Menu icons (`IconDrawable`: map, cart, book, help, share, sliders, info, infinity) are line drawings on a 24-unit grid, drawn in code and coloured like the text beside them.
+
+The board can be taller than the screen (24 rows as standard, 16 to 32 in the player's own rules). The engine owns the camera (`GameEngine.CameraBottom`, `ViewTopRow`, `CameraFor`): the screen stays at the floor until the stack is 12 rows high, then keeps `CameraHeadroomRows` (4) empty rows above the top of the stack, up to `Rows - 16`, and it is worked out only when the board has settled, just before a piece spawns, so it never moves while a piece falls; on a 16-row board (and in every lesson) it never leaves the floor. Pieces spawn one row above the top of the screen. Drawing keeps `BoardSpace.ViewTop` (the board row at the top of the screen); `GameDrawable` eases it between camera positions over 300 ms (instantly under Reduced motion) and every effect that maps a board row to the screen (bursts, floating gold, particles) reads it. Only the rows on the screen are drawn. When rows are below the screen the bottom edge fades and says "â–¼ n rows below", and a 4-wide gauge down the right edge shows the whole board, a bracket for the screen and a fill up to the top of the stack.
+
+### Pip looks added in v1.1
+
+Six looks for Pip are sold from the first day (Daisy 150, Nerdy Glasses 180, Sunglasses 200, Sporty Pip 220, Shy Pip 220, Party Pip 260), drawn by `PipDrawable.DrawAccessory` at the same anchors as the earned ones. Shy and Party Pip also set a mood of their own: `PipMood.Shy` (eyes down and to the side, a small wavy mouth, and a peek up every six seconds while a clock runs) and `PipMood.Party`. The rule is `PipDrawable.EffectiveMood`: a story scene's expression (`MoodRequested`, set by `GamePage.ApplySpeaker`) always wins, otherwise the look's mood applies. Party Pip's drifting confetti is switched on with `PipDrawable.Confetti` and shows only where Pip has a running clock (the story stage); Pip has no picture on the menu or the map.
+
+### Boards and frames added in v1.1
+
+Seven boards (Night Sky 300, Nebula Drift 400, Tide Pool 300, Canyon Strata 300, Ember Forge 400, Blossom Grove 350, Patchwork Quilt 500) and six frames (Starlight 220, Ripple 220, Stone Edge 200, Flame Edge 260, Vine 240, Neon Pulse 300) are sold from the first day. A board's still picture is `GameDrawable.DrawMotifs` (clouds, ripple lines, rock layers and quilt squares are whole-panel pictures; stars, embers and petals are scattered shapes). Five of them also move, through `BoardAmbient` (at most twelve things, placed by a function of the time rounded to 15 steps a second, so nothing is stored or allocated): the page runs a repaint timer for this only while a game is being played, and stops it when the game is paused, after ten seconds with no input, and under Reduced motion (`GamePage.UpdateAmbient`; any input wakes it). The animated frames (Starlight orbiting sparkles, Ripple wobble, Flame flicker, Neon pulse at 0.8 Hz) repaint only while a piece is falling and are still pictures under Reduced motion. The Neon glow is a wide soft line under the sharp one rather than a blurred image.
+
+### Block sets added in v1.1
+
+Seven sets are open from the first day (`Requirement.None`, bought with gold, see `CosmeticCatalog.NewIds`): Pure Solid 350, Starfield 450, Tidepool 450, Granite 450, Ember 500, Blossom 450 and Patchwork 900. They add `SkinPattern.Stars / Waves / Rock / Flame / Flower`, `SkinSpec.HideSymbol` and `SkinSpec.InnerBevel`. The detailed patterns (`Graphics/RichPatterns.cs`) are painted once per set, colour and size into an image by `PatternCache` and blitted (the face is one `DrawImage`); if an image cannot be made they are painted straight onto the canvas. Every pattern stays clear of the middle where the symbol sits. **Pure Solid hides its symbols** unless Colour assist is on or the High Contrast board is selected (`VisualDesign.ColourAssist`, set when a game starts); `CellRenderer.DrawSymbol` is the one place that checks. **Patchwork** draws each colour as the set the player chose for it (`cosmetic_mix_*`, only sets they own, Classic by default): `VisualDesign.UsePatchwork` fills the per-colour tables once when a game starts and `CornerFor / BorderFor / HighlightFor / PatternFor / SymbolFor` read the set for a colour. Starfield and Ember use dark symbols, not the pale ones the plan named: their bright faces cannot reach the 3:1 symbol contrast the skin tests require with a pale symbol. New looks wear a NEW ribbon until the tab they are on has been left (`cosmetic_seen`).
+
+### Petals and Shards (v1.1)
+
+`Graphics/BurstParticles.cs` draws the two bought pop styles that are whole particle systems. Both are stateless (a particle's place is a function of its cell, its number and the burst's age), so nothing is stored or allocated per frame; the petal and shard outlines are built once and drawn through canvas transforms. **Petals**: five teardrops (two quadratic curves, 7 to 10 dp) per popped block, the block's face lightened 35% with a paler tip (one in five is `#FFE8F0`), launched up and sideways at 40 to 90 dp/s with drag, gravity 60 dp/s^2, a 10 dp sine sway at 1.4 Hz and a 90 deg/s tumble, alive 1100 ms and fading over the last 500; each group opens one bloom ring (0 to 1.2 cells, alpha 0.35 to 0). **Shards**: four to six thin triangles (4 to 14 dp) per block in the block's saturated pop colour with a white edge, thrown outwards at 220 to 380 dp/s, gravity 900 dp/s^2, spinning 540 to 900 deg/s, one bounce off the floor of the board that keeps 30%, alive 480 ms and fading over the last 150, after a 60 ms white flash on the popped cells and a five-line crack star for 120 ms. Under Reduced motion petals fade in place (450 ms) and shards are a single flash. `BlastEffects` hands the whole burst to `BurstParticles` for these two styles and uses their lifetimes. The wardrobe's burst tiles (`BurstPreviewDrawable`) replay the real effect on a loop, with a repaint timer that runs only while the tile is on screen.
+
+### Floating gold (v1.1)
+
+`Graphics/FloatingText.cs` holds `FloatingText`, a pool of twelve slots drawn by `GameDrawable.Floaters` after the burst effects. `Spawn(BurstWave)` floats one `+0.6` (one decimal under 10 gold, whole numbers from 10; a 12 px coin to its left; 15 sp bold `#FFD54A` with a 2 px `#3A2A00` outline) per group in `wave.Gold`, at the group's centre, rising 36 dp over 900 ms with a 120 ms pop-in and the alpha held for 500 ms. Chain waves add a second line `×N CHAIN` in `#FF7A45`. The strings are formatted at spawn, so drawing allocates nothing. Reduced motion fades the number in place for 600 ms. `CoinFlyDrawable` (same file) draws the 6 to 10 coins that fly from a result card to the gold chip; the page animates it only while the coins are in the air.
 
 ## 6.5 The ghost and the hint
 

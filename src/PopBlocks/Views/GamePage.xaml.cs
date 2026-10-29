@@ -27,6 +27,9 @@ public partial class GamePage : ContentPage
     private readonly StageDrawable _stage = new();           // the picture above the panel
     private readonly PipDrawable _bannerPip = new() { Mood = PipMood.Happy };
     private int _bannerVersion;
+    private readonly HeartsDrawable _hearts = new();       // the continues left on a failed card
+    private bool _continueBusy;
+    private readonly CoinFlyDrawable _coinFly = new();   // the coins that fly from a result card to the gold chip
 
     private IDispatcherTimer? _animationTimer;
     private IDispatcherTimer? _stageTimer;
@@ -60,13 +63,27 @@ public partial class GamePage : ContentPage
         ScenePipRightView.Drawable = _portrait;   // the same portrait, shown on whichever side the speaker stands
         StageView.Drawable = _stage;
         BannerPipView.Drawable = _bannerPip;
+        CoinFlyView.Drawable = _coinFly;
+        HeartsView.Drawable = _hearts;
 
         _vm.Redraw += OnRedraw;
         _vm.WaveResolved += OnWaveResolved;
+        _vm.OrbHappened += OnOrbHappened;
         _vm.GameStarted += OnGameStarted;
         _vm.Toast += OnToast;
         _vm.Banner += OnBanner;
         _vm.PropertyChanged += OnViewModelPropertyChanged;
+        _vm.EndBeatStarted += OnEndBeatStarted;
+        _vm.InsightChanged += suggestion =>
+        {
+            _board.Insight = suggestion;
+            _board.InsightSinceMs = Environment.TickCount64;
+            BoardView.Invalidate();
+            if (suggestion is not null) StartAnimation();
+        };
+        _vm.ShopRequested += OnShopRequested;
+        _vm.EaseRequested += OnEaseRequested;
+        _vm.ShareRequested += text => _ = Ui.ShareAsync(text);
 
         BoardView.StartInteraction += OnTouchStart;
         BoardView.DragInteraction += OnTouchDrag;
@@ -104,6 +121,9 @@ public partial class GamePage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+        _board.AmbientOn = false;
+        _ambientCheck?.Stop();
+        BoardSpace.ViewTop = PopBlocks.Engine.GameConfig.HiddenRows;   // other pages draw with the standard camera
         StopRepeat();
         StopAnimation();
         StopStage();
@@ -177,12 +197,24 @@ public partial class GamePage : ContentPage
         _board.ShowGhost = _settings.LandingGuideStyle > 0 || (_vm.Level?.ForceGhost ?? false);
         _board.GuideBold = _settings.LandingGuideStyle == 2;
         _board.ReducedMotion = _settings.ReducedMotion;
+        _board.ShowHanging = _settings.ShowHanging;
         _board.Effects.Enabled = _settings.BlastEffects;
         _board.Effects.ReducedMotion = _settings.ReducedMotion;
         _board.Effects.Flair = _shop.FlairLevel;
+        _board.Floaters.ReducedMotion = _settings.ReducedMotion;
+        _board.OrbFx.ReducedMotion = _settings.ReducedMotion;
+        _board.OrbFx.Enabled = _settings.BlastEffects;
+        _board.Floaters.Clear();
+        _board.ResetCamera();
+        this.AbortAnimation("GoldCountUp");
+        this.AbortAnimation("CoinFly");
+        CoinFlyView.IsVisible = false;
 
         // Looks from the wardrobe. They are read once here, so nothing changes in the middle of a level.
-        VisualDesign.UseSkin(_loadout.Skin);
+        var skin = _loadout.Skin;
+        if (skin.IsPatchwork) VisualDesign.UsePatchwork(_loadout.PatchworkSources());
+        else VisualDesign.UseSkin(skin);
+        VisualDesign.ColourAssist = _settings.ColourAssist || _loadout.SelectedBoard == "board_contrast";
         _board.Effects.Style = _loadout.Burst;
         _board.Frame = _loadout.Frame;
         _bannerPip.Accessory = _vm.PipAccessory;
@@ -218,10 +250,21 @@ public partial class GamePage : ContentPage
 
         if (_board.NeedsAnimation(Environment.TickCount64))
             StartAnimation();
+        UpdateAmbient();
+    }
+
+    private void OnOrbHappened(GameEvent e, int x, int y)
+    {
+        long now = Environment.TickCount64;
+        if (e == GameEvent.OrbSpawned) _board.OrbFx.Appeared(x, y, now);
+        else if (e == GameEvent.OrbBroken) _board.OrbFx.Broke(x, y, now);
+        else _board.OrbFx.Corrupted(x, y, now);
+        StartAnimation();
     }
 
     private void OnWaveResolved(BurstWave wave)
     {
+        if (_settings.BlastEffects) _board.Floaters.Spawn(wave, Environment.TickCount64);
         _board.Effects.Trigger(wave, Environment.TickCount64);
         StartAnimation();
     }
@@ -242,9 +285,51 @@ public partial class GamePage : ContentPage
 
     private void OnAnimationTick(object? sender, EventArgs e)
     {
+        long now = Environment.TickCount64;
+        // When only the board's slow movement is running, repaint at about 15 frames a second instead of 60.
+        if (_board.OnlyAmbientRunning(now) && (_ambientSkip++ & 3) != 0) return;
         BoardView.Invalidate();
-        if (!_board.NeedsAnimation(Environment.TickCount64))
+        if (!_board.NeedsAnimation(now) && !_board.WantsSlowRepaint)
             StopAnimation();
+    }
+
+    private int _ambientSkip;
+    private long _lastInputMs = Environment.TickCount64;
+
+    /// <summary>
+    /// The board's own movement and the animated frames run only while a game is being played: not while paused, not after ten
+    /// seconds with no input, and never under Reduced motion. Any input wakes them again.
+    /// </summary>
+    private void UpdateAmbient()
+    {
+        bool idle = Environment.TickCount64 - _lastInputMs > 10_000;
+        _board.AmbientOn = !_settings.ReducedMotion && !idle && _vm.IsPlaying && !_vm.IsOverlayVisible;
+        if (_board.WantsSlowRepaint) StartAnimation();
+        else if (!_board.NeedsAnimation(Environment.TickCount64)) StopAnimation();
+
+        // While the movement is on, look again once a second to notice that the player has gone idle.
+        if (_board.AmbientOn)
+        {
+            if (_ambientCheck is null)
+            {
+                _ambientCheck = Dispatcher.CreateTimer();
+                _ambientCheck.Interval = TimeSpan.FromSeconds(1);
+                _ambientCheck.Tick += (_, _) => UpdateAmbient();
+            }
+            if (!_ambientCheck.IsRunning) _ambientCheck.Start();
+        }
+        else
+        {
+            _ambientCheck?.Stop();
+        }
+    }
+
+    private IDispatcherTimer? _ambientCheck;
+
+    private void NoteInput()
+    {
+        _lastInputMs = Environment.TickCount64;
+        if (!_board.AmbientOn) UpdateAmbient();
     }
 
     private void StopAnimation()
@@ -256,9 +341,247 @@ public partial class GamePage : ContentPage
         BoardView.Invalidate();
     }
 
+    // ------------------------------------------------------------------ the end of a level
+
+    /// <summary>
+    /// The board is held for a beat after the last pop: the move counter pulses once (red on a loss) or the top row flashes
+    /// when the stack overflowed. Reduced motion has the hold without the pulse. The card then fades in over 250 ms.
+    /// </summary>
+    private void OnEndBeatStarted(EndBeatKind kind)
+    {
+        switch (kind)
+        {
+            case EndBeatKind.Win:
+            case EndBeatKind.OutOfMoves:
+                _ = PulseMovesAsync();
+                break;
+            case EndBeatKind.Overflow:
+                new Animation(v =>
+                {
+                    _board.TopRowFlash = (float)(v < 0.5 ? v * 2 : (1 - v) * 2);
+                    BoardView.Invalidate();
+                }).Commit(this, "TopRowFlash", 16, 400, Easing.Linear, (_, _) =>
+                {
+                    _board.TopRowFlash = 0f;
+                    BoardView.Invalidate();
+                });
+                break;
+        }
+    }
+
+    private async Task PulseMovesAsync()
+    {
+        await MovesLabel.ScaleToAsync(1.15, 220, Easing.CubicOut);
+        await MovesLabel.ScaleToAsync(1.0, 220, Easing.CubicIn);
+    }
+
+    // ------------------------------------------------------------------ gold on the result card
+
+    private const int CountUpMs = 900;
+    private const int CoinTickMs = 120;
+    private const int MaxCoinTicks = 8;
+
+    /// <summary>
+    /// The gold on a result card counts up from 0 over 900 ms, with a coin tick about every 120 ms (never more than eight),
+    /// while a few coins fly to the gold chip and the chip counts up behind them. A failed card with nothing to keep just says
+    /// so. Reduced motion shows the final numbers at once. The final text is always set at the end, so the numbers are right
+    /// for a screen reader whatever the animation did.
+    /// </summary>
+    private void StartGoldCountUp()
+    {
+        if (_vm.IsPaused) return;
+        int pop = _vm.IsComplete ? _vm.PopGoldValue : 0;
+        int first = _vm.IsComplete ? _vm.GoldRewardValue : 0;
+        int kept = _vm.ShowConsolation ? _vm.ConsolationValue : 0;
+        int total = pop + first + kept;
+        if (total <= 0)
+        {
+            _vm.SetChipHold(0);
+            return;
+        }
+
+        void Show(double t)
+        {
+            PopGoldLabel.Text = $"Pop gold  +{(int)Math.Round(pop * t):N0}";
+            GoldRewardLabel.Text = $"+{(int)Math.Round(first * t):N0} gold";
+            ConsolationLabel.Text = $"Kept half your gold  +{(int)Math.Round(kept * t):N0}";
+            _vm.SetChipHold(total - (int)Math.Round(total * t));
+        }
+
+        void Finish()
+        {
+            PopGoldLabel.Text = _vm.PopGoldText;
+            GoldRewardLabel.Text = _vm.GoldRewardText;
+            ConsolationLabel.Text = kept > 0 ? $"{_vm.ConsolationText}  +{kept:N0}" : _vm.ConsolationText;
+            _vm.SetChipHold(0);
+        }
+
+        if (_settings.ReducedMotion)
+        {
+            Finish();
+            return;
+        }
+
+        Show(0);
+        int ticks = 0;
+        long lastTick = Environment.TickCount64 - CoinTickMs;
+        new Animation(t =>
+        {
+            Show(t);
+            long now = Environment.TickCount64;
+            if (ticks < MaxCoinTicks && now - lastTick >= CoinTickMs)
+            {
+                lastTick = now;
+                ticks++;
+                _vm.PlayCoinTick();
+            }
+        }, 0, 1, Easing.CubicOut).Commit(this, "GoldCountUp", 16, CountUpMs, Easing.Linear, (_, _) => Finish());
+
+        LaunchCoins(total);
+    }
+
+    /// <summary>Six to ten coins from the middle of the card to the gold chip.</summary>
+    private void LaunchCoins(int total)
+    {
+        var chip = GoldChipLabel;
+        var (cx, cy) = (CoinFlyView.Width / 2.0, CoinFlyView.Height / 2.0);
+        if (CoinFlyView.Width <= 0 || chip.Width <= 0) return;
+
+        double tx = 0, ty = 0;
+        for (Element? e = chip; e is VisualElement v && !ReferenceEquals(v, CoinFlyView.Parent); e = e.Parent)
+        {
+            tx += v.X;
+            ty += v.Y;
+        }
+
+        _coinFly.Coins = Math.Clamp(6 + total / 20, 6, CoinFlyDrawable.MaxCoins);
+        _coinFly.From = new PointF((float)cx, (float)cy);
+        _coinFly.To = new PointF((float)(tx + chip.Width / 2.0), (float)(ty + chip.Height / 2.0));
+        _coinFly.Progress = 0f;
+        CoinFlyView.IsVisible = true;
+        new Animation(v =>
+        {
+            _coinFly.Progress = (float)v;
+            CoinFlyView.Invalidate();
+        }).Commit(this, "CoinFly", 16, 800, Easing.Linear, (_, _) =>
+        {
+            CoinFlyView.IsVisible = false;
+        });
+    }
+
+    /// <summary>A result card fades in; the pause card appears at once.</summary>
+    private async void FadeOverlayIn()
+    {
+        if (_vm.IsPaused || _settings.ReducedMotion)
+        {
+            OverlayGrid.Opacity = 1;
+            return;
+        }
+        OverlayGrid.Opacity = 0;
+        await OverlayGrid.FadeToAsync(1, (uint)EndBeat.CardFadeMs, Easing.CubicOut);
+    }
+
+    /// <summary>
+    /// Buying a continue: the next heart cracks and empties (220 ms), the card slides away, and the move counter flashes the new
+    /// moves. Under Reduced motion the purchase just happens. The gold is taken once, by the view model, and the button is
+    /// ignored while this runs.
+    /// </summary>
+    private async void OnContinueClicked(object? sender, EventArgs e)
+    {
+        if (_continueBusy || !_vm.CanAffordContinue) return;
+        _continueBusy = true;
+        try
+        {
+            bool still = _settings.ReducedMotion;
+            if (!still)
+            {
+                _hearts.CrackIndex = _vm.ContinuesLeft - 1;
+                new Animation(v =>
+                {
+                    _hearts.CrackT = (float)v;
+                    HeartsView.Invalidate();
+                }).Commit(this, "HeartCrack", 16, 220, Easing.CubicOut);
+                await Task.Delay(240);
+                await OverlayGrid.TranslateToAsync(0, Height * 0.5, 200, Easing.CubicIn);
+            }
+
+            bool bought = _vm.BuyContinue();
+            OverlayGrid.TranslationY = 0;
+            _hearts.CrackIndex = -1;
+            if (!bought) return;
+
+            if (!still)
+            {
+                // The gold chip counts down to what is left.
+                _ = CountChipDownAsync();
+            }
+            OnToast("+5 moves");
+            if (!still) _ = PulseMovesAsync();
+        }
+        finally
+        {
+            _continueBusy = false;
+        }
+    }
+
+    private async Task CountChipDownAsync()
+    {
+        // The view model starts the chip showing the gold from before the purchase; walk it down to the real figure.
+        for (int step = 1; step <= 6; step++)
+        {
+            await Task.Delay(60);
+            _vm.SetChipHold(_vm.ChipHoldNow * (6 - step) / 6);
+        }
+        _vm.SetChipHold(0);
+    }
+
+    /// <summary>EASE THIS LEVEL asks first, in plain words: the level pays no gold but the story moves on.</summary>
+    private async void OnEaseRequested()
+    {
+        bool ease = await DisplayAlertAsync("Ease this level?",
+            "You'll get an easier version of this level with more moves. You'll still move on in the story when you clear it, but this level won't pay any gold. Win the normal level later to earn it.",
+            "EASE IT", "KEEP TRYING");
+        if (ease) _vm.ConfirmEase();
+    }
+
+    /// <summary>SHOP on a result card: the workshop opens on Upgrades, and Back leads to the Map rather than into the finished level.</summary>
+    private async void OnShopRequested()
+    {
+        var services = Handler?.MauiContext?.Services;
+        if (services is null) return;
+        var nav = Navigation;
+        var stack = nav.NavigationStack;
+        if (stack.Count < 2 || stack[^2] is not WorldMapPage)
+            nav.InsertPageBefore(services.GetRequiredService<WorldMapPage>(), this);
+
+        var shop = services.GetRequiredService<WorkshopPage>();
+        shop.StartTab = WorkshopTab.Upgrades;
+        await nav.PushAsync(shop);
+        nav.RemovePage(this);
+    }
+
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(GameViewModel.PipBrightness) or nameof(GameViewModel.SceneMood) or nameof(GameViewModel.SceneSpeakerId))
+        if (e.PropertyName == nameof(GameViewModel.IsOverlayVisible))
+        {
+            if (_vm.IsOverlayVisible)
+            {
+                _hearts.Left = _vm.ContinuesLeft;
+                _hearts.CrackIndex = -1;
+                HeartsView.Invalidate();
+                FadeOverlayIn();
+                StartGoldCountUp();
+            }
+            else
+            {
+                OverlayGrid.Opacity = 1;
+                this.AbortAnimation("GoldCountUp");
+                this.AbortAnimation("CoinFly");
+                CoinFlyView.IsVisible = false;
+                _vm.SetChipHold(0);
+            }
+        }
+        else if (e.PropertyName is nameof(GameViewModel.PipBrightness) or nameof(GameViewModel.SceneMood) or nameof(GameViewModel.SceneSpeakerId))
         {
             _bannerPip.Brightness = _vm.PipBrightness;
             ApplySpeaker();
@@ -286,6 +609,7 @@ public partial class GamePage : ContentPage
         face.Accessory = pip ? _vm.PipAccessory : AccessoryStyle.None;
         face.Detail = pip ? _vm.PipDetail : 0;
         face.Mood = _vm.SceneMood;
+        face.MoodRequested = true;   // the scene decides the expression; Shy and Party Pip step aside
         ScenePipView.Invalidate();
         ScenePipRightView.Invalidate();
     }
@@ -502,6 +826,8 @@ public partial class GamePage : ContentPage
 
     private void OnTouchStart(object? sender, TouchEventArgs e)
     {
+        _vm.SkipEndBeat();   // a tap ends the hold after the last pop
+        NoteInput();
         if (e.Touches.Length == 0) return;
         var p = e.Touches[0];
         _touchStartX = _anchorX = p.X;

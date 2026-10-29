@@ -18,10 +18,50 @@ public sealed class GameDrawable : IDrawable
 {
     private IReadOnlyList<ColourGroup>? _lastPending;
     private long _pendingStartMs;
-    private readonly bool[] _pendingMask = new bool[GameConfig.Columns * GameConfig.TotalRows];
+    private bool[] _pendingMask = new bool[GameConfig.Columns * (GameConfig.MaxBoardRows + GameConfig.HiddenRows)];
+
+    // ---- The camera (tall boards). The engine decides where it is; the picture eases there over 300 ms. ----
+    private const int CameraEaseMs = 300;
+    private float _shownTop = GameConfig.HiddenRows, _fromTop = GameConfig.HiddenRows, _toTop = GameConfig.HiddenRows;
+    private long _tweenStartMs;
+
+    /// <summary>Puts the camera straight where the engine says it is (a new game), with no easing.</summary>
+    public void ResetCamera()
+    {
+        _shownTop = _fromTop = _toTop = Game?.ViewTopRow ?? GameConfig.HiddenRows;
+        BoardSpace.ViewTop = _shownTop;
+    }
+
+    /// <summary>The camera is still easing to a new place, so the page keeps repainting.</summary>
+    public bool CameraMoving(long nowMs) => nowMs - _tweenStartMs < CameraEaseMs && MathF.Abs(_shownTop - _toTop) > 0.001f;
+
+    private void StepCamera(long now)
+    {
+        float target = Game?.ViewTopRow ?? GameConfig.HiddenRows;
+        if (target != _toTop)
+        {
+            _fromTop = _shownTop;
+            _toTop = target;
+            _tweenStartMs = now;
+            if (ReducedMotion) _shownTop = _fromTop = target;   // Reduced motion: the camera just jumps
+        }
+        if (_shownTop != _toTop)
+        {
+            float t = Math.Clamp((now - _tweenStartMs) / (float)CameraEaseMs, 0f, 1f);
+            _shownTop = _fromTop + (_toTop - _fromTop) * (t * t * (3f - 2f * t));   // ease in and out
+            if (t >= 1f) _shownTop = _toTop;
+        }
+        BoardSpace.ViewTop = _shownTop;
+    }
 
     public GameEngine? Game { get; set; }
     public BlastEffects Effects { get; } = new();
+
+    /// <summary>The gold each popped group paid, floating up from where it popped.</summary>
+    public FloatingText Floaters { get; } = new();
+
+    /// <summary>The Orb's arrival, break and running out of time.</summary>
+    public OrbEffects OrbFx { get; } = new();
     public bool ShowGhost { get; set; } = true;
 
     /// <summary>Landing guide look: false = thin outline, true = bold (thicker line, a tint and a faint column of light).</summary>
@@ -32,6 +72,9 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>Chain Sense: the landing guide glows when dropping the piece where it is would start a chain.</summary>
     public bool ChainGlow { get; set; }
+
+    /// <summary>0..1: a white flash over the top row of the board, used once when the stack reaches the top.</summary>
+    public float TopRowFlash { get; set; }
 
     /// <summary>Calmer drawing: no pulsing or wobble in the highlights.</summary>
     public bool ReducedMotion { get; set; }
@@ -68,13 +111,56 @@ public sealed class GameDrawable : IDrawable
     /// <summary>Cell edge length from the most recent draw, in the same units as touch coordinates.</summary>
     public float CellSize { get; private set; } = 24f;
 
+    /// <summary>Pip's Insight: where the piece in hand should go. Drawn as a dashed outline until it is reached or four seconds pass.</summary>
+    public PlacementSuggestion? Insight { get; set; }
+    public long InsightSinceMs { get; set; }
+    private const int InsightShowMs = 4000;
+    private static readonly float[] InsightDash = { 4f, 3f };
+    private string _turnText = string.Empty;
+    private static readonly PathF InsightArrow = BuildInsightArrow();
+
+    private static PathF BuildInsightArrow()
+    {
+        var p = new PathF();
+        p.MoveTo(-1f, -0.7f);
+        p.LineTo(1f, -0.7f);
+        p.LineTo(0f, 0.9f);
+        p.Close();
+        return p;
+    }
+
+    private bool InsightVisible(long nowMs) =>
+        Insight is not null && nowMs - InsightSinceMs < InsightShowMs
+        && Game is { State: GameState.Playing, CurrentPiece: { } piece }
+        && PlacementSuggestion.Describe(piece) != Insight.Signature;
+
+    /// <summary>The page lets the board's own movement run (a game in play, not paused, not idle, not Reduced motion).</summary>
+    public bool AmbientOn { get; set; }
+
+    /// <summary>The board's movement (stars, clouds, ripples, embers, petals) wants repainting.</summary>
+    public bool NeedsAmbient => AmbientOn && !ReducedMotion && BoardAmbient.Animates(Theme.Motif);
+
+    /// <summary>Any slow movement (board ambience, an animated frame, an Orb) wants a gentle repaint.</summary>
+    public bool WantsSlowRepaint => NeedsAmbient || FrameAnimates || OrbAnimates;
+
+    /// <summary>The frame in use moves while a piece falls, so it wants repainting too.</summary>
+    public bool FrameAnimates =>
+        !ReducedMotion && Frame is FrameStyle.Starlight or FrameStyle.Ripple or FrameStyle.Flame or FrameStyle.Neon
+        && Game is { State: GameState.Playing, CurrentPiece: not null };
+
     /// <summary>True while something on the board is animating, so the page keeps repainting.</summary>
     public bool NeedsAnimation(long nowMs) =>
-        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || HintColumn >= 0;
+        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || OrbFx.IsActive(nowMs) || HintColumn >= 0 || CameraMoving(nowMs) || (!ReducedMotion && InsightVisible(nowMs));
+
+    /// <summary>The slow movement (board ambience, frame animation) is all that is running: a gentle repaint is enough.</summary>
+    public bool OnlyAmbientRunning(long nowMs) =>
+        WantsSlowRepaint
+        && !(Game is { PendingGroups.Count: > 0 }) && !Effects.IsActive(nowMs) && !Floaters.IsActive(nowMs) && !OrbFx.IsActive(nowMs) && HintColumn < 0 && !CameraMoving(nowMs);
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
         long now = Clock();
+        Diagnostics.CountFrame();   // (debug builds only) so a board that repaints while idle shows up in the numbers
 
         canvas.SaveState();
 
@@ -91,6 +177,7 @@ public sealed class GameDrawable : IDrawable
         float originX = dirtyRect.X + (dirtyRect.Width - boardW) / 2f;
         float originY = dirtyRect.Y + (dirtyRect.Height - boardH) / 2f;
 
+        StepCamera(now);   // where the screen is on a tall board (always the floor on the standard one)
         var (shakeX, shakeY) = Effects.ShakeOffset(cell, now);
         canvas.Translate(shakeX, shakeY);
 
@@ -108,6 +195,7 @@ public sealed class GameDrawable : IDrawable
 
             for (int pass = 0; pass < 3; pass++)
                 DrawLockedCells(canvas, (CellRenderer.BlockLayer)pass, game.Board, originX, originY, cell, now);
+            DrawOrb(canvas, game, originX, originY, cell, now);
 
             if (LensLevel > 0) DrawLens(canvas, game, originX, originY, cell);
 
@@ -116,8 +204,18 @@ public sealed class GameDrawable : IDrawable
             if (ShowGhost || ChainGlow) DrawGhost(canvas, game, originX, originY, cell);
             for (int pass = 0; pass < 3; pass++)
                 DrawActivePiece(canvas, (CellRenderer.BlockLayer)pass, game.CurrentPiece, originX, originY, cell);
-            if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell);
+            if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell, now);
             Effects.Draw(canvas, originX, originY, cell, boardW, Flip, now);
+            OrbFx.Draw(canvas, originX, originY, cell, Flip, now);
+            Floaters.Draw(canvas, originX, originY, cell, Flip, now);
+            DrawCameraHints(canvas, game, originX, originY, boardW, boardH, cell);
+            if (InsightVisible(now)) DrawInsight(canvas, originX, originY, cell, now);
+
+            if (TopRowFlash > 0f)
+            {
+                canvas.FillColor = Colors.White.WithAlpha(0.6f * TopRowFlash);
+                canvas.FillRectangle(originX, Flip ? originY + boardH - cell : originY, boardW, cell);
+            }
 
             canvas.RestoreState();
         }
@@ -140,9 +238,14 @@ public sealed class GameDrawable : IDrawable
         // Vertical gradient drawn as thin solid bands clipped to the rounded panel. (SetFillPaint is avoided on
         // purpose: on Android its shader stays on the paint and later solid FillColor calls come out invisible.)
         canvas.SaveState();
-        var panelPath = new PathF();
-        panelPath.AppendRoundedRectangle(x, y, w, h, corner);
-        canvas.ClipPath(panelPath);
+        if (_panelPath is null || _panelX != x || _panelY != y || _panelW != w || _panelH != h || _panelCorner != corner)
+        {
+            // The clip outline only changes with the size of the board, so it is built when that changes, not every frame.
+            _panelPath = new PathF();
+            _panelPath.AppendRoundedRectangle(x, y, w, h, corner);
+            (_panelX, _panelY, _panelW, _panelH, _panelCorner) = (x, y, w, h, corner);
+        }
+        canvas.ClipPath(_panelPath);
         const int bands = 40;
         var top = Theme.Top;
         var bottom = Theme.Bottom;
@@ -161,27 +264,25 @@ public sealed class GameDrawable : IDrawable
         // The board's decoration sits behind the grid and the blocks, faint enough that nothing is hard to read.
         if (Theme.Motif != BoardMotif.None && Theme.MotifAlpha > 0f)
             DrawMotifs(canvas, Theme, x, y, w, h, cell, flip);
+        if (NeedsAmbient) BoardAmbient.Draw(canvas, Theme.Motif, Theme.Rim, Theme.MotifAlpha, x, y, w, h, cell, Clock());
         canvas.RestoreState();
 
         canvas.StrokeColor = rim.WithAlpha(0.35f);
         canvas.StrokeSize = 1.5f;
         canvas.DrawRoundedRectangle(x, y, w, h, corner);
 
+        // The grid and the empty cells are the same lines and squares every frame, so they are two paths built when the size of
+        // the board changes and drawn with one call each (not 22 lines and 128 squares). Vector, so nothing is resampled.
+        EnsureGridPaths(originX, originY, boardW, boardH, cell);
+
         // Subtle grid lines.
         canvas.StrokeColor = Theme.Grid.WithAlpha(Theme.GridAlpha);
         canvas.StrokeSize = VisualDesign.GridLineWidth;
-        for (int gx = 1; gx < GameConfig.Columns; gx++)
-            canvas.DrawLine(originX + gx * cell, originY, originX + gx * cell, originY + boardH);
-        for (int gy = 1; gy < GameConfig.VisibleRows; gy++)
-            canvas.DrawLine(originX, originY + gy * cell, originX + boardW, originY + gy * cell);
+        canvas.DrawPath(_gridPath!);
 
         // Empty cells.
-        float inset = cell * VisualDesign.EmptyCellInset;
-        float size = cell - 2f * inset;
         canvas.FillColor = Theme.Empty.WithAlpha(0.75f);
-        for (int ey = 0; ey < GameConfig.VisibleRows; ey++)
-            for (int ex = 0; ex < GameConfig.Columns; ex++)
-                canvas.FillRoundedRectangle(originX + ex * cell + inset, originY + ey * cell + inset, size, size, cell * 0.18f);
+        canvas.FillPath(_emptyCellsPath!);
 
         // A glowing line along the floor, where blocks come to rest. Upside down on flipped levels.
         float floorY = flip ? originY : originY + boardH;
@@ -244,12 +345,15 @@ public sealed class GameDrawable : IDrawable
 
     private void DrawLockedCells(ICanvas canvas, CellRenderer.BlockLayer layer, Board board, float originX, float originY, float cell, long now)
     {
-        for (int y = GameConfig.HiddenRows; y < board.Height; y++)
+        // Only the rows on (or one row either side of) the screen are drawn.
+        int firstRow = Math.Max(GameConfig.HiddenRows, (int)MathF.Floor(BoardSpace.ViewTop));
+        for (int y = firstRow; y < board.Height; y++)
         {
+            if (BoardSpace.BelowView(y)) break;
             for (int x = 0; x < board.Width; x++)
             {
                 var colour = board[x, y];
-                if (colour == CellColour.Empty) continue;
+                if (colour is CellColour.Empty or CellColour.Orb) continue;   // an Orb is drawn as a whole, below
 
                 var links = LinksAt(board, x, y, colour);
                 float fall = Effects.FallOffsetCells(x, y, now);
@@ -260,7 +364,8 @@ public sealed class GameDrawable : IDrawable
                     BoardSpace.ScreenY(y, Flip, originY, cell, fall),
                     cell,
                     colour,
-                    Flip ? CellRenderer.Flip(links) : links);
+                    Flip ? CellRenderer.Flip(links) : links,
+                    board.FractureAt(x, y));
             }
         }
     }
@@ -321,12 +426,12 @@ public sealed class GameDrawable : IDrawable
             {
                 foreach (var c in group.Cells)
                 {
-                    if (c.Y < GameConfig.HiddenRows) continue;
+                    if (BoardSpace.AboveView(c.Y)) continue;
 
                     bool Same(int dx, int dy)
                     {
                         int nx = c.X + dx, ny = c.Y + dy;
-                        return nx >= 0 && nx < GameConfig.Columns && ny >= 0 && ny < GameConfig.TotalRows
+                        return nx >= 0 && nx < GameConfig.Columns && ny >= 0 && ny < game.Board.Height
                                && _pendingMask[ny * GameConfig.Columns + nx]
                                && game.Board[nx, ny] == group.Colour;
                     }
@@ -358,7 +463,7 @@ public sealed class GameDrawable : IDrawable
         for (int i = 0; i < cells.Count; i++)
         {
             int by = piece.Y + cells[i].Y;
-            if (by < GameConfig.HiddenRows) continue;   // still in the hidden spawn rows
+            if (BoardSpace.AboveView(by)) continue;   // still in the hidden spawn rows
 
             int bx = piece.X + cells[i].X;
             var links = CellRenderer.LinksForPiece(cells, i);
@@ -376,9 +481,14 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>Faint outline showing where the active piece will land.</summary>
     /// <summary>An outline around the piece in play. Drawn on top of the blocks; it never hides a symbol.</summary>
-    private void DrawFrame(ICanvas canvas, Piece? piece, float originX, float originY, float cell)
+    private void DrawFrame(ICanvas canvas, Piece? piece, float originX, float originY, float cell, long now)
     {
         if (piece is null) return;
+        if (Frame >= FrameStyle.Starlight)
+        {
+            DrawSoldFrame(canvas, piece, originX, originY, cell, ReducedMotion ? 0f : (now / 33 * 33) / 1000f);
+            return;
+        }
         var cells = piece.Cells;
         float inset = cell * VisualDesign.CellInset * 0.5f;
         canvas.StrokeSize = MathF.Max(1.5f, cell * 0.06f);
@@ -386,7 +496,7 @@ public sealed class GameDrawable : IDrawable
         for (int i = 0; i < cells.Count; i++)
         {
             int by = piece.Y + cells[i].Y;
-            if (by < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(by)) continue;
             int bx = piece.X + cells[i].X;
 
             canvas.StrokeColor = Frame switch
@@ -402,6 +512,266 @@ public sealed class GameDrawable : IDrawable
                 cell - 2f * inset,
                 cell * VisualDesign.Corner);
         }
+    }
+
+    // ---- the six frames sold in v1.1. Time is 0 under Reduced motion, so they are still pictures there. ----
+
+    private void DrawSoldFrame(ICanvas canvas, Piece piece, float originX, float originY, float cell, float t)
+    {
+        var cells = piece.Cells;
+        float inset = cell * VisualDesign.CellInset * 0.5f;
+        float line = Math.Clamp(cell * 0.07f, 2f, 3f);
+        float corner = cell * VisualDesign.Corner;
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        canvas.StrokeSize = line;
+        canvas.StrokeLineCap = LineCap.Round;
+
+        for (int i = 0; i < cells.Count; i++)
+        {
+            int by = piece.Y + cells[i].Y;
+            if (BoardSpace.AboveView(by)) continue;
+            int bx = piece.X + cells[i].X;
+            float cx = BoardSpace.ScreenX(bx, Flip, originX, cell) + inset;
+            float cy = BoardSpace.ScreenY(by, Flip, originY, cell) + inset;
+            float side = cell - 2f * inset;
+            minX = MathF.Min(minX, cx); minY = MathF.Min(minY, cy);
+            maxX = MathF.Max(maxX, cx + side); maxY = MathF.Max(maxY, cy + side);
+
+            switch (Frame)
+            {
+                case FrameStyle.Starlight:
+                    canvas.StrokeColor = Color.FromArgb("#BFD3FF");
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    break;
+
+                case FrameStyle.Ripple:
+                {
+                    float wobble = MathF.Sin(t * 5f + i * 1.3f) * 1f;   // plus or minus one unit
+                    canvas.StrokeColor = Color.FromArgb("#7EE7F5");
+                    canvas.DrawRoundedRectangle(cx - wobble, cy - wobble, side + 2f * wobble, side + 2f * wobble, corner);
+                    break;
+                }
+
+                case FrameStyle.Stone:
+                {
+                    // A 3 unit bevel: light along the top and left, dark along the bottom and right.
+                    canvas.StrokeSize = 3f;
+                    canvas.StrokeColor = Color.FromArgb("#B8B2A8");
+                    canvas.DrawLine(cx + 1.5f, cy + 1.5f, cx + side - 1.5f, cy + 1.5f);
+                    canvas.DrawLine(cx + 1.5f, cy + 1.5f, cx + 1.5f, cy + side - 1.5f);
+                    canvas.StrokeColor = Color.FromArgb("#6B655C");
+                    canvas.DrawLine(cx + 1.5f, cy + side - 1.5f, cx + side - 1.5f, cy + side - 1.5f);
+                    canvas.DrawLine(cx + side - 1.5f, cy + 1.5f, cx + side - 1.5f, cy + side - 1.5f);
+                    break;
+                }
+
+                case FrameStyle.Flame:
+                {
+                    float mix = cells.Count <= 1 ? 0f : i / (float)(cells.Count - 1);
+                    canvas.StrokeColor = new Color(1f, 0.416f + 0.17f * mix, 0.169f + 0.31f * mix);   // #FF6A2B towards #FFD23F
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    // Two flickering tips on the top edge.
+                    for (int k = 0; k < 2; k++)
+                    {
+                        float flick = 0.5f + 0.5f * MathF.Sin(t * 14f + i * 2.1f + k * 1.7f);
+                        float tx = cx + side * (0.3f + 0.4f * k);
+                        canvas.DrawLine(tx, cy, tx + (k == 0 ? -1f : 1f), cy - cell * (0.08f + 0.12f * flick));
+                    }
+                    break;
+                }
+
+                case FrameStyle.Vine:
+                    canvas.StrokeColor = Color.FromArgb("#5FBF4A");
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    break;
+
+                case FrameStyle.Neon:
+                {
+                    float pulse = 0.8f + 0.2f * MathF.Sin(t * MathF.Tau * 0.8f);   // 0.6 to 1.0 at 0.8 Hz
+                    var neon = Color.FromArgb("#FF4FD8");
+                    canvas.StrokeSize = line + 4f;
+                    canvas.StrokeColor = neon.WithAlpha(0.22f * pulse);   // the glow: a wide soft line under the sharp one
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    canvas.StrokeSize = line;
+                    canvas.StrokeColor = neon.WithAlpha(pulse);
+                    canvas.DrawRoundedRectangle(cx, cy, side, side, corner);
+                    break;
+                }
+            }
+        }
+
+        if (minX > maxX) return;
+
+        if (Frame == FrameStyle.Starlight)
+        {
+            // Four sparkles circling slowly round the piece.
+            float cxm = (minX + maxX) / 2f, cym = (minY + maxY) / 2f;
+            float rx = (maxX - minX) / 2f + cell * 0.25f, ry = (maxY - minY) / 2f + cell * 0.25f;
+            canvas.StrokeSize = 1.5f;
+            canvas.StrokeColor = Colors.White.WithAlpha(0.9f);
+            for (int k = 0; k < 4; k++)
+            {
+                float a = t * 0.7f + k * MathF.PI / 2f;
+                float sx = cxm + MathF.Cos(a) * rx, sy = cym + MathF.Sin(a) * ry, arm = cell * 0.09f;
+                canvas.DrawLine(sx - arm, sy, sx + arm, sy);
+                canvas.DrawLine(sx, sy - arm, sx, sy + arm);
+            }
+        }
+        else if (Frame == FrameStyle.Vine)
+        {
+            // A small leaf on three of the four corners.
+            canvas.FillColor = Color.FromArgb("#5FBF4A");
+            float leaf = cell * 0.16f;
+            canvas.FillEllipse(minX - leaf * 0.6f, minY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
+            canvas.FillEllipse(maxX - leaf * 0.6f, minY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
+            canvas.FillEllipse(minX - leaf * 0.6f, maxY - leaf * 0.4f, leaf * 1.2f, leaf * 0.8f);
+        }
+    }
+
+    /// <summary>
+    /// A dashed 2-unit outline where the piece should land, in the piece's own colours at 70% (pulsing unless Reduced motion),
+    /// an arrow above its column and a turn glyph with the number of quarter turns. It disappears once the piece is in place.
+    /// </summary>
+    private void DrawInsight(ICanvas canvas, float originX, float originY, float cell, long now)
+    {
+        var s = Insight!;
+        float pulse = ReducedMotion ? 1f : 0.75f + 0.25f * MathF.Sin(now / 1000f * MathF.Tau * 1.2f);
+        float inset = cell * VisualDesign.CellInset * 0.5f;
+        canvas.StrokeSize = 2f;
+        canvas.StrokeDashPattern = InsightDash;
+        float minSx = float.MaxValue, maxSx = float.MinValue, topSy = float.MaxValue;
+        for (int li = 0; li < s.Landed.Count; li++)
+        {
+            var c = s.Landed[li];
+            if (BoardSpace.AboveView(c.Y) || BoardSpace.BelowView(c.Y)) continue;
+            float sx = BoardSpace.ScreenX(c.X, Flip, originX, cell), sy = BoardSpace.ScreenY(c.Y, Flip, originY, cell);
+            minSx = MathF.Min(minSx, sx);
+            maxSx = MathF.Max(maxSx, sx + cell);
+            topSy = MathF.Min(topSy, sy);
+            canvas.StrokeColor = VisualDesign.NeonColour(c.Colour).WithAlpha(0.7f * pulse);
+            canvas.DrawRoundedRectangle(sx + inset, sy + inset, cell - 2f * inset, cell - 2f * inset, cell * VisualDesign.Corner);
+        }
+        canvas.StrokeDashPattern = null;
+        if (minSx > maxSx) return;
+
+        // An arrow above the column(s), pointing down at the spot.
+        float ax = (minSx + maxSx) / 2f, ay = originY + cell * 0.55f, r = cell * 0.28f;
+        canvas.FillColor = Colors.White.WithAlpha(0.85f * pulse);
+        canvas.SaveState();
+        canvas.Translate(ax, ay);
+        canvas.Scale(r, r);
+        canvas.FillPath(InsightArrow, WindingMode.NonZero);
+        canvas.RestoreState();
+        if (s.Rotations > 0)
+        {
+            if (_turnText.Length == 0 || _turnText[^1] != (char)('0' + s.Rotations)) _turnText = "\u21BB" + s.Rotations;
+            canvas.FontColor = Colors.White.WithAlpha(0.9f);
+            canvas.FontSize = cell * 0.42f;
+            canvas.DrawString(_turnText, ax - cell, ay + r + 2f, cell * 2f, cell * 0.6f, HorizontalAlignment.Center, VerticalAlignment.Top);
+        }
+    }
+
+    /// <summary>The Orb, if there is one, drawn over its four cells.</summary>
+    private void DrawOrb(ICanvas canvas, GameEngine game, float originX, float originY, float cell, long now)
+    {
+        if (game.OrbAt is not { } orb) return;
+        if (BoardSpace.AboveView(orb.Y) && BoardSpace.AboveView(orb.Y + 1)) return;
+        float x0 = MathF.Min(BoardSpace.ScreenX(orb.X, Flip, originX, cell), BoardSpace.ScreenX(orb.X + 1, Flip, originX, cell));
+        float y0 = MathF.Min(BoardSpace.ScreenY(orb.Y, Flip, originY, cell), BoardSpace.ScreenY(orb.Y + 1, Flip, originY, cell));
+        float grow = OrbFx.GrowFactor(now);   // it grows in when it arrives
+        if (grow < 0.999f || grow > 1.001f)
+        {
+            canvas.SaveState();
+            canvas.Translate(x0 + cell, y0 + cell);
+            canvas.Scale(grow, grow);
+            canvas.Translate(-(x0 + cell), -(y0 + cell));
+            OrbDrawable.Draw(canvas, x0, y0, cell * 2f, game.OrbTimerLeft, game.Rules.OrbTimer, now, ReducedMotion, AmbientOn);
+            canvas.RestoreState();
+        }
+        else
+        {
+            OrbDrawable.Draw(canvas, x0, y0, cell * 2f, game.OrbTimerLeft, game.Rules.OrbTimer, now, ReducedMotion, AmbientOn);
+        }
+    }
+
+    /// <summary>The Orb's swirl and shiver move while it is on the board.</summary>
+    public bool OrbAnimates => AmbientOn && !ReducedMotion && Game is { OrbAt: not null };
+
+    private PathF? _gridPath, _emptyCellsPath;
+    private float _gridX, _gridY, _gridCell;
+
+    private void EnsureGridPaths(float originX, float originY, float boardW, float boardH, float cell)
+    {
+        if (_gridPath is not null && _emptyCellsPath is not null && _gridX == originX && _gridY == originY && _gridCell == cell) return;
+
+        var grid = new PathF();
+        for (int gx = 1; gx < GameConfig.Columns; gx++)
+        {
+            grid.MoveTo(originX + gx * cell, originY);
+            grid.LineTo(originX + gx * cell, originY + boardH);
+        }
+        for (int gy = 1; gy < GameConfig.VisibleRows; gy++)
+        {
+            grid.MoveTo(originX, originY + gy * cell);
+            grid.LineTo(originX + boardW, originY + gy * cell);
+        }
+
+        float inset = cell * VisualDesign.EmptyCellInset;
+        float size = cell - 2f * inset;
+        var empty = new PathF();
+        for (int ey = 0; ey < GameConfig.VisibleRows; ey++)
+            for (int ex = 0; ex < GameConfig.Columns; ex++)
+                empty.AppendRoundedRectangle(originX + ex * cell + inset, originY + ey * cell + inset, size, size, cell * 0.18f);
+
+        (_gridPath, _emptyCellsPath) = (grid, empty);
+        (_gridX, _gridY, _gridCell) = (originX, originY, cell);
+    }
+
+    private PathF? _panelPath;
+    private float _panelX, _panelY, _panelW, _panelH, _panelCorner;
+
+    private int _belowShown = -1;
+    private string _belowText = string.Empty;
+
+    /// <summary>
+    /// On a tall board: a fade and "â–¼ n rows below" when part of the board is under the screen, and a thin gauge down the
+    /// right-hand edge: the whole board's height, a bracket for what the screen shows, filled up to the top of the stack.
+    /// </summary>
+    private void DrawCameraHints(ICanvas canvas, GameEngine game, float originX, float originY, float boardW, float boardH, float cell)
+    {
+        int rows = game.BoardRows;
+        if (rows <= GameConfig.ViewportRows) return;
+
+        int below = game.CameraBottom;
+        if (below > 0)
+        {
+            float fade = cell * 1.3f, bottom = originY + boardH;
+            for (int i = 0; i < 5; i++)
+            {
+                canvas.FillColor = Theme.Bottom.WithAlpha(0.18f * (i + 1));
+                canvas.FillRectangle(originX, bottom - fade + fade * i / 5f, boardW, fade / 5f + 1f);
+            }
+            if (below != _belowShown)
+            {
+                _belowShown = below;
+                _belowText = below == 1 ? "â–¼ 1 row below" : $"â–¼ {below} rows below";
+            }
+            canvas.FontColor = Colors.White.WithAlpha(0.9f);
+            canvas.FontSize = cell * 0.40f;
+            canvas.DrawString(_belowText, originX, bottom - cell * 0.95f, boardW, cell * 0.8f, HorizontalAlignment.Center, VerticalAlignment.Center);
+        }
+
+        float gx = originX + boardW + 0.5f, gw = 4f;
+        float perRow = boardH / rows;
+        canvas.FillColor = Theme.Grid.WithAlpha(0.55f);
+        canvas.FillRectangle(gx, originY, gw, boardH);
+        float filled = MathF.Min(rows, game.StackTop) * perRow;
+        canvas.FillColor = Theme.Rim.WithAlpha(0.85f);
+        canvas.FillRectangle(gx, originY + boardH - filled, gw, filled);
+        float barBottom = originY + boardH - below * perRow, barTop = barBottom - GameConfig.ViewportRows * perRow;
+        canvas.StrokeColor = Colors.White.WithAlpha(0.9f);
+        canvas.StrokeSize = 1.2f;
+        canvas.DrawRectangle(gx - 0.5f, barTop, gw + 1f, barBottom - barTop);
     }
 
     private static readonly PathF MotifDiamond = BuildMotifDiamond();
@@ -448,6 +818,53 @@ public sealed class GameDrawable : IDrawable
             for (float bx = x + cell * 0.2f; bx < x + w - bw; bx += bw * 2f)
                 canvas.FillRectangle(bx, top, bw, bw * 1.4f);
             return;
+        }
+
+        // Wide, still pictures: clouds, ripple lines, rock layers and quilt squares.
+        switch (theme.Motif)
+        {
+            case BoardMotif.Nebula:
+                for (int i = 0; i < 4; i++)
+                {
+                    float rx = cell * (2.4f + 0.7f * i), ry = cell * (1.1f + 0.3f * i);
+                    canvas.FillEllipse(x + w * (0.1f + 0.8f * BoardSpace.Noise(i, 31)) - rx, y + h * (0.12f + 0.24f * i) - ry, rx * 2f, ry * 2f);
+                }
+                return;
+
+            case BoardMotif.Waves:
+                for (int i = 0; i < 6; i++)
+                {
+                    float wy = y + h * (0.08f + 0.16f * i);
+                    float px = x, py = wy;
+                    for (int k = 1; k <= 16; k++)
+                    {
+                        float nx = x + w * k / 16f, ny = wy + MathF.Sin(k * 0.9f + i) * cell * 0.12f;
+                        canvas.DrawLine(px, py, nx, ny);
+                        px = nx;
+                        py = ny;
+                    }
+                }
+                return;
+
+            case BoardMotif.Strata:
+                for (int i = 0; i < 6; i++)
+                {
+                    float sy = y + h * (0.05f + 0.16f * i + 0.03f * BoardSpace.Noise(i, 37));
+                    canvas.FillRectangle(x, sy, w, cell * (0.18f + 0.22f * BoardSpace.Noise(i, 39)));
+                }
+                return;
+
+            case BoardMotif.Patchwork:
+            {
+                float sq = cell * 2f;
+                for (int gy = 0; gy * sq < h; gy++)
+                    for (int gx = 0; gx * sq < w; gx++)
+                    {
+                        if ((gx + gy) % 2 == 0) canvas.FillRectangle(x + gx * sq + 2f, y + gy * sq + 2f, sq - 4f, sq - 4f);
+                        else canvas.DrawRectangle(x + gx * sq + 3f, y + gy * sq + 3f, sq - 6f, sq - 6f);
+                    }
+                return;
+            }
         }
 
         const int count = 16;
@@ -503,6 +920,20 @@ public sealed class GameDrawable : IDrawable
                     canvas.DrawLine(0f, s * 0.5f, 0f, -s * 0.5f);
                     canvas.FillEllipse(-s * 0.18f, -s * 0.68f, s * 0.36f, s * 0.36f);
                     break;
+
+                case BoardMotif.Stars:
+                    canvas.DrawLine(-s * 0.35f, 0f, s * 0.35f, 0f);
+                    canvas.DrawLine(0f, -s * 0.35f, 0f, s * 0.35f);
+                    break;
+
+                case BoardMotif.Embers:
+                    canvas.FillEllipse(-s * 0.18f, -s * 0.18f, s * 0.36f, s * 0.36f);
+                    break;
+
+                case BoardMotif.Petals:
+                    canvas.Rotate(spin);
+                    canvas.FillEllipse(-s * 0.55f, -s * 0.25f, s * 1.1f, s * 0.5f);
+                    break;
             }
             canvas.RestoreState();
         }
@@ -516,7 +947,7 @@ public sealed class GameDrawable : IDrawable
     {
         if (game.State is not (GameState.Playing or GameState.Paused)) return;
 
-        var groups = ColourMatcher.FindNearGroups(game.Board, LensLevel >= 2 ? 2 : 3, 3);
+        var groups = ColourMatcher.FindNearGroups(game.Board, LensLevel >= 2 ? 2 : 3, 3, game.Rules.MinGroupSize);
         if (groups.Count == 0) return;
 
         canvas.StrokeSize = MathF.Max(1.5f, cell * 0.06f);
@@ -527,7 +958,7 @@ public sealed class GameDrawable : IDrawable
 
             foreach (var c in group.Cells)
             {
-                if (c.Y < GameConfig.HiddenRows) continue;
+                if (BoardSpace.AboveView(c.Y)) continue;
                 float x0 = BoardSpace.ScreenX(c.X, Flip, originX, cell);
                 float y0 = BoardSpace.ScreenY(c.Y, Flip, originY, cell);
 
@@ -562,7 +993,7 @@ public sealed class GameDrawable : IDrawable
             {
                 _glowPiece = piece;
                 _glowPlaced = game.PiecesPlaced;
-                _glowChain = PlacementPreview.StartsChain(game.Board, piece);
+                _glowChain = PlacementPreview.StartsChain(game.Board, piece, game.Rules.MinGroupSize, game.FractureActive, game.OrbTimerLeft == 0 ? int.MaxValue : game.OrbTimerLeft);
             }
             chain = _glowChain;
         }
@@ -594,7 +1025,7 @@ public sealed class GameDrawable : IDrawable
         for (int i = 0; i < cells.Count; i++)
         {
             int by = piece.Y + cells[i].Y + distance;
-            if (by < GameConfig.HiddenRows) continue;
+            if (BoardSpace.AboveView(by)) continue;
             int bx = piece.X + cells[i].X;
 
             float x = BoardSpace.ScreenX(bx, Flip, originX, cell) + inset;

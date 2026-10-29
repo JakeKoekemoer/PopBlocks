@@ -49,7 +49,7 @@ public class StoryRuleTests
     public void A_stack_reaching_the_spawn_rows_fails_the_level()
     {
         var tower = Column(3, 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R');
-        var e = Story.Start(Story.Level(tower, new[] { "Dot:Y" }, Never));
+        var e = Story.Start(Story.Level(tower, new[] { "Dot:Y" }, Never), GameRules.Default with { BoardRows = GameConfig.VisibleRows });   // the standard 16-row board
 
         Assert.Equal(GameState.Playing, e.State);
         e.HardDrop();
@@ -407,7 +407,7 @@ public class StoryRuleTests
     [Fact]
     public void Setup_titles()
     {
-        Assert.Equal("CLASSIC", GameSetup.Classic.Title);
+        Assert.Equal("ENDLESS", GameSetup.Classic.Title);
         Assert.Equal("LEVEL 7", GameSetup.Story(7).Title);
         Assert.Equal("LESSON 3", GameSetup.Lesson(3).Title);
         Assert.Equal(1, GameSetup.Story(-4).Level);

@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:PopBlocks.ViewModels"
+             xmlns:views="clr-namespace:PopBlocks.Views"
              xmlns:levels="clr-namespace:PopBlocks.Engine.Levels;assembly=PopBlocks.Engine"
              xmlns:story="clr-namespace:PopBlocks.Engine.Story;assembly=PopBlocks.Engine"
              x:Class="PopBlocks.Views.GamePage"
@@ -29,10 +30,17 @@
                            FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{StaticResource TextPrimary}" />
-                    <Label Text="{Binding SubText}"
+                    <Label x:Name="GoldChipLabel"
+                           Text="{Binding SubText}"
                            FontSize="12"
                            FontAttributes="Bold"
                            TextColor="{StaticResource GoldColor}" />
+                    <Label Text="{Binding RulesChipText}"
+                           IsVisible="{Binding HasRulesChip}"
+                           FontSize="11"
+                           FontAttributes="Bold"
+                           TextColor="#FF9F6B"
+                           SemanticProperties.Description="Your own rules are on" />
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Grid.Column="2"
@@ -41,7 +49,8 @@
                                      VerticalOptions="Center"
                                      MinimumWidthRequest="58">
                     <Label Text="MOVES" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
-                    <Label Text="{Binding MovesText}"
+                    <Label x:Name="MovesLabel"
+                           Text="{Binding MovesText}"
                            FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{Binding MovesColour}"
@@ -211,6 +220,24 @@
                         HeightRequest="38"
                         SemanticProperties.Description="{Binding PrismShiftDescription}" />
             </Grid>
+            <!-- Pip's Insight: shows where the piece in hand would do the most good. Never plays the move. -->
+            <Grid IsVisible="{Binding InsightRowVisible}" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,4">
+                <Button Grid.Column="0"
+                        Text="{Binding InsightText}"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding InsightCommand}"
+                        IsVisible="{Binding ShowInsightButton}"
+                        IsEnabled="{Binding CanInsight}"
+                        HeightRequest="38"
+                        SemanticProperties.Description="Ask Pip where this piece would do the most good" />
+                <Button Grid.Column="1"
+                        Text="{Binding AlwaysOnText}"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding InsightAlwaysCommand}"
+                        IsVisible="{Binding ShowAlwaysOn}"
+                        HeightRequest="38"
+                        SemanticProperties.Description="Show Pip's suggestion for every piece" />
+            </Grid>
             <Label Text="{Binding HelperHint}"
                    IsVisible="{Binding HasHelperHint}"
                    Style="{StaticResource CaptionLabel}"
@@ -234,7 +261,8 @@
         </VerticalStackLayout>
 
         <!-- Pause / level complete / level failed / game over -->
-        <Grid Grid.RowSpan="4"
+        <Grid x:Name="OverlayGrid"
+              Grid.RowSpan="4"
               IsVisible="{Binding IsOverlayVisible}"
               BackgroundColor="{StaticResource Overlay}"
               Margin="-6,-2,-6,-6">
@@ -256,6 +284,19 @@
                            TextColor="{StaticResource TextSecondary}"
                            HorizontalTextAlignment="Center" />
 
+                    <!-- After five losses: the level was solved before the player saw it -->
+                    <Label IsVisible="{Binding ShowSolvableNote}"
+                           FontSize="14"
+                           TextColor="{StaticResource TextSecondary}"
+                           HorizontalTextAlignment="Center">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="There is always a way through." FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                <Span Text=" Pip's puzzle machine solved this exact level before you saw it, so it can be done. Try a different first move, or reroll for a fresh version." />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
+
                     <!-- Classic game over: the gold this run paid, and the seed it used (so a good run can be shared or replayed) -->
                     <Label Text="{Binding ClassicOverGoldText}"
                            IsVisible="{Binding HasClassicOverGold}"
@@ -275,16 +316,34 @@
                                 SemanticProperties.Description="Copy the seed of this run" />
                     </Grid>
 
+                    <!-- A win: pop gold and first-clear gold on two lines. Both count up when the card appears. -->
+                    <Label x:Name="PopGoldLabel"
+                           Text="{Binding PopGoldText}"
+                           IsVisible="{Binding HasPopGold}"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="Center" />
                     <HorizontalStackLayout IsVisible="{Binding HasGoldReward}"
                                            HorizontalOptions="Center"
                                            Spacing="10">
                         <GraphicsView x:Name="CoinView" WidthRequest="30" HeightRequest="30" VerticalOptions="Center" />
-                        <Label Text="{Binding GoldRewardText}"
+                        <Label x:Name="GoldRewardLabel"
+                               Text="{Binding GoldRewardText}"
                                FontSize="26"
                                FontAttributes="Bold"
                                TextColor="{StaticResource GoldColor}"
                                VerticalOptions="Center" />
                     </HorizontalStackLayout>
+
+                    <!-- A loss: half the gold kept, counting up; or a plain "No gold this time" -->
+                    <Label x:Name="ConsolationLabel"
+                           Text="{Binding ConsolationText}"
+                           IsVisible="{Binding ShowConsolation}"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="Center" />
                     <Label Text="{Binding GoldNote}"
                            IsVisible="{Binding HasGoldNote}"
                            Style="{StaticResource BodyLabel}"
@@ -323,14 +382,66 @@
                            FontSize="12"
                            HorizontalTextAlignment="Center" />
 
-                    <Button Text="{Binding NextText}"
-                            Style="{StaticResource PrimaryButton}"
-                            IsVisible="{Binding IsComplete}"
-                            Command="{Binding NextLevelCommand}" />
+                    <!-- Out of moves: five more moves for gold, three times per attempt. The hearts show how many are left. -->
+                    <VerticalStackLayout IsVisible="{Binding ShowContinue}" Spacing="4">
+                        <Button x:Name="ContinueButton"
+                                Text="{Binding ContinueText}"
+                                Style="{StaticResource PrimaryButton}"
+                                IsEnabled="{Binding CanAffordContinue}"
+                                Clicked="OnContinueClicked"
+                                SemanticProperties.Description="Buy five more moves" />
+                        <Label Text="{Binding ContinueHintText}"
+                               IsVisible="{Binding ShowContinueHint}"
+                               Style="{StaticResource CaptionLabel}"
+                               HorizontalTextAlignment="Center" />
+                        <GraphicsView x:Name="HeartsView"
+                                      HeightRequest="26"
+                                      HorizontalOptions="Fill"
+                                      SemanticProperties.Description="{Binding ContinuesLeftText}" />
+                    </VerticalStackLayout>
+
+                    <Grid IsVisible="{Binding IsComplete}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Button Text="{Binding NextText}"
+                                Style="{StaticResource PrimaryButton}"
+                                MinimumWidthRequest="0"
+                                Command="{Binding NextLevelCommand}" />
+                        <views:IconButton Grid.Column="1"
+                                          Text="SHOP"
+                                          Icon="Cart"
+                                          WidthRequest="130"
+                                          IsVisible="{Binding ShowShop}"
+                                          Command="{Binding ShopCommand}"
+                                          SemanticProperties.Description="Open the workshop" />
+                    </Grid>
                     <Button Text="{Binding RetryText}"
                             Style="{StaticResource PrimaryButton}"
                             IsVisible="{Binding CanRetry}"
                             Command="{Binding RestartCommand}" />
+                    <!-- After fifteen losses: an easier version of the level, for no gold -->
+                    <VerticalStackLayout IsVisible="{Binding ShowEase}" Spacing="4">
+                        <Button Text="EASE THIS LEVEL"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding EaseCommand}"
+                                SemanticProperties.Description="Ease this level. You still move on in the story, but this level pays no gold." />
+                        <Label Text="{Binding EaseNoteText}"
+                               Style="{StaticResource BodyLabel}"
+                               FontSize="12"
+                               HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+                    <views:IconButton Text="SHOP"
+                                      Icon="Cart"
+                                      Kind="Ghost"
+                                      HorizontalOptions="Center"
+                                      IsVisible="{Binding ShowShopOnFailed}"
+                                      Command="{Binding ShopCommand}"
+                                      SemanticProperties.Description="Open the workshop" />
+                    <views:IconButton Text="SHARE"
+                                      Icon="Share"
+                                      Kind="Ghost"
+                                      HorizontalOptions="Center"
+                                      IsVisible="{Binding ShowShare}"
+                                      Command="{Binding ShareCommand}"
+                                      SemanticProperties.Description="Share this result" />
 
                     <!-- Reroll: a new level for gold. The price falls with each failure and is free from the tenth. Plain words only:
                          no countdown, no timer, no urgent colour. The "?" appears only when the player cannot pay yet. -->
@@ -430,6 +541,17 @@
                                 TextColor="{StaticResource Danger}" Command="{Binding DevSkipLevelCommand}" />
                         <Button Grid.Column="1" Text="DEV: +1,000 GOLD" Style="{StaticResource GhostButton}"
                                 TextColor="{StaticResource Danger}" Command="{Binding DevGoldCommand}" />
+                    </Grid>
+                    <!-- Development builds only: the new board features, from the pause card -->
+                    <Grid IsVisible="{Binding ShowDevBoardTools}" ColumnDefinitions="*,*,*,*" ColumnSpacing="4">
+                        <Button Grid.Column="0" Text="ORB" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevSpawnOrbCommand}" />
+                        <Button Grid.Column="1" Text="CRACK" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevCrackAllCommand}" />
+                        <Button Grid.Column="2" Text="FILL 12" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevFillRowsCommand}" CommandParameter="12" />
+                        <Button Grid.Column="3" Text="FILL 20" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
+                                MinimumWidthRequest="0" Command="{Binding DevFillRowsCommand}" CommandParameter="20" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
@@ -605,7 +727,7 @@
                            FontSize="20"
                            FontAttributes="Bold"
                            TextColor="{StaticResource TextPrimary}" />
-                    <Label Text="This only changes how things are drawn. You can change it again any time in the Archive."
+                    <Label Text="This only changes how things are drawn. You can change it again any time in the Story Book."
                            Style="{StaticResource BodyLabel}"
                            FontSize="13" />
 
@@ -629,5 +751,8 @@
                 </VerticalStackLayout>
             </Border>
         </Grid>
+
+        <!-- Coins flying from a result card to the gold chip. Draws only while they are in the air. -->
+        <GraphicsView x:Name="CoinFlyView" Grid.RowSpan="4" InputTransparent="True" IsVisible="False" />
     </Grid>
 </ContentPage>

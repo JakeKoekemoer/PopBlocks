@@ -79,6 +79,32 @@ public static class SaveCode
             new(SaveKeys.CurrentLevelFailures, Kind.Int, 0, 100_000),
             new(SaveKeys.FirstClearSeeds, Kind.SeedList),
             new(SaveKeys.ClassicGoldCarry, Kind.Int, 0, 9),
+            new(SaveKeys.LevelLosses, Kind.SeedList),
+            new(SaveKeys.EasedLevels, Kind.SeedList),
+            new(SaveKeys.ConsolationPaid, Kind.SeedList),
+            new(SaveKeys.RuleFallSpeed, Kind.Int, 50, 200),
+            new(SaveKeys.RuleColourCount, Kind.Int, 3, 5),
+            new(SaveKeys.RuleColours, Kind.Text),
+            new(SaveKeys.RuleShapes, Kind.Text),
+            new(SaveKeys.RuleMinGroup, Kind.Int, 3, 6),
+            new(SaveKeys.RuleSolidChance, Kind.Int, 0, 100),
+            new(SaveKeys.RuleBoardRows, Kind.Int, 16, 32),
+            new(SaveKeys.RuleFracture, Kind.Bool),
+            new(SaveKeys.RuleOrbs, Kind.Int, 0, 2),
+            new(SaveKeys.RuleOrbTimer, Kind.Int, 6, 12),
+            new(SaveKeys.RuleUseInStory, Kind.Bool),
+            new(SaveKeys.SettingsTab, Kind.Int, 0, 4),
+            new(SaveKeys.ShowHanging, Kind.Bool),
+            new(SaveKeys.ColourAssist, Kind.Bool),
+            new(SaveKeys.CosmeticMixCyan, Kind.Text),
+            new(SaveKeys.CosmeticMixCoral, Kind.Text),
+            new(SaveKeys.CosmeticMixYellow, Kind.Text),
+            new(SaveKeys.CosmeticMixPurple, Kind.Text),
+            new(SaveKeys.CosmeticMixLime, Kind.Text),
+            new(SaveKeys.CosmeticSeen, Kind.Unlocks),
+            new(SaveKeys.StoryBookTab, Kind.Int, 0, 3),
+            new(SaveKeys.SeenOrbIntro, Kind.Bool),
+            new(SaveKeys.InsightAlwaysOn, Kind.Bool),
         };
         foreach (var item in ShopCatalog.Items) f.Add(new Field(item.SaveKey, Kind.Int, 0, item.MaxLevel));
         foreach (var c in ConsumableCatalog.All) f.Add(new Field(c.SaveKey, Kind.Int, 0, ConsumableCatalog.Cap));
@@ -246,7 +272,7 @@ public static class SaveCode
                     foreach (var id in ids)
                         if (id.Length > MaxId || !id.All(IsIdChar)) return Fail(bad);
                     var clean = ids.Distinct(StringComparer.Ordinal).OrderBy(i => i, StringComparer.Ordinal).ToArray();
-                    unlocks = clean.Length;
+                    if (key == SaveKeys.Unlocks) unlocks = clean.Length;   // (the summary counts the real unlocks, not other id lists)
                     values.Add((key, string.Join(',', clean)));
                     break;
                 }

@@ -36,6 +36,15 @@ public sealed record GameSetup(GameMode Mode, int Level)
     /// <summary>The seed a Story level is built from. Legacy unless the player's own seed is given.</summary>
     public LevelSeed Seed { get; init; }
 
+    /// <summary>
+    /// The rules this game is played by (see <see cref="GameRules"/>). Normal unless the player set their own and they apply
+    /// here: Endless always, the Story only if they asked, never a lesson or a region's finale.
+    /// </summary>
+    public GameRules Rules { get; init; } = GameRules.Default;
+
+    /// <summary>The player eased this Story level: it is played with <see cref="LevelDefinition.ToEased"/> and pays no gold.</summary>
+    public bool Eased { get; init; }
+
     /// <summary>Lesson <paramref name="lesson"/> of the tutorial (1 to <see cref="StoryConfig.LessonCount"/>).</summary>
     public static GameSetup Lesson(int lesson) => new(GameMode.Tutorial, Math.Max(1, lesson));
 
@@ -52,7 +61,7 @@ public sealed record GameSetup(GameMode Mode, int Level)
     public bool SeedChosen { get; init; }
 
     /// <summary>Whether this run can set the Classic personal best. A typed seed cannot.</summary>
-    public bool CountsForBest => !SeedChosen;
+    public bool CountsForBest => !SeedChosen && Rules.IsDefault;
 
     /// <summary>Settings key of the Classic personal best. Story has progress instead of a best score.</summary>
     public string BestScoreKey => "best_score";
@@ -68,7 +77,7 @@ public sealed record GameSetup(GameMode Mode, int Level)
     /// <summary>Short label for the HUD.</summary>
     public string Title => Mode switch
     {
-        GameMode.Classic => "CLASSIC",
+        GameMode.Classic => "ENDLESS",
         GameMode.Tutorial => $"LESSON {Level}",
         _ => $"LEVEL {Level}",
     };

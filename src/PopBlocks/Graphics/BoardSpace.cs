@@ -9,6 +9,19 @@ namespace PopBlocks.Graphics;
 /// </summary>
 public static class BoardSpace
 {
+    /// <summary>
+    /// The board row (y) at the top of the screen. On the standard board this is the first row below the hidden ones, always.
+    /// On a tall board it follows the camera (the drawing sets it once per frame, easing between camera positions), so every
+    /// effect that maps a board row to the screen moves with the board. The UI draws on one thread, so a plain field is enough.
+    /// </summary>
+    public static float ViewTop = GameConfig.HiddenRows;
+
+    /// <summary>Is this board row above the screen (not drawn)? With the standard board that is exactly the hidden rows.</summary>
+    public static bool AboveView(int y) => y < MathF.Floor(ViewTop);
+
+    /// <summary>Is this board row well below the screen (not drawn)? One row of margin is kept for the camera's ease.</summary>
+    public static bool BelowView(int y) => y > ViewTop + GameConfig.ViewportRows + 1f;
+
     /// <summary>Left edge of board column <paramref name="x"/> on screen.</summary>
     public static float ScreenX(int x, bool flip, float originX, float cell) =>
         originX + (flip ? GameConfig.Columns - 1 - x : x) * cell;
@@ -19,7 +32,7 @@ public static class BoardSpace
     /// </summary>
     public static float ScreenY(int y, bool flip, float originY, float cell, float fallOffset = 0f)
     {
-        int row = y - GameConfig.HiddenRows;
+        float row = y - ViewTop;
         float screenRow = flip ? (GameConfig.VisibleRows - 1 - row) - fallOffset : row + fallOffset;
         return originY + screenRow * cell;
     }

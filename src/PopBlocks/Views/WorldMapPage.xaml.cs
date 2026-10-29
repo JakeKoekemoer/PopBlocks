@@ -385,6 +385,18 @@ public partial class WorldMapPage : ContentPage
                 VerticalOptions = LayoutOptions.Start,
                 Margin = new Thickness(0, -2, 0, 0),
             });
+            if (_progress.IsEased(level))
+            {
+                // Cleared in its eased form: a small feather. Winning the normal level later pays the gold and takes it off.
+                content.Children.Add(new Label
+                {
+                    Text = "ðŸª¶",
+                    FontSize = 11,
+                    HorizontalOptions = LayoutOptions.End,
+                    VerticalOptions = LayoutOptions.End,
+                    Margin = new Thickness(0, 0, 0, -2),
+                });
+            }
         }
 
         var tile = new Border
@@ -397,7 +409,7 @@ public partial class WorldMapPage : ContentPage
             Content = content,
         };
         string region = RegionCatalog.For(level)?.Title ?? RegionCatalog.BeyondTitle;
-        SemanticProperties.SetDescription(tile, $"Level {level}, {region}" + (cleared ? ", cleared" : current ? ", your next level" : unlocked ? "" : ", locked"));
+        SemanticProperties.SetDescription(tile, $"Level {level}, {region}" + (cleared ? (_progress.IsEased(level) ? ", cleared in its eased form" : ", cleared") : current ? ", your next level" : unlocked ? "" : ", locked"));
         StyleTile(tile, level, colour);
         _tiles[level] = tile;
 

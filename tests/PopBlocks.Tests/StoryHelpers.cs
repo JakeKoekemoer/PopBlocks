@@ -24,10 +24,10 @@ public static class Story
         NoPopPenalty = penalty,
     };
 
-    public static GameEngine Start(LevelDefinition level)
+    public static GameEngine Start(LevelDefinition level, GameRules? rules = null)
     {
         var engine = new GameEngine(new ScriptedGenerator());
-        engine.StartLevel(level);
+        engine.StartLevel(level, rules);
         return engine;
     }
 

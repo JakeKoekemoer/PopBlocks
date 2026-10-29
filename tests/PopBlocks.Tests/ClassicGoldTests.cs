@@ -44,7 +44,7 @@ public class ClassicGoldEngineTests
     }
 
     [Fact]
-    public void A_Story_level_never_earns_Classic_gold()
+    public void A_Story_level_earns_pop_gold_at_the_Endless_rate()
     {
         var level = Story.Level(new[] { "RRR....." }, new[] { "Dot:R" }, new[] { new Goal(GoalKind.PopBlocks, 4) }, moves: 5);
         var engine = Story.Start(level);
@@ -54,7 +54,77 @@ public class ClassicGoldEngineTests
         Story.Settle(engine);
 
         Assert.True(engine.TotalPopped > 0);
-        Assert.Equal(0, engine.ClassicGoldTenths);
+        Assert.True(engine.EarnsPopGold);
+        Assert.Equal(engine.TotalPopped * SeedingConfig.ClassicTenthsPerBlock(1), engine.ClassicGoldTenths);   // 1 tenth a block at score level 1
+    }
+
+    [Fact]
+    public void Lessons_and_eased_levels_earn_no_pop_gold()
+    {
+        var level = Story.Level(new[] { "RRR....." }, new[] { "Dot:R" }, new[] { new Goal(GoalKind.PopBlocks, 4) }, moves: 5);
+        foreach (var variant in new[] { level with { IsTutorial = true }, level.ToEased() })
+        {
+            var engine = Story.Start(variant);
+            engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft();
+            engine.HardDrop();
+            Story.Settle(engine);
+
+            Assert.True(engine.TotalPopped > 0);
+            Assert.False(engine.EarnsPopGold);
+            Assert.Equal(0, engine.ClassicGoldTenths);
+            Assert.All(engine.LastWave!.Gold, g => Assert.Equal(0, g.GoldTenths));
+        }
+    }
+
+    [Fact]
+    public void Each_wave_reports_what_every_group_paid_and_where_it_was()
+    {
+        var level = Story.Level(new[] { "RRR....." }, new[] { "Dot:R" }, new[] { new Goal(GoalKind.PopBlocks, 40) }, moves: 5);
+        var engine = Story.Start(level);
+
+        engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft();
+        engine.HardDrop();
+        Story.Settle(engine);
+
+        var wave = engine.LastWave!;
+        Assert.Equal(wave.Groups.Count, wave.Gold.Count);
+        Assert.Equal(engine.ClassicGoldTenths, wave.GoldTenths);
+        var g = wave.Gold[0];
+        Assert.Equal(wave.Groups[0].Size, g.Cells);
+        Assert.Equal(g.Cells * SeedingConfig.ClassicTenthsPerBlock(1), g.GoldTenths);
+        Assert.Equal(1, g.Multiplier);
+        Assert.InRange(g.CentreX, 0f, GameConfig.Columns);
+        Assert.InRange(g.CentreY, GameConfig.HiddenRows, engine.Board.Height);
+    }
+
+    [Fact]
+    public void Undo_takes_back_the_gold_of_the_pops_it_rewinds()
+    {
+        var level = Story.Level(new[] { "RRR....." }, new[] { "Dot:R", "Dot:Y", "Dot:Y" }, new[] { new Goal(GoalKind.PopBlocks, 40) }, moves: 8);
+        var engine = Story.Start(level);
+        engine.SecondChanceStock = 1;
+        engine.Restart();
+        engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft();
+        engine.HardDrop();
+        Story.Settle(engine);
+        Assert.True(engine.ClassicGoldTenths > 0);
+
+        if (engine.UseSecondChance()) Assert.Equal(0, engine.ClassicGoldTenths);
+    }
+
+    [Fact]
+    public void Goal_progress_is_the_average_of_each_goal()
+    {
+        var level = Story.Level(new[] { "RRR....." }, new[] { "Dot:R" },
+            new[] { new Goal(GoalKind.PopBlocks, 4), new Goal(GoalKind.PopBlocks, 400) }, moves: 5);
+        var engine = Story.Start(level);
+        Assert.Equal(0.0, engine.GoalProgress);
+
+        engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft(); engine.MoveLeft();
+        engine.HardDrop();
+        Story.Settle(engine);
+
+        Assert.InRange(engine.GoalProgress, 0.49, 0.52);   // one goal done, the other 4 / 400
     }
 
     [Fact]
@@ -77,6 +147,8 @@ public class ClassicGoldEngineTests
         var engine = new GameEngine(new PieceGenerator(new Random(7)));
         engine.Start(GameSetup.Classic);
         var random = new Random(3);
+        int orbBreaks = 0;
+        engine.WaveResolved += w => { if (w.OrbBroke) orbBreaks++; };
 
         int guard = 0;
         while (engine.State is GameState.Playing or GameState.ResolvingBursts && guard++ < 4000)
@@ -88,8 +160,9 @@ public class ClassicGoldEngineTests
         }
 
         Assert.True(engine.TotalPopped > 0);
-        Assert.InRange(engine.ClassicGoldTenths, engine.TotalPopped, engine.TotalPopped * SeedingConfig.ClassicMaxTenths);
-        if (engine.Level == 1) Assert.Equal(engine.TotalPopped, engine.ClassicGoldTenths);
+        // Cracked blocks pay a half to three quarters, and each broken Orb adds its 25 gold bonus on top.
+        int bonus = orbBreaks * OrbSystem.BreakBonusGold * 10;
+        Assert.InRange(engine.ClassicGoldTenths, engine.TotalPopped / 2, engine.TotalPopped * SeedingConfig.ClassicMaxTenths + bonus);
     }
 
     [Fact]
