@@ -31,7 +31,7 @@ Code: `src/PopBlocks/Graphics/`. Everything on the board is drawn from vector op
 
 The picture is built in this order, all clipped to the board rectangle so falling cells never poke out:
 
-1. Board surface: soft outer glow, a vertical gradient panel, a rim.
+1. Board surface: soft outer glow, a vertical gradient panel, a rim. The grid lines and the empty cells are two vector paths cached by board size (`EnsureGridPaths`) and drawn with one call each.
 2. Empty-cell slots, grid lines, and a glowing floor line.
 3. The tutorial hint column (a pulsing highlight), if any.
 4. The hanging-block cue (below), under the blocks.

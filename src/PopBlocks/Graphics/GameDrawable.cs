@@ -271,21 +271,18 @@ public sealed class GameDrawable : IDrawable
         canvas.StrokeSize = 1.5f;
         canvas.DrawRoundedRectangle(x, y, w, h, corner);
 
+        // The grid and the empty cells are the same lines and squares every frame, so they are two paths built when the size of
+        // the board changes and drawn with one call each (not 22 lines and 128 squares). Vector, so nothing is resampled.
+        EnsureGridPaths(originX, originY, boardW, boardH, cell);
+
         // Subtle grid lines.
         canvas.StrokeColor = Theme.Grid.WithAlpha(Theme.GridAlpha);
         canvas.StrokeSize = VisualDesign.GridLineWidth;
-        for (int gx = 1; gx < GameConfig.Columns; gx++)
-            canvas.DrawLine(originX + gx * cell, originY, originX + gx * cell, originY + boardH);
-        for (int gy = 1; gy < GameConfig.VisibleRows; gy++)
-            canvas.DrawLine(originX, originY + gy * cell, originX + boardW, originY + gy * cell);
+        canvas.DrawPath(_gridPath!);
 
         // Empty cells.
-        float inset = cell * VisualDesign.EmptyCellInset;
-        float size = cell - 2f * inset;
         canvas.FillColor = Theme.Empty.WithAlpha(0.75f);
-        for (int ey = 0; ey < GameConfig.VisibleRows; ey++)
-            for (int ex = 0; ex < GameConfig.Columns; ex++)
-                canvas.FillRoundedRectangle(originX + ex * cell + inset, originY + ey * cell + inset, size, size, cell * 0.18f);
+        canvas.FillPath(_emptyCellsPath!);
 
         // A glowing line along the floor, where blocks come to rest. Upside down on flipped levels.
         float floorY = flip ? originY : originY + boardH;
@@ -699,6 +696,36 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>The Orb's swirl and shiver move while it is on the board.</summary>
     public bool OrbAnimates => AmbientOn && !ReducedMotion && Game is { OrbAt: not null };
+
+    private PathF? _gridPath, _emptyCellsPath;
+    private float _gridX, _gridY, _gridCell;
+
+    private void EnsureGridPaths(float originX, float originY, float boardW, float boardH, float cell)
+    {
+        if (_gridPath is not null && _emptyCellsPath is not null && _gridX == originX && _gridY == originY && _gridCell == cell) return;
+
+        var grid = new PathF();
+        for (int gx = 1; gx < GameConfig.Columns; gx++)
+        {
+            grid.MoveTo(originX + gx * cell, originY);
+            grid.LineTo(originX + gx * cell, originY + boardH);
+        }
+        for (int gy = 1; gy < GameConfig.VisibleRows; gy++)
+        {
+            grid.MoveTo(originX, originY + gy * cell);
+            grid.LineTo(originX + boardW, originY + gy * cell);
+        }
+
+        float inset = cell * VisualDesign.EmptyCellInset;
+        float size = cell - 2f * inset;
+        var empty = new PathF();
+        for (int ey = 0; ey < GameConfig.VisibleRows; ey++)
+            for (int ex = 0; ex < GameConfig.Columns; ex++)
+                empty.AppendRoundedRectangle(originX + ex * cell + inset, originY + ey * cell + inset, size, size, cell * 0.18f);
+
+        (_gridPath, _emptyCellsPath) = (grid, empty);
+        (_gridX, _gridY, _gridCell) = (originX, originY, cell);
+    }
 
     private PathF? _panelPath;
     private float _panelX, _panelY, _panelW, _panelH, _panelCorner;

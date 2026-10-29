@@ -42,11 +42,15 @@ so a slow piece never holds up a frame.
 
 ## Not done (and why)
 
-* **The board surface is not cached as an image.** The gradient and the motifs are redrawn on each paint, as they always were.
-  The new ambient layer is cheap (at most 12 stateless shapes), and nothing measured over budget on the engine side; a phone
-  draw-time measurement is still wanted before deciding. If the 8 ms draw budget is missed, cache `DrawBoardSurface` with
-  `PatternCache`-style keys (board id, size).
-* **Cracked blocks are drawn straight onto the canvas** (a few short lines) rather than cached per set x colour x level.
+* **The board surface is not cached as an image, on purpose.** The grid and the 128 empty cells are now two cached vector paths
+  (`GameDrawable.EnsureGridPaths`, rebuilt only when the size of the board changes) drawn with one call each instead of 22 lines
+  and 128 rounded squares per paint, and nothing is resampled. The gradient (40 bands), the motifs and the ambient layer are still
+  drawn per paint. A bitmap of the whole surface was not made: the image would be blitted at a fractional device pixel on most
+  phones, which blurs the 1.5 px grid lines against the sharp blocks above them, and it cannot be judged or timed without a phone.
+  If a phone shows the 8 ms draw budget missed, cache the gradient and motifs (the part with no thin lines) with
+  `CachedSceneDrawable`-style keys (board id, size, density) and keep the grid and the empty cells as paths.
+* **Cracked blocks are drawn straight onto the canvas** (one to two short lines on the few blocks that are cracked) rather than
+  cached per set x colour x level: at most a handful a frame, so nothing to save.
 * **Draw time on a phone was not measured** (there is no device here); the figures above are engine times.
 * The engine's wave code still uses LINQ for the per-wave lists (groups, cleared cells). It runs once per wave, not per frame, and
   the settle numbers above include it.
