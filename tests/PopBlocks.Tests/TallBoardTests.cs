@@ -40,10 +40,10 @@ public class TallBoardTests
         Assert.Equal(expected, GameEngine.CameraFor(stackTop, rows));
 
     [Fact]
-    public void A_standard_board_is_the_old_board_and_never_scrolls()
+    public void A_16_row_board_is_the_old_board_and_never_scrolls()
     {
         var e = new GameEngine(new ScriptedGenerator());
-        e.Start(GameSetup.Classic);
+        e.Start(GameSetup.Classic with { Rules = Rows(16) });
         Assert.Equal(GameConfig.TotalRows, e.Board.Height);
         Assert.Equal(16, e.BoardRows);
         Stack(e, 14);
@@ -203,11 +203,27 @@ public class TallBoardTests
         Assert.All(GameRules.BoardRowChoices, n => Assert.InRange(n, GameConfig.MinBoardRows, GameConfig.MaxBoardRows));
         Assert.True(RuleFeatures.TallBoards);
         Assert.Equal(GameConfig.DefaultBoardRows, GameRules.Default.BoardRows);
-        Assert.True((Rows(24)).IsEasierThanDefault);   // a taller board is easier, so it pays half
+        Assert.Equal(24, GameRules.Default.BoardRows);        // the standard board is the tall one: the camera follows the stack
+        Assert.True(Rows(28).IsEasierThanDefault);        // a taller board is easier, so it pays half
+        Assert.False(Rows(24).IsEasierThanDefault);
         Assert.False(Rows(16).IsEasierThanDefault);
 
         var store = new PopBlocks.Engine.Services.GameRulesStore(new InMemorySettings());
         store.Set(Rows(28));
         Assert.Equal(28, store.Rules.BoardRows);
+    }
+
+    [Fact]
+    public void A_Story_level_is_played_on_the_24_row_default_and_a_lesson_on_16()
+    {
+        var level = Story.Level(new[] { "RRR....." }, new[] { "Dot:Y" }, new[] { new Goal(GoalKind.Score, 999_999) }, moves: 5);
+        var story = Story.Start(level);
+        Assert.Equal(24, story.BoardRows);
+        Assert.Equal(GameConfig.HiddenRows + 8, story.ViewTopRow);   // the piece appears at the top of the screen, not 8 rows above it
+        Assert.Equal(CellColour.Coral, story.Board[0, story.Board.Height - 1]);   // the pile sits on the floor
+
+        var lesson = Story.Start(Story.Level(new[] { "RRR....." }, new[] { "Dot:Y" }, new[] { new Goal(GoalKind.Score, 999_999) }, moves: 5, tutorial: true));
+        Assert.Equal(16, lesson.BoardRows);
+        Assert.Equal(0, lesson.CameraBottom);
     }
 }

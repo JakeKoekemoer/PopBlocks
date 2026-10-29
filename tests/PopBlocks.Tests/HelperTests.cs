@@ -59,7 +59,7 @@ public class PrismShiftTests
         Story.MoveTo(e, 7);
         e.HardDrop();
         Story.Settle(e);
-        Assert.Same(shifted, e.CurrentPiece);          // played as shifted
+        Assert.Equal(shifted.Cells.Select(c => c.Colour), e.CurrentPiece!.Cells.Select(c => c.Colour));   // played as shifted (on a tall board the piece is lifted to the top of the screen, so it is a moved copy)
         Assert.Equal("P", Board.ToChar(e.NextPiece!.Cells[0].Colour).ToString());   // the next one is the scripted Dot:P, untouched
     }
 

@@ -4,7 +4,7 @@ This document describes the game as the player experiences it, and the product r
 
 ## 1.1 The core loop
 
-1. A piece (2 to 5 coloured cells) appears at the top of an 8-column, 16-row board and falls.
+1. A piece (2 to 5 coloured cells) appears at the top of an 8-column, 24-row board and falls (the screen shows 16 rows and follows the stack; see below).
 2. The player moves it sideways, rotates it, and drops it.
 3. When it lands it locks into the board.
 4. Every group of **four or more** cells of the same colour that touch **sideways or up/down** (never diagonally) bursts.
@@ -119,7 +119,7 @@ From level 36 of the Story (and always in Endless, unless switched off in the pl
 
 ### Tall boards (v1.1)
 
-With a board height of 20 to 32 rows in the player's own rules, the board is taller than the screen and the view follows the stack: the top of the stack is kept in the middle of the screen, the view drops back as the stack is cleared, and a piece always appears at the top of what you can see. Losing is still a block that reaches the very top of the board, or a piece that has no room to appear. Taller boards are easier, so they pay half gold.
+The standard board is 24 rows tall (16 to 32 in the player's own rules; lessons are always 16), so the board is taller than the screen and the view follows the stack: the top of the stack is kept in the middle of the screen, the view drops back as the stack is cleared, and a piece always appears at the top of what you can see. Losing is still a block that reaches the very top of the board, or a piece that has no room to appear. Boards taller than 24 are easier, so they pay half gold.
 
 ### Your own rules (v1.1)
 

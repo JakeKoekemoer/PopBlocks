@@ -21,10 +21,10 @@ public static class GameConfig
     public const int MaxBoardRows = 32;
 
     /// <summary>
-    /// Board height when the player has not chosen one. The solved Story levels were built and verified for this height, so it
-    /// is the standard 16 (nothing scrolls). Taller boards come from the player's own rules.
+    /// Board height when the player has not chosen one: 24 rows, of which the screen shows 16 and follows the stack. A solved Story
+    /// level is still winnable here (the solver plays on 16 rows, and extra room never takes a move away). Lessons stay at 16.
     /// </summary>
-    public const int DefaultBoardRows = VisibleRows;
+    public const int DefaultBoardRows = 24;
 
     // ---- Matching ----
     public const int MinGroupSize = 4;

@@ -49,7 +49,7 @@ public class StoryRuleTests
     public void A_stack_reaching_the_spawn_rows_fails_the_level()
     {
         var tower = Column(3, 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R', 'C', 'R');
-        var e = Story.Start(Story.Level(tower, new[] { "Dot:Y" }, Never));
+        var e = Story.Start(Story.Level(tower, new[] { "Dot:Y" }, Never), GameRules.Default with { BoardRows = GameConfig.VisibleRows });   // the standard 16-row board
 
         Assert.Equal(GameState.Playing, e.State);
         e.HardDrop();

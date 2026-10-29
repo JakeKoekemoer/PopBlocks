@@ -120,7 +120,7 @@ public class AchievementV11Tests
         var run = new RunStats();
         run.Attach(e);
         e.Start(GameSetup.Classic);
-        int floor = GameConfig.TotalRows - 1;
+        int floor = GameConfig.DefaultBoardRows + GameConfig.HiddenRows - 1;
         e.Board[3, floor] = CellColour.Yellow;
         for (int h = 0; h < 3; h++) e.Board[2, floor - h] = CellColour.Coral;
         for (int h = 0; h < 4; h++) e.Board[4, floor - h] = CellColour.Lime;
@@ -140,7 +140,7 @@ public class AchievementV11Tests
         var run = new RunStats();
         run.Attach(e);
         e.Start(GameSetup.Classic);
-        int floor = GameConfig.TotalRows - 1;
+        int floor = GameConfig.DefaultBoardRows + GameConfig.HiddenRows - 1;
         e.PlaceOrb(3, floor - 1, timer: 2);   // the next lock takes it to 1; the pop that breaks it comes with that lock
         for (int h = 0; h < 3; h++) e.Board[5, floor - h] = CellColour.Coral;
         Story.MoveTo(e, 5);

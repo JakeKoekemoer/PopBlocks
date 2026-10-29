@@ -94,7 +94,7 @@ public class ClassicGoldEngineTests
         Assert.Equal(g.Cells * SeedingConfig.ClassicTenthsPerBlock(1), g.GoldTenths);
         Assert.Equal(1, g.Multiplier);
         Assert.InRange(g.CentreX, 0f, GameConfig.Columns);
-        Assert.InRange(g.CentreY, GameConfig.HiddenRows, GameConfig.TotalRows);
+        Assert.InRange(g.CentreY, GameConfig.HiddenRows, engine.Board.Height);
     }
 
     [Fact]

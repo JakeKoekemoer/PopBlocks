@@ -307,7 +307,8 @@ public sealed class GameEngine
         _orbTimer = _piecesSinceOrb = _orbRolls = 0;
         _orbEver = _orbBrokeThisResolution = false;
         _orbSeed = Levels.SeedMix.Mix32(level?.PieceSeed ?? setup.ClassicSeed ?? 0, 0x0B0B);
-        int wantedHeight = setup.Rules.BoardRows + GameConfig.HiddenRows;
+        // A lesson is always the 16-row board, so nothing scrolls while someone is learning to play.
+        int wantedHeight = (setup.IsLesson ? GameConfig.VisibleRows : setup.Rules.BoardRows) + GameConfig.HiddenRows;
         if (Board.Height != wantedHeight && RuleFeatures.TallBoards) Board = new Board(Board.Width, wantedHeight);
         Board.Clear();
         CameraBottom = 0;

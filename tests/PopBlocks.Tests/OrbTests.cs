@@ -10,7 +10,7 @@ namespace PopBlocks.Tests;
 /// <summary>v1.1 Orbs: a 2x2 unit that breaks into a cross of cleared blocks, or cracks the blocks round it when its timer ends.</summary>
 public class OrbTests
 {
-    private const int Floor = GameConfig.TotalRows - 1;
+    private const int Floor = GameConfig.DefaultBoardRows + GameConfig.HiddenRows - 1;
     private static readonly string[] Window = { "CRYP", "RYPC", "YPCR", "PCRY" };   // 16 blocks, 4 colours, none with a same-colour neighbour
 
     private static GameEngine Endless(int seed = 1, GameRules? rules = null)

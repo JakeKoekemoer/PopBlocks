@@ -11,6 +11,9 @@ public class GameEngineTests
 
     private static GameEngine NewEngine(params Piece[] script) => new(new ScriptedGenerator(script));
 
+    /// <summary>These tests are about the rules on the standard 16-row board (the default is taller now; see TallBoardTests).</summary>
+    private static readonly GameSetup StandardBoard = GameSetup.Classic with { Rules = GameRules.Default with { BoardRows = GameConfig.VisibleRows } };
+
     // ---------------------------------------------------------------- lifecycle
 
     [Fact]
@@ -25,7 +28,7 @@ public class GameEngineTests
     public void Start_spawns_a_piece_and_a_preview()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         Assert.Equal(GameState.Playing, engine.State);
         Assert.NotNull(engine.CurrentPiece);
         Assert.NotNull(engine.NextPiece);
@@ -35,7 +38,7 @@ public class GameEngineTests
     public void Piece_falls_one_row_per_tick()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         int y = engine.CurrentPiece!.Y;
         engine.Tick();
         Assert.Equal(y + 1, engine.CurrentPiece!.Y);
@@ -45,7 +48,7 @@ public class GameEngineTests
     public void Piece_moves_and_rotates_without_corrupting_the_board()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         Assert.True(engine.MoveLeft());
         Assert.True(engine.MoveRight());
         engine.Tick();
@@ -57,7 +60,7 @@ public class GameEngineTests
     public void Piece_cannot_leave_the_board_sideways()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         for (int i = 0; i < 20; i++) engine.MoveLeft();
         foreach (var c in engine.CurrentPiece!.BoardCells())
             Assert.InRange(c.X, 0, GameConfig.Columns - 1);
@@ -72,7 +75,7 @@ public class GameEngineTests
     public void Piece_locks_into_the_board_when_it_can_no_longer_descend()
     {
         var engine = NewEngine(Pieces.Pair(CellColour.Cyan, CellColour.Coral));
-        engine.Start();
+        engine.Start(StandardBoard);
 
         int guard = 0;
         while (engine.CurrentPiece is { } p && p.Y < engine.Board.Height - 1 && guard++ < 100)
@@ -91,7 +94,7 @@ public class GameEngineTests
     public void Hard_drop_locks_immediately_and_scores_the_distance()
     {
         var engine = NewEngine(Pieces.Pair(L, CellColour.Cyan));
-        engine.Start();
+        engine.Start(StandardBoard);
         int distance = CollisionDetector.HardDropDistance(engine.Board, engine.CurrentPiece!);
 
         Assert.True(engine.HardDrop());
@@ -103,7 +106,7 @@ public class GameEngineTests
     public void Soft_drop_moves_one_row_and_scores_a_point()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         int y = engine.CurrentPiece!.Y;
         Assert.True(engine.SoftDrop());
         Assert.Equal(y + 1, engine.CurrentPiece!.Y);
@@ -116,7 +119,7 @@ public class GameEngineTests
     public void Placing_a_piece_that_completes_four_bursts_them_and_scores()
     {
         var engine = NewEngine(Pieces.Pair(CellColour.Cyan, CellColour.Cyan));
-        engine.Start();
+        engine.Start(StandardBoard);
         // Two cyan already sit at the bottom; the falling pair lands beside them to make four in a row.
         int bottom = engine.Board.Height - 1;
         engine.Board[5, bottom] = CellColour.Cyan;
@@ -137,7 +140,7 @@ public class GameEngineTests
         // Lime pair lands harmlessly on top of column 3/4. The board already holds a cyan group
         // that bursts first; the coral cells above then fall into a second group.
         var engine = NewEngine(Pieces.Pair(L, L));
-        engine.Start();
+        engine.Start(StandardBoard);
         var seeded = Board.FromRows(new[]
         {
             "...R....",
@@ -175,7 +178,7 @@ public class GameEngineTests
     public void Chain_total_score_includes_every_wave_and_the_drop()
     {
         var engine = NewEngine(Pieces.Pair(L, L));
-        engine.Start();
+        engine.Start(StandardBoard);
         CopyInto(engine.Board, Board.FromRows(new[] { "...R....", "RRR.....", "CCCC...." }));
         int distance = CollisionDetector.HardDropDistance(engine.Board, engine.CurrentPiece!);
 
@@ -189,7 +192,7 @@ public class GameEngineTests
     public void Simultaneous_groups_are_cleared_in_one_wave()
     {
         var engine = NewEngine(Pieces.Pair(L, L));
-        engine.Start();
+        engine.Start(StandardBoard);
         CopyInto(engine.Board, Board.FromRows(new[] { "CCCC....", "....RRRR" }));
         var waves = new List<BurstWave>();
         engine.WaveResolved += waves.Add;
@@ -208,7 +211,7 @@ public class GameEngineTests
     public void Pausing_stops_timed_gameplay_and_resuming_restores_it()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         int y = engine.CurrentPiece!.Y;
 
         engine.Pause();
@@ -229,7 +232,7 @@ public class GameEngineTests
     public void Pausing_during_a_chain_resumes_into_the_chain()
     {
         var engine = NewEngine(Pieces.Pair(L, L));
-        engine.Start();
+        engine.Start(StandardBoard);
         CopyInto(engine.Board, Board.FromRows(new[] { "...R....", "RRR.....", "CCCC...." }));
         engine.HardDrop();
         Assert.Equal(GameState.ResolvingBursts, engine.State);
@@ -254,7 +257,7 @@ public class GameEngineTests
     public void Restart_resets_the_game()
     {
         var engine = NewEngine(Pieces.Pair(L, CellColour.Cyan));
-        engine.Start();
+        engine.Start(StandardBoard);
         engine.HardDrop();
         Assert.True(engine.Score > 0);
         Assert.True(engine.Board.CountOccupied() > 0);
@@ -272,7 +275,7 @@ public class GameEngineTests
     public void Restart_works_after_game_over()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         FillSpawnArea(engine);
         engine.HardDrop();
         Assert.Equal(GameState.GameOver, engine.State);
@@ -286,7 +289,7 @@ public class GameEngineTests
     public void Game_over_when_a_piece_locks_in_the_hidden_rows()
     {
         var engine = NewEngine(Pieces.Pair(CellColour.Cyan, CellColour.Coral));
-        engine.Start();
+        engine.Start(StandardBoard);
         // A cell directly under the spawn position stops the piece where it appeared.
         engine.Board[3, 2] = CellColour.Yellow;
 
@@ -301,7 +304,7 @@ public class GameEngineTests
     {
         // Current piece is a pair; the next is a square whose spawn cells will be blocked.
         var engine = NewEngine(Pieces.Pair(CellColour.Cyan, CellColour.Coral), Pieces.Square(CellColour.Purple));
-        engine.Start();
+        engine.Start(StandardBoard);
         // Block a visible spawn cell (row 2, x = 3 or 4) away from where the current pair will land.
         engine.Board[4, 2] = CellColour.Yellow;
         // Land the current pair elsewhere on the floor.
@@ -315,7 +318,7 @@ public class GameEngineTests
     public void Game_over_state_ignores_input_and_ticks()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         FillSpawnArea(engine);
         engine.HardDrop();
         Assert.Equal(GameState.GameOver, engine.State);
@@ -330,7 +333,7 @@ public class GameEngineTests
     public void A_new_game_starts_at_level_one_and_the_initial_pace()
     {
         var engine = NewEngine();
-        engine.Start();
+        engine.Start(StandardBoard);
         Assert.Equal(1, engine.Level);
         Assert.Equal(GameConfig.InitialFallIntervalMs, engine.FallIntervalMs);
         Assert.Equal(engine.FallIntervalMs, engine.TimerIntervalMs);
@@ -340,7 +343,7 @@ public class GameEngineTests
     public void Big_clears_raise_the_level_and_speed_up_the_fall()
     {
         var engine = NewEngine(Pieces.Pair(L, L));
-        engine.Start();
+        engine.Start(StandardBoard);
         // Six full rows of one colour form a single 48-cell group, worth far more than one level step.
         const int rows = 6;
         for (int y = 0; y < rows; y++)
@@ -361,7 +364,7 @@ public class GameEngineTests
         var engine = NewEngine();
         int count = 0;
         engine.Changed += () => count++;
-        engine.Start();
+        engine.Start(StandardBoard);
         engine.Tick();
         engine.Pause();
         Assert.True(count >= 3);

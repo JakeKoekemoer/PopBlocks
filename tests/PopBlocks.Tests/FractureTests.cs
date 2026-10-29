@@ -10,7 +10,7 @@ namespace PopBlocks.Tests;
 /// <summary>v1.1 cracked blocks: a pop that hits a block from two sides cracks it; a third crack breaks it.</summary>
 public class FractureTests
 {
-    private const int Floor = GameConfig.TotalRows - 1;
+    private const int Floor = GameConfig.DefaultBoardRows + GameConfig.HiddenRows - 1;
 
     /// <summary>
     /// A game with a target block (yellow) on the floor at column 3, a column of three coral blocks at column 2 (a fourth is
@@ -122,7 +122,7 @@ public class FractureTests
     [Fact]
     public void Cracks_travel_with_a_falling_block()
     {
-        var board = new Board();
+        var board = new Board(GameConfig.Columns, Floor + 1);
         board[2, Floor] = CellColour.Yellow;
         board[2, Floor - 1] = CellColour.Coral;
         board.SetFracture(2, Floor - 1, 2);
@@ -136,11 +136,11 @@ public class FractureTests
     [Fact]
     public void Cracks_survive_clone_and_copy_and_a_new_block_starts_intact()
     {
-        var board = new Board();
+        var board = new Board(GameConfig.Columns, Floor + 1);
         board[1, Floor] = CellColour.Lime;
         board.SetFracture(1, Floor, 1);
         Assert.Equal(1, board.Clone().FractureAt(1, Floor));
-        var other = new Board();
+        var other = new Board(GameConfig.Columns, Floor + 1);
         other.CopyFrom(board);
         Assert.Equal(1, other.FractureAt(1, Floor));
         board[1, Floor] = CellColour.Coral;   // writing a block clears its cracks
