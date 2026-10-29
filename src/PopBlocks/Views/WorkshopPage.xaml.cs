@@ -73,19 +73,7 @@ public partial class WorkshopPage : ContentPage
             bool lit = _workshop.IsLit(station);
             bool selected = station.Tab == _tab;
 
-            var tab = new Button
-            {
-                Text = station.Name.ToUpperInvariant(),
-                FontSize = 11,
-                FontAttributes = FontAttributes.Bold,
-                CharacterSpacing = 0.7,
-                CornerRadius = 22,
-                HeightRequest = 44,
-                Padding = new Thickness(2, 0),
-                MinimumWidthRequest = 0,
-                BackgroundColor = selected ? Ui.Res("Accent", Colors.Cyan) : Colors.Transparent,
-                TextColor = selected ? Ui.Res("AccentText", Colors.Black) : Ui.Res("TextSecondary", Colors.Gray),
-            };
+            var tab = Ui.TabButton(station.Name.ToUpperInvariant(), selected);
             var chosen = station.Tab;
             tab.Clicked += (_, _) =>
             {

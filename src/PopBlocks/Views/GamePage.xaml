@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:PopBlocks.ViewModels"
+             xmlns:views="clr-namespace:PopBlocks.Views"
              xmlns:levels="clr-namespace:PopBlocks.Engine.Levels;assembly=PopBlocks.Engine"
              xmlns:story="clr-namespace:PopBlocks.Engine.Story;assembly=PopBlocks.Engine"
              x:Class="PopBlocks.Views.GamePage"
@@ -404,13 +405,13 @@
                                 Style="{StaticResource PrimaryButton}"
                                 MinimumWidthRequest="0"
                                 Command="{Binding NextLevelCommand}" />
-                        <Button Grid.Column="1"
-                                Text="SHOP"
-                                Style="{StaticResource SecondaryButton}"
-                                MinimumWidthRequest="0"
-                                IsVisible="{Binding ShowShop}"
-                                Command="{Binding ShopCommand}"
-                                SemanticProperties.Description="Open the workshop" />
+                        <views:IconButton Grid.Column="1"
+                                          Text="SHOP"
+                                          Icon="Cart"
+                                          WidthRequest="130"
+                                          IsVisible="{Binding ShowShop}"
+                                          Command="{Binding ShopCommand}"
+                                          SemanticProperties.Description="Open the workshop" />
                     </Grid>
                     <Button Text="{Binding RetryText}"
                             Style="{StaticResource PrimaryButton}"
@@ -427,16 +428,20 @@
                                FontSize="12"
                                HorizontalTextAlignment="Center" />
                     </VerticalStackLayout>
-                    <Button Text="SHOP"
-                            Style="{StaticResource GhostButton}"
-                            IsVisible="{Binding ShowShopOnFailed}"
-                            Command="{Binding ShopCommand}"
-                            SemanticProperties.Description="Open the workshop" />
-                    <Button Text="SHARE"
-                            Style="{StaticResource GhostButton}"
-                            IsVisible="{Binding ShowShare}"
-                            Command="{Binding ShareCommand}"
-                            SemanticProperties.Description="Share this result" />
+                    <views:IconButton Text="SHOP"
+                                      Icon="Cart"
+                                      Kind="Ghost"
+                                      HorizontalOptions="Center"
+                                      IsVisible="{Binding ShowShopOnFailed}"
+                                      Command="{Binding ShopCommand}"
+                                      SemanticProperties.Description="Open the workshop" />
+                    <views:IconButton Text="SHARE"
+                                      Icon="Share"
+                                      Kind="Ghost"
+                                      HorizontalOptions="Center"
+                                      IsVisible="{Binding ShowShare}"
+                                      Command="{Binding ShareCommand}"
+                                      SemanticProperties.Description="Share this result" />
 
                     <!-- Reroll: a new level for gold. The price falls with each failure and is free from the tenth. Plain words only:
                          no countdown, no timer, no urgent colour. The "?" appears only when the player cannot pay yet. -->

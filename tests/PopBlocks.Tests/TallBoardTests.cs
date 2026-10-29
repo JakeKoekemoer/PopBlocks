@@ -32,11 +32,13 @@ public class TallBoardTests
     [InlineData(16, 16, 0)]
     [InlineData(5, 24, 0)]      // a low stack leaves the camera at the floor
     [InlineData(8, 24, 0)]
-    [InlineData(12, 24, 4)]     // the top of the stack sits in the middle of the screen
+    [InlineData(12, 24, 0)]     // the screen shows the stack's top 12 rows without moving
+    [InlineData(13, 24, 1)]     // above that it follows, keeping 4 rows of headroom
+    [InlineData(16, 24, 4)]
     [InlineData(20, 24, 8)]     // never higher than rows - viewport
     [InlineData(24, 24, 8)]
     [InlineData(30, 32, 16)]
-    public void The_camera_keeps_the_top_of_the_stack_in_the_middle_between_the_floor_and_the_ceiling(int stackTop, int rows, int expected) =>
+    public void The_camera_waits_until_the_stack_is_twelve_rows_high_then_keeps_four_rows_of_headroom(int stackTop, int rows, int expected) =>
         Assert.Equal(expected, GameEngine.CameraFor(stackTop, rows));
 
     [Fact]

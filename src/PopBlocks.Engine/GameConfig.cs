@@ -16,6 +16,14 @@ public static class GameConfig
     /// <summary>Rows the screen shows at once.</summary>
     public const int ViewportRows = VisibleRows;
 
+    /// <summary>
+    /// Empty rows the camera keeps above the top of the stack. The screen scrolls only once the stack is taller than
+    /// <c>ViewportRows - CameraHeadroomRows</c> (12 rows), and then keeps the top of the stack that far below the top of the screen,
+    /// so the player always sees the stack's top three quarters and still has room above it to steer a piece. (Half the screen,
+    /// 8 rows, scrolled too early and hid too much of the stack.)
+    /// </summary>
+    public const int CameraHeadroomRows = 4;
+
     /// <summary>The standard board height and the shortest and tallest a player can ask for (rows, not counting the hidden spawn rows).</summary>
     public const int MinBoardRows = 16;
     public const int MaxBoardRows = 32;

@@ -263,6 +263,7 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
             case CosmeticSlot.Skin:
                 return new GraphicsView
                 {
+                    InputTransparent = true,   // decoration: a drag that starts on it must still scroll the page
                     Drawable = new SkinPreviewDrawable
                     {
                         Skin = CosmeticCatalog.SkinOf(item.Id),
@@ -277,6 +278,7 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
                 // The tile plays the real burst on a loop, but only while it is on screen.
                 var view = new GraphicsView
                 {
+                    InputTransparent = true,   // decoration: a drag that starts on it must still scroll the page
                     Drawable = new BurstPreviewDrawable { Style = CosmeticCatalog.BurstOf(item.Id) },
                     HeightRequest = 64,
                     Margin = new Thickness(0, 4, 0, 0),
@@ -298,11 +300,12 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
             }
 
             case CosmeticSlot.Board:
-                return new GraphicsView { Drawable = new BoardPreviewDrawable { BoardId = item.Id }, HeightRequest = 64, Margin = new Thickness(0, 4, 0, 0) };
+                return new GraphicsView { InputTransparent = true, Drawable = new BoardPreviewDrawable { BoardId = item.Id }, HeightRequest = 64, Margin = new Thickness(0, 4, 0, 0) };
 
             case CosmeticSlot.Accessory:
                 return new GraphicsView
                 {
+                    InputTransparent = true,   // decoration: a drag that starts on it must still scroll the page
                     Drawable = new PipDrawable { Brightness = 0.9f, Mood = PipMood.Happy, Accessory = CosmeticCatalog.AccessoryOf(item.Id) },
                     HeightRequest = 80,
                     WidthRequest = 80,

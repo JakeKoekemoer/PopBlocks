@@ -148,7 +148,7 @@ public partial class MainPage : ContentPage
         string place = RegionCatalog.For(next)?.Title ?? RegionCatalog.BeyondTitle;
         NextLevelDetail.Text = _progress.HighestCleared == 0
             ? "Start here."
-            : $"{place} Â· {StoryConfig.Name(tier)} Â· {_progress.HighestCleared} cleared";
+            : $"{place} · {StoryConfig.Name(tier)} · {_progress.HighestCleared} cleared";
         PlayButton.Text = "CONTINUE";
 
         // The card shows the next level's region as it is now. Past the campaign it is the Heart, restored.

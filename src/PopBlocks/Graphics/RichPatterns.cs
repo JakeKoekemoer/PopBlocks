@@ -36,8 +36,16 @@ public static class PatternCache
 
         if (image is not null)
         {
-            canvas.DrawImage(image, left, top, span, span);
-            return;
+            try
+            {
+                canvas.DrawImage(image, left, top, span, span);
+                return;
+            }
+            catch (Exception e)
+            {
+                Diagnostics.Error("PatternCache.Draw", e);
+                Cache.Remove(key);
+            }
         }
 
         canvas.SaveState();
@@ -59,7 +67,8 @@ public static class PatternCache
         {
             float density = (float)Math.Clamp(DeviceDisplay.Current.MainDisplayInfo.Density, 1.0, 3.0);
             int pixels = (int)(px * density);
-            using var context = new PlatformBitmapExportContext(pixels, pixels, density);
+            // disposeBitmap: false: the cached image outlives this context (see CachedSceneDrawable).
+            using var context = new PlatformBitmapExportContext(pixels, pixels, density, disposeBitmap: false);
             context.Canvas.Scale(density, density);
             RichPatterns.Paint(context.Canvas, pattern, colour, px);
             return context.Image;

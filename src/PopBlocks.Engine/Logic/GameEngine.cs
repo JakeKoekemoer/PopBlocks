@@ -52,8 +52,9 @@ public sealed class GameEngine
     public Board Board { get; private set; }
 
     // ---- The camera (tall boards) ----
-    // The screen shows ViewportRows of the board. The camera sits so that the top of the stack is in the middle of the
-    // screen, between the floor and the highest it can go. It is worked out only when the board has settled, just before a
+    // The screen shows ViewportRows of the board. The camera stays at the floor until the stack is taller than
+    // ViewportRows - CameraHeadroomRows, then keeps the top of the stack CameraHeadroomRows below the top of the screen,
+    // between the floor and the highest it can go. It is worked out only when the board has settled, just before a
     // piece spawns, never while a piece falls, and it depends on nothing but the board. On the standard 16-row board it is
     // always at the floor, so nothing ever scrolls.
 
@@ -81,9 +82,9 @@ public sealed class GameEngine
     /// <summary>The board row (y) at the top of the screen. Pieces spawn just above it.</summary>
     public int ViewTopRow => Board.Height - CameraBottom - GameConfig.ViewportRows;
 
-    /// <summary>Camera rule: <c>clamp(stackTop - ViewportRows / 2, 0, Rows - ViewportRows)</c>.</summary>
+    /// <summary>Camera rule: <c>clamp(stackTop - (ViewportRows - CameraHeadroomRows), 0, Rows - ViewportRows)</c>.</summary>
     public static int CameraFor(int stackTop, int boardRows) =>
-        Math.Clamp(stackTop - GameConfig.ViewportRows / 2, 0, Math.Max(0, boardRows - GameConfig.ViewportRows));
+        Math.Clamp(stackTop - (GameConfig.ViewportRows - GameConfig.CameraHeadroomRows), 0, Math.Max(0, boardRows - GameConfig.ViewportRows));
 
     private void UpdateCamera()
     {

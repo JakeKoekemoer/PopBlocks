@@ -85,19 +85,7 @@ public partial class SettingsPage : ContentPage
         for (int i = 0; i < TabNames.Length; i++)
         {
             bool selected = i == _tab;
-            var tab = new Button
-            {
-                Text = TabNames[i],
-                FontSize = 11,
-                FontAttributes = FontAttributes.Bold,
-                CharacterSpacing = 0.7,
-                CornerRadius = 22,
-                HeightRequest = 44,
-                Padding = new Thickness(2, 0),
-                MinimumWidthRequest = 0,
-                BackgroundColor = selected ? Ui.Res("Accent", Colors.Cyan) : Colors.Transparent,
-                TextColor = selected ? Ui.Res("AccentText", Colors.Black) : Ui.Res("TextSecondary", Colors.Gray),
-            };
+            var tab = Ui.TabButton(TabNames[i], selected);
             SemanticProperties.SetDescription(tab, $"{TabNames[i]} tab{(selected ? ", selected" : "")}");
             int chosen = i;
             tab.Clicked += (_, _) =>

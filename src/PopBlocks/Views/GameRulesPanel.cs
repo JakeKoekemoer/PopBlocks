@@ -159,22 +159,25 @@ public sealed class GameRulesPanel : ContentView
 
     private View ColourCard(GameRules rules)
     {
-        var row = new HorizontalStackLayout { Spacing = 10, HorizontalOptions = LayoutOptions.Start };
-        foreach (var colour in new[] { CellColour.Cyan, CellColour.Coral, CellColour.Yellow, CellColour.Purple, CellColour.Lime })
+        // Five equal columns, so all five colours always fit whatever the phone's width. (A row of fixed 54-unit chips ran off the
+        // edge of the card on narrower phones, and the last colours could not be reached.) The chips are tapped through
+        // Ui.TapTarget so that a drag that starts on one still scrolls the page.
+        var row = new Grid { ColumnSpacing = 6, HorizontalOptions = LayoutOptions.Fill };
+        var colours = new[] { CellColour.Cyan, CellColour.Coral, CellColour.Yellow, CellColour.Purple, CellColour.Lime };
+        for (int i = 0; i < colours.Length; i++) row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        for (int i = 0; i < colours.Length; i++)
         {
+            var colour = colours[i];
             bool on = rules.Allows(colour);
-            var chip = new GraphicsView { WidthRequest = 54, HeightRequest = 54, Drawable = new ColourChipDrawable { Colour = colour, On = on } };
-            SemanticProperties.SetDescription(chip, $"{Engine_ColourName(colour)} blocks, {(on ? "on" : "off")}. Tap to switch.");
-            var tap = new TapGestureRecognizer();
-            tap.Tapped += (_, _) =>
+            var chip = new GraphicsView { HeightRequest = 56, Drawable = new ColourChipDrawable { Colour = colour, On = on } };
+            var target = Ui.TapTarget(chip, () =>
             {
                 var next = rules.EnabledColours.ToList();
                 if (on) next.Remove(colour); else next.Add(colour);
                 if (next.Count < GameRules.MinColourCount) { SemanticScreenReader.Announce("At least three colours must stay on"); return; }
                 Change(r => r with { EnabledColours = next }, warn: true);
-            };
-            chip.GestureRecognizers.Add(tap);
-            row.Children.Add(chip);
+            }, $"{Engine_ColourName(colour)} blocks, {(on ? "on" : "off")}. Tap to switch.");
+            row.Add(target, i, 0);
         }
         return Ui.Card(new VerticalStackLayout
         {
@@ -182,7 +185,7 @@ public sealed class GameRulesPanel : ContentView
             Children =
             {
                 new Label { Text = $"Colours: {rules.ColourCount} of 5", FontAttributes = FontAttributes.Bold, TextColor = Ui.Res("TextPrimary", Colors.White) },
-                Ui.Body("Tap a colour to switch it on or off (three at least). Each one has its own symbol.", 12),
+                Ui.Body("Tap a colour to switch it on or off (three at least). Each one has its own symbol.", 13),
                 row,
             },
         });
@@ -205,10 +208,8 @@ public sealed class GameRulesPanel : ContentView
         foreach (var shape in ShapeCatalog.Classic.Concat(ShapeCatalog.Exotic))
         {
             bool on = rules.AllowsShape(shape.Name);
-            var chip = new GraphicsView { WidthRequest = 54, HeightRequest = 54, Margin = new Thickness(0, 0, 8, 8), Drawable = new ShapeChipDrawable { Shape = shape, On = on } };
-            SemanticProperties.SetDescription(chip, $"{shape.Name} piece, {(on ? "on" : "off")}. Tap to switch.");
-            var tap = new TapGestureRecognizer();
-            tap.Tapped += (_, _) =>
+            var chip = new GraphicsView { WidthRequest = 54, HeightRequest = 54, Drawable = new ShapeChipDrawable { Shape = shape, On = on } };
+            var target = Ui.TapTarget(chip, () =>
             {
                 var next = rules.EnabledShapes.ToList();
                 if (on) next.Remove(shape.Name); else next.Add(shape.Name);
@@ -219,9 +220,11 @@ public sealed class GameRulesPanel : ContentView
                     return;
                 }
                 Change(r => r with { EnabledShapes = next }, warn: true);
-            };
-            chip.GestureRecognizers.Add(tap);
-            wrap.Children.Add(chip);
+            }, $"{shape.Name} piece, {(on ? "on" : "off")}. Tap to switch.");
+            target.WidthRequest = 54;
+            target.HeightRequest = 54;
+            target.Margin = new Thickness(0, 0, 8, 8);
+            wrap.Children.Add(target);
         }
         return Ui.Card(new VerticalStackLayout
         {
@@ -229,7 +232,7 @@ public sealed class GameRulesPanel : ContentView
             Children =
             {
                 new Label { Text = $"Pieces: {rules.EnabledShapes.Count} of {ShapeCatalog.Classic.Length + ShapeCatalog.Exotic.Length}", FontAttributes = FontAttributes.Bold, TextColor = Ui.Res("TextPrimary", Colors.White) },
-                Ui.Body("Tap a shape to switch it on or off. Keep three at least, and one with four blocks or more.", 12),
+                Ui.Body("Tap a shape to switch it on or off. Keep three at least, and one with four blocks or more.", 13),
                 wrap,
             },
         });
@@ -239,10 +242,13 @@ public sealed class GameRulesPanel : ContentView
 
     private View ChoiceCard(string title, string help, IReadOnlyList<(string Text, bool Selected, Action Pick)> choices)
     {
-        var row = new HorizontalStackLayout { Spacing = 8 };
+        // The chips wrap onto a second line when they do not fit. (A horizontal scroll inside the page's own scroll made the page hard
+        // to scroll whenever a finger started on a row of chips.)
+        var row = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, Direction = Microsoft.Maui.Layouts.FlexDirection.Row };
         foreach (var (text, selected, pick) in choices)
         {
             var chip = Ui.Chip(text, selected);
+            chip.Margin = new Thickness(0, 0, 8, 8);
             SemanticProperties.SetDescription(chip, $"{title}: {text}{(selected ? ", selected" : "")}");
             chip.Clicked += (_, _) => pick();
             row.Children.Add(chip);
@@ -253,8 +259,8 @@ public sealed class GameRulesPanel : ContentView
             Children =
             {
                 new Label { Text = title, FontAttributes = FontAttributes.Bold, TextColor = Ui.Res("TextPrimary", Colors.White) },
-                Ui.Body(help, 12),
-                new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = row, HorizontalScrollBarVisibility = ScrollBarVisibility.Never },
+                Ui.Body(help, 13),
+                row,
             },
         });
     }
@@ -268,7 +274,7 @@ public sealed class GameRulesPanel : ContentView
         var texts = new VerticalStackLayout
         {
             VerticalOptions = LayoutOptions.Center,
-            Children = { new Label { Text = title, FontAttributes = FontAttributes.Bold, TextColor = Ui.Res("TextPrimary", Colors.White) }, Ui.Body(help, 12) },
+            Children = { new Label { Text = title, FontAttributes = FontAttributes.Bold, TextColor = Ui.Res("TextPrimary", Colors.White) }, Ui.Body(help, 13) },
         };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitionCollection(new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)), ColumnSpacing = 10 };
         grid.Add(texts, 0);

@@ -16,7 +16,7 @@
         <ScrollView Grid.Row="1">
             <VerticalStackLayout Spacing="18" Padding="4,8,4,32">
 
-                <GraphicsView x:Name="LogoView"
+                <GraphicsView x:Name="LogoView" InputTransparent="True"
                               HeightRequest="56"
                               WidthRequest="280"
                               HorizontalOptions="Center" />

@@ -119,7 +119,7 @@ From level 36 of the Story (and always in Endless, unless switched off in the pl
 
 ### Tall boards (v1.1)
 
-The standard board is 24 rows tall (16 to 32 in the player's own rules; lessons are always 16), so the board is taller than the screen and the view follows the stack: the top of the stack is kept in the middle of the screen, the view drops back as the stack is cleared, and a piece always appears at the top of what you can see. Losing is still a block that reaches the very top of the board, or a piece that has no room to appear. Boards taller than 24 are easier, so they pay half gold.
+The standard board is 24 rows tall (16 to 32 in the player's own rules; lessons are always 16), so the board is taller than the screen and the view follows the stack: the screen stays on the floor until the stack is 12 rows high and then keeps 4 empty rows above the top of the stack (`GameConfig.CameraHeadroomRows`), the view drops back as the stack is cleared, and a piece always appears at the top of what you can see. Losing is still a block that reaches the very top of the board, or a piece that has no room to appear. Boards taller than 24 are easier, so they pay half gold.
 
 ### Your own rules (v1.1)
 

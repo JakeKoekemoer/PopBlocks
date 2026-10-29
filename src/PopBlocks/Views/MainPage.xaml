@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:views="clr-namespace:PopBlocks.Views"
              x:Class="PopBlocks.Views.MainPage"
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
@@ -12,7 +13,7 @@
                          VerticalOptions="Center"
                          Padding="32,0"
                          Spacing="18">
-        <GraphicsView x:Name="StartLogoView"
+        <GraphicsView x:Name="StartLogoView" InputTransparent="True"
                       HeightRequest="64"
                       WidthRequest="320"
                       HorizontalOptions="Center" />
@@ -66,7 +67,7 @@
                     <RoundRectangle CornerRadius="20" />
                 </Border.StrokeShape>
                 <HorizontalStackLayout Spacing="8">
-                    <GraphicsView x:Name="CoinView" WidthRequest="22" HeightRequest="22" VerticalOptions="Center" />
+                    <GraphicsView x:Name="CoinView" InputTransparent="True" WidthRequest="22" HeightRequest="22" VerticalOptions="Center" />
                     <Label x:Name="GoldLabel"
                            FontSize="16"
                            FontAttributes="Bold"
@@ -75,7 +76,7 @@
                 </HorizontalStackLayout>
             </Border>
 
-            <GraphicsView x:Name="LogoView"
+            <GraphicsView x:Name="LogoView" InputTransparent="True"
                           HeightRequest="64"
                           WidthRequest="320"
                           HorizontalOptions="Center"
@@ -122,25 +123,19 @@
                 </Grid>
             </Border>
 
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
-                <Button Grid.Row="0" Grid.Column="0" Text="MAP" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnMapClicked" />
-                <Button Grid.Row="0" Grid.Column="1" Text="ENDLESS" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnClassicClicked" />
-                <Button Grid.Row="1" Grid.Column="0" Text="WORKSHOP" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnShopClicked" />
-                <Button Grid.Row="1" Grid.Column="1" Text="STORY BOOK" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnArchiveClicked" />
-                <Button Grid.Row="2" Grid.Column="0" Text="TUTORIAL" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnTutorialClicked" />
-                <Button Grid.Row="2" Grid.Column="1" Text="ABOUT" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnAboutClicked" />
-                <!-- Settings: pop effects, landing guide, motion, sound, board style, name and saved data all live on their own page -->
-                <Button Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Text="SETTINGS" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnSettingsClicked" />
-                <Button Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Text="SHARE" Style="{StaticResource SecondaryButton}"
-                        MinimumWidthRequest="0" Clicked="OnShareClicked"
-                        SemanticProperties.Description="Share PopBlocks with a friend" />
+            <!-- Settings sits right under CONTINUE: pop effects, landing guide, motion, sound, board style, rules, name and saved data
+                 all live on their own page. -->
+            <views:IconButton Icon="Settings" Text="SETTINGS" Clicked="OnSettingsClicked" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="12">
+                <views:IconButton Grid.Row="0" Grid.Column="0" Icon="Map" Text="MAP" Clicked="OnMapClicked" />
+                <views:IconButton Grid.Row="0" Grid.Column="1" Icon="Infinity" Text="ENDLESS" Clicked="OnClassicClicked" />
+                <views:IconButton Grid.Row="1" Grid.Column="0" Icon="Cart" Text="WORKSHOP" Clicked="OnShopClicked" />
+                <views:IconButton Grid.Row="1" Grid.Column="1" Icon="Book" Text="STORY BOOK" Clicked="OnArchiveClicked" />
+                <views:IconButton Grid.Row="2" Grid.Column="0" Icon="Help" Text="TUTORIAL" Clicked="OnTutorialClicked" />
+                <views:IconButton Grid.Row="2" Grid.Column="1" Icon="Info" Text="ABOUT" Clicked="OnAboutClicked" />
+                <views:IconButton Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Icon="Share" Text="SHARE" Clicked="OnShareClicked"
+                                  SemanticProperties.Description="Share PopBlocks with a friend" />
             </Grid>
 
 
