@@ -68,6 +68,7 @@ public partial class GamePage : ContentPage
 
         _vm.Redraw += OnRedraw;
         _vm.WaveResolved += OnWaveResolved;
+        _vm.OrbHappened += OnOrbHappened;
         _vm.GameStarted += OnGameStarted;
         _vm.Toast += OnToast;
         _vm.Banner += OnBanner;
@@ -201,6 +202,8 @@ public partial class GamePage : ContentPage
         _board.Effects.ReducedMotion = _settings.ReducedMotion;
         _board.Effects.Flair = _shop.FlairLevel;
         _board.Floaters.ReducedMotion = _settings.ReducedMotion;
+        _board.OrbFx.ReducedMotion = _settings.ReducedMotion;
+        _board.OrbFx.Enabled = _settings.BlastEffects;
         _board.Floaters.Clear();
         _board.ResetCamera();
         this.AbortAnimation("GoldCountUp");
@@ -248,6 +251,15 @@ public partial class GamePage : ContentPage
         if (_board.NeedsAnimation(Environment.TickCount64))
             StartAnimation();
         UpdateAmbient();
+    }
+
+    private void OnOrbHappened(GameEvent e, int x, int y)
+    {
+        long now = Environment.TickCount64;
+        if (e == GameEvent.OrbSpawned) _board.OrbFx.Appeared(x, y, now);
+        else if (e == GameEvent.OrbBroken) _board.OrbFx.Broke(x, y, now);
+        else _board.OrbFx.Corrupted(x, y, now);
+        StartAnimation();
     }
 
     private void OnWaveResolved(BurstWave wave)

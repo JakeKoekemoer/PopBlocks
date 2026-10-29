@@ -343,4 +343,22 @@ public class OrbTests
             Assert.Equal(before, board.CountOccupied());
         }
     }
+
+    [Fact]
+    public void The_engine_says_where_the_orb_was_when_it_appeared_broke_and_ran_out()
+    {
+        var e = new GameEngine(new ScriptedGenerator(Piece.AtSpawn(new[] { new BlockCell(0, 0, CellColour.Coral) })));
+        var seen = new List<(GameEvent, (int X, int Y)?)>();
+        e.EventRaised += ev => { if (ev is GameEvent.OrbSpawned or GameEvent.OrbBroken or GameEvent.OrbCorrupted) seen.Add((ev, e.OrbEventAt)); };
+        e.Start(GameSetup.Classic);
+        Assert.True(e.PlaceOrb(3, Floor - 1, timer: 8));
+        Assert.Equal((GameEvent.OrbSpawned, e.OrbAt), seen[^1]);
+
+        for (int h = 0; h < 3; h++) e.Board[5, Floor - h] = CellColour.Coral;
+        Story.MoveTo(e, 5);
+        e.HardDrop();
+        Story.Settle(e);
+        Assert.Equal(GameEvent.OrbBroken, seen[^1].Item1);
+        Assert.Equal(3, seen[^1].Item2!.Value.X);
+    }
 }

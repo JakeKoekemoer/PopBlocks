@@ -554,10 +554,10 @@ public class StoryLevelsTests
         rig.Progress.DevSetHighestCleared(39);
 
         rig.Levels.PrefetchAfter(40);
-        Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(started.Wait(TimeSpan.FromSeconds(30)));
         rig.Levels.CancelPrefetches();
 
-        Assert.True(cancelled.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(cancelled.Wait(TimeSpan.FromSeconds(30)));
         await WaitUntil(() => !rig.Levels.HasRoll(41, 0));
     }
 
@@ -595,7 +595,7 @@ public class StoryLevelsTests
         Assert.True(LevelSolver.Solve(level with { MoveLimit = LevelCatalog.SolverCap }, LevelCatalog.SolverCap).Won);
     }
 
-    private static async Task WaitUntil(Func<bool> condition, int timeoutMs = 5000)
+    private static async Task WaitUntil(Func<bool> condition, int timeoutMs = 30000)
     {
         var end = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (!condition())

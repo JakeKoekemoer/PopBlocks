@@ -198,6 +198,9 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>A burst wave just resolved (for visual effects).</summary>
     public event Action<BurstWave>? WaveResolved;
 
+    /// <summary>The Orb appeared, broke or ran out of time, and where (its top-left cell): the board draws the effect that goes with it.</summary>
+    public event Action<GameEvent, int, int>? OrbHappened;
+
     /// <summary>A new game (or level) has just started: the view should refresh anything that depends on the level.</summary>
     public event Action? GameStarted;
 
@@ -1700,6 +1703,8 @@ public sealed class GameViewModel : ObservableObject
     private void OnGameEvent(GameEvent e)
     {
         PlaySound(e);
+        if (e is GameEvent.OrbSpawned or GameEvent.OrbBroken or GameEvent.OrbCorrupted && _game.OrbEventAt is { } at)
+            OrbHappened?.Invoke(e, at.X, at.Y);
         _coach?.Notify(e);
         if (e == GameEvent.PenaltyApplied)
             Toast?.Invoke($"No pop!  −{_game.LastPenalty}");
@@ -1723,9 +1728,21 @@ public sealed class GameViewModel : ObservableObject
                 _audio.Rotated();
                 break;
 
-            case GameEvent.OrbSpawned when !_settings.SeenOrbIntro:
+            case GameEvent.OrbSpawned:
+                _audio.OrbSound(OrbSoundKind.Appeared);
+                if (_settings.SeenOrbIntro) break;
                 _settings.SeenOrbIntro = true;
-                Toast?.Invoke("An Orb! Pop a block touching it to break it and clear its rows and columns for a big gold bonus. If its timer runs out, it cracks the blocks around it.");
+                Toast?.Invoke(_setup.IsStory
+                    ? "An Orb! Pop a block touching it to break it and clear its rows and columns. If its timer runs out, it cracks the blocks around it."
+                    : "An Orb! Pop a block touching it to break it and clear its rows and columns for a big gold bonus. If its timer runs out, it cracks the blocks around it.");
+                break;
+
+            case GameEvent.OrbBroken:
+                _audio.OrbSound(OrbSoundKind.Broke);
+                break;
+
+            case GameEvent.OrbCorrupted:
+                _audio.OrbSound(OrbSoundKind.Corrupted);
                 break;
 
             case GameEvent.HardDropped:

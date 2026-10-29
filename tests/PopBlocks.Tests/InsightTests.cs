@@ -182,4 +182,34 @@ public class InsightTests
         Assert.Contains(SaveKeys.InsightAlwaysOn, SaveKeys.All);
         Assert.Contains(SaveKeys.UpgradeInsight, SaveCode.Keys);
     }
+
+    // ------------------------------------------------------------------ the Orb and cracks
+
+    [Fact]
+    public void A_move_that_breaks_the_orb_is_preferred_to_one_that_only_pops_more()
+    {
+        // Three lime stand by the Orb (columns 3-4); a lime dropped on them pops four next to it and breaks it.
+        // Elsewhere a coral bar could pop five, but breaking the Orb comes first.
+        var board = new Board(8, 12);
+        board[0, 11] = CellColour.Coral; board[0, 10] = CellColour.Coral; board[0, 9] = CellColour.Coral; board[0, 8] = CellColour.Coral;
+        board[6, 11] = CellColour.Lime; board[6, 10] = CellColour.Lime; board[6, 9] = CellColour.Lime;
+        Assert.True(OrbSystem.TryPlace(board, 4, 10));   // the Orb at columns 4-5, rows 10-11, right beside the lime stack
+
+        var best = PlacementAdvisor.Best(Request(board, Pieces.Pair(CellColour.Lime, CellColour.Lime)))!;
+        Assert.True(best.BreaksOrb);
+        Assert.True(best.Popped >= 5);   // the lime group, and the Orb's cross on top of it
+    }
+
+    [Fact]
+    public void Cracks_are_played_out_when_the_game_cracks_blocks()
+    {
+        // Two coral groups pop either side of a yellow block: it cracks once. A third crack waiting on it breaks it with the wave.
+        var board = Board.FromRows(new[] { "........", "R.....L.", "R.....L.", "RY.....L" });
+        board.SetFracture(1, board.Height - 1, 2);
+        var cracked = new AdviceRequest(board, Pieces.Pair(CellColour.Coral, CellColour.Coral), null, 0, 4, Fracture: true);
+        var plain = new AdviceRequest(board, Pieces.Pair(CellColour.Coral, CellColour.Coral), null, 0, 4, Fracture: false);
+        var a = PlacementAdvisor.Best(cracked)!;
+        var b = PlacementAdvisor.Best(plain)!;
+        Assert.True(a.Popped >= b.Popped);   // the same pop, and one more block when the crack goes through
+    }
 }

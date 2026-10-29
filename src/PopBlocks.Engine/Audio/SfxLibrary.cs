@@ -63,6 +63,48 @@ public static class SfxLibrary
         },
     };
 
+    // ---- the Orb ------------------------------------------------------------------------------------------------------------
+
+    /// <summary>The Orb appears: three glass notes rising, soft enough not to startle in the middle of a move.</summary>
+    public static SfxCue OrbAppear { get; } = new()
+    {
+        Name = "orb-appear",
+        Notes = new[]
+        {
+            Note(Patches.GlassChime, 79f, 0, 260, 0.34f),
+            Note(Patches.GlassChime, 84f, 70, 260, 0.34f),
+            Note(Patches.GlassChime, 91f, 140, 380, 0.36f),
+            Note(Patches.PureTone, 103f, 140, 300, 0.08f, gain: 0.7f),
+        },
+    };
+
+    /// <summary>The Orb breaks: a bright glass burst over a low thump, the biggest sound the effects make.</summary>
+    public static SfxCue OrbBreak { get; } = new()
+    {
+        Name = "orb-break",
+        Notes = new[]
+        {
+            Noise(Patches.Whoosh, 0, 140, 5200f, 1800f, 0.42f, gain: 0.8f),
+            Note(Patches.Thump, 45f, 0, 170, 0.62f, transposes: false),
+            Note(Patches.GlassChime, 84f, 10, 480, 0.46f),
+            Note(Patches.GlassChime, 88f, 40, 480, 0.40f),
+            Note(Patches.GlassChime, 91f, 70, 520, 0.40f),
+            Note(Patches.GlassChime, 96f, 100, 560, 0.34f),
+        },
+    };
+
+    /// <summary>The Orb's timer runs out: a dull crack and a short fall, never a buzzer.</summary>
+    public static SfxCue OrbCorrupt { get; } = new()
+    {
+        Name = "orb-corrupt",
+        Notes = new[]
+        {
+            Note(Patches.Thump, 38f, 0, 220, 0.66f, transposes: false),
+            Note(Patches.WoodNote, 46f, 40, 220, 0.34f, gain: 0.8f),
+            Note(Patches.Bloop, 64f, 60, 300, 0.30f, glideSemis: -7f, glideMs: 220f),
+        },
+    };
+
     // ---- colour pops ---------------------------------------------------------------------------------------------------
 
     private static readonly InstrumentPatch[] PopPatches =
@@ -231,5 +273,6 @@ public static class SfxLibrary
     public static IReadOnlyList<SfxCue> Globals { get; } = new[]
     {
         Rotate, Place, HardDrop, ButtonTap, MenuOpen, MenuClose, Locked, SettingsChange, Pause, Resume, WardenReveal,
+        OrbAppear, OrbBreak, OrbCorrupt,
     };
 }

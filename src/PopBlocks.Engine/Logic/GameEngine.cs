@@ -571,6 +571,12 @@ public sealed class GameEngine
     /// <summary>The top-left cell of the Orb on the board, or null.</summary>
     public (int X, int Y)? OrbAt => OrbSystem.Find(Board);
 
+    /// <summary>
+    /// Where the Orb was (top-left cell) when it last appeared, broke or ran out of time, for the effects that go with those events.
+    /// It is set just before <see cref="GameEvent.OrbSpawned"/>, <see cref="GameEvent.OrbBroken"/> and <see cref="GameEvent.OrbCorrupted"/>.
+    /// </summary>
+    public (int X, int Y)? OrbEventAt { get; private set; }
+
     /// <summary>Pieces left before the Orb on the board cracks the blocks round it (0 when there is none).</summary>
     public int OrbTimerLeft => OrbSystem.Find(Board) is null ? 0 : _orbTimer;
 
@@ -612,6 +618,7 @@ public sealed class GameEngine
         _orbTimer = Rules.OrbTimer;
         _orbEver = true;
         _piecesSinceOrb = 0;
+        OrbEventAt = OrbSystem.Find(Board);
         Raise(GameEvent.OrbSpawned);
     }
 
@@ -626,6 +633,7 @@ public sealed class GameEngine
         _orbTimer = timer ?? Rules.OrbTimer;
         _orbEver = true;
         _piecesSinceOrb = 0;
+        OrbEventAt = OrbSystem.Find(Board);
         Raise(GameEvent.OrbSpawned);
         Notify();
         return true;
@@ -668,6 +676,7 @@ public sealed class GameEngine
     private void CorruptOrb()
     {
         if (OrbSystem.Find(Board) is not { } o) return;
+        OrbEventAt = o;
         OrbSystem.Remove(Board, o.X, o.Y);
         if (FractureActive)
             foreach (var (x, y) in OrbSystem.Ring(o.X, o.Y))
@@ -823,7 +832,7 @@ public sealed class GameEngine
         _poppedClassic += cleared.Count;
 
         var wave = new BurstWave(Chain, multiplier, points, groups, cleared, moves) { Gold = payouts, Broken = broken, Cracked = cracked, OrbPopped = orbPopped, OrbBroke = orbAt is not null, OrbAt = orbAt, OrbTimerAtBreak = _orbTimer };
-        if (orbAt is not null) Raise(GameEvent.OrbBroken);
+        if (orbAt is not null) { OrbEventAt = orbAt; Raise(GameEvent.OrbBroken); }
         LastWave = wave;
         _goals?.OnWave(wave);
         WaveResolved?.Invoke(wave);
@@ -976,7 +985,7 @@ public sealed class GameEngine
     /// <summary>A copy of what the advisor needs for the piece in hand, or null if there is no piece in play.</summary>
     public AdviceRequest? CreateAdviceRequest() =>
         CurrentPiece is { } piece && State == GameState.Playing
-            ? new AdviceRequest(Board.Clone(), piece, _goals?.Clone(), Score, Rules.MinGroupSize)
+            ? new AdviceRequest(Board.Clone(), piece, _goals?.Clone(), Score, Rules.MinGroupSize, FractureActive)
             : null;
 
     /// <summary>Second Chances used this level (0 or 1).</summary>

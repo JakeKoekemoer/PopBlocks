@@ -59,6 +59,9 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>The gold each popped group paid, floating up from where it popped.</summary>
     public FloatingText Floaters { get; } = new();
+
+    /// <summary>The Orb's arrival, break and running out of time.</summary>
+    public OrbEffects OrbFx { get; } = new();
     public bool ShowGhost { get; set; } = true;
 
     /// <summary>Landing guide look: false = thin outline, true = bold (thicker line, a tint and a faint column of light).</summary>
@@ -147,12 +150,12 @@ public sealed class GameDrawable : IDrawable
 
     /// <summary>True while something on the board is animating, so the page keeps repainting.</summary>
     public bool NeedsAnimation(long nowMs) =>
-        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || HintColumn >= 0 || CameraMoving(nowMs) || (!ReducedMotion && InsightVisible(nowMs));
+        (Game is { PendingGroups.Count: > 0 }) || Effects.IsActive(nowMs) || Floaters.IsActive(nowMs) || OrbFx.IsActive(nowMs) || HintColumn >= 0 || CameraMoving(nowMs) || (!ReducedMotion && InsightVisible(nowMs));
 
     /// <summary>The slow movement (board ambience, frame animation) is all that is running: a gentle repaint is enough.</summary>
     public bool OnlyAmbientRunning(long nowMs) =>
         WantsSlowRepaint
-        && !(Game is { PendingGroups.Count: > 0 }) && !Effects.IsActive(nowMs) && !Floaters.IsActive(nowMs) && HintColumn < 0 && !CameraMoving(nowMs);
+        && !(Game is { PendingGroups.Count: > 0 }) && !Effects.IsActive(nowMs) && !Floaters.IsActive(nowMs) && !OrbFx.IsActive(nowMs) && HintColumn < 0 && !CameraMoving(nowMs);
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -203,6 +206,7 @@ public sealed class GameDrawable : IDrawable
                 DrawActivePiece(canvas, (CellRenderer.BlockLayer)pass, game.CurrentPiece, originX, originY, cell);
             if (Frame != FrameStyle.None) DrawFrame(canvas, game.CurrentPiece, originX, originY, cell, now);
             Effects.Draw(canvas, originX, originY, cell, boardW, Flip, now);
+            OrbFx.Draw(canvas, originX, originY, cell, Flip, now);
             Floaters.Draw(canvas, originX, originY, cell, Flip, now);
             DrawCameraHints(canvas, game, originX, originY, boardW, boardH, cell);
             if (InsightVisible(now)) DrawInsight(canvas, originX, originY, cell, now);
@@ -677,7 +681,20 @@ public sealed class GameDrawable : IDrawable
         if (BoardSpace.AboveView(orb.Y) && BoardSpace.AboveView(orb.Y + 1)) return;
         float x0 = MathF.Min(BoardSpace.ScreenX(orb.X, Flip, originX, cell), BoardSpace.ScreenX(orb.X + 1, Flip, originX, cell));
         float y0 = MathF.Min(BoardSpace.ScreenY(orb.Y, Flip, originY, cell), BoardSpace.ScreenY(orb.Y + 1, Flip, originY, cell));
-        OrbDrawable.Draw(canvas, x0, y0, cell * 2f, game.OrbTimerLeft, game.Rules.OrbTimer, now, ReducedMotion, AmbientOn);
+        float grow = OrbFx.GrowFactor(now);   // it grows in when it arrives
+        if (grow < 0.999f || grow > 1.001f)
+        {
+            canvas.SaveState();
+            canvas.Translate(x0 + cell, y0 + cell);
+            canvas.Scale(grow, grow);
+            canvas.Translate(-(x0 + cell), -(y0 + cell));
+            OrbDrawable.Draw(canvas, x0, y0, cell * 2f, game.OrbTimerLeft, game.Rules.OrbTimer, now, ReducedMotion, AmbientOn);
+            canvas.RestoreState();
+        }
+        else
+        {
+            OrbDrawable.Draw(canvas, x0, y0, cell * 2f, game.OrbTimerLeft, game.Rules.OrbTimer, now, ReducedMotion, AmbientOn);
+        }
     }
 
     /// <summary>The Orb's swirl and shiver move while it is on the board.</summary>
