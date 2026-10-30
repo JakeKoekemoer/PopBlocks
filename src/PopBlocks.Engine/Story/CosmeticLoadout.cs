@@ -60,6 +60,11 @@ public sealed class CosmeticLoadout
     {
         var c = CosmeticCatalog.Find(id);
         if (c is null || c.Slot != slot || !IsOwned(c)) return false;
+        if (slot == CosmeticSlot.Board && _settings.GetInt(SaveKeys.CosmeticBoardPinned, -1) != 1)
+        {
+            _settings.SetInt(SaveKeys.CosmeticBoardPinned, 1);   // a board chosen by hand stays, whatever the area
+            if (Selected(slot) == id) { Changed?.Invoke(); return true; }
+        }
         if (Selected(slot) == id) return true;
         _settings.SetString(CosmeticCatalog.SaveKey(slot), id);
         Changed?.Invoke();
@@ -69,6 +74,43 @@ public sealed class CosmeticLoadout
     // ---- The board, as the app has always asked for it ----
 
     public string SelectedBoard => Selected(CosmeticSlot.Board);
+
+    /// <summary>
+    /// The board takes the look of the area being played (the region's own board, if the player has it; otherwise the classic one).
+    /// True until the player chooses a board by hand; <see cref="FollowAreaBoard"/> gives it back. A save from before this existed
+    /// that already holds a chosen board keeps it.
+    /// </summary>
+    public bool BoardFollowsArea
+    {
+        get
+        {
+            int pinned = _settings.GetInt(SaveKeys.CosmeticBoardPinned, -1);
+            return pinned >= 0 ? pinned == 0 : _settings.GetString(CosmeticCatalog.SaveKey(CosmeticSlot.Board), "").Length == 0;
+        }
+    }
+
+    /// <summary>Back to the area's own board (the player's hand-picked board is forgotten).</summary>
+    public void FollowAreaBoard()
+    {
+        _settings.SetInt(SaveKeys.CosmeticBoardPinned, 0);
+        _settings.SetString(CosmeticCatalog.SaveKey(CosmeticSlot.Board), "");
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// The board to draw on a level (0 for Endless): the player's pick if they made one, otherwise the area's themed board if they
+    /// have it, otherwise the classic board.
+    /// </summary>
+    public string BoardFor(int level)
+    {
+        if (!BoardFollowsArea) return SelectedBoard;
+        if (RegionCatalog.For(level) is { } region)
+        {
+            var themed = Themes.FirstOrDefault(t => t.RegionNumber == region.Number && IsAvailable(t.Id));
+            if (themed is not null) return themed.Id;
+        }
+        return DefaultId;
+    }
 
     public bool Select(string boardId) => Select(CosmeticSlot.Board, boardId);
 

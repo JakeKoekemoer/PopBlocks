@@ -114,6 +114,22 @@
                                         FontSize="13"
                                         Clicked="OnBoardStyleClicked" />
                             </Grid>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="56">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Board and song" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Changed the board or the song? Go back to the themed board and the music of the area you are playing in." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="1"
+                                        Text="RESET"
+                                        Style="{StaticResource SecondaryButton}"
+                                        MinimumWidthRequest="0"
+                                        WidthRequest="96"
+                                        HeightRequest="40"
+                                        CornerRadius="20"
+                                        FontSize="13"
+                                        Clicked="OnResetAreaClicked"
+                                        SemanticProperties.Description="Reset the board and the song to the ones of the area" />
+                            </Grid>
                         </VerticalStackLayout>
                     </Border>
 
@@ -225,6 +241,22 @@
                                         Grid.Column="1"
                                         OnColor="{StaticResource Accent}"
                                         Toggled="OnReducedAudioToggled" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" MinimumHeightRequest="56">
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="Song and board" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" />
+                                    <Label Text="Back to the music (and themed board) of the area you are playing in" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="1"
+                                        Text="RESET"
+                                        Style="{StaticResource SecondaryButton}"
+                                        MinimumWidthRequest="0"
+                                        WidthRequest="96"
+                                        HeightRequest="40"
+                                        CornerRadius="20"
+                                        FontSize="13"
+                                        Clicked="OnResetAreaClicked"
+                                        SemanticProperties.Description="Reset the song and the board to the ones of the area" />
                             </Grid>
                             <Label Text="Sound effects can be turned off on their own with the switch above. When something else is playing sound on the phone, or a call comes in, PopBlocks gives way and carries on afterwards."
                                    Style="{StaticResource BodyLabel}" FontSize="12" />

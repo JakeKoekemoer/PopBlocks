@@ -58,7 +58,7 @@ public partial class SettingsPage : ContentPage
 
         // Board style is only offered once a style has been earned.
         BoardStyleRow.IsVisible = CosmeticLoadout.Themes.Any(t => _loadout.IsAvailable(t.Id));
-        BoardStyleButton.Text = BoardName(_loadout.SelectedBoard).ToUpperInvariant();
+        BoardStyleButton.Text = BoardLabel();
 
         ShowSaveStatus();
         _rulesPanel.Refresh();
@@ -112,15 +112,29 @@ public partial class SettingsPage : ContentPage
     private static string BoardName(string id) =>
         CosmeticLoadout.Themes.FirstOrDefault(t => t.Id == id)?.Name ?? "Classic";
 
-    /// <summary>Cycles through the board styles the player owns: Classic, then each earned style.</summary>
+    private string BoardLabel() => _loadout.BoardFollowsArea ? "AREA" : BoardName(_loadout.SelectedBoard).ToUpperInvariant();
+
+    /// <summary>Cycles through the board styles: the area's own board, Classic, then each earned style.</summary>
     private void OnBoardStyleClicked(object? sender, EventArgs e)
     {
-        var owned = new List<string> { CosmeticLoadout.DefaultId };
+        var owned = new List<string> { string.Empty, CosmeticLoadout.DefaultId };   // "" = follow the area
         owned.AddRange(CosmeticLoadout.Themes.Where(t => _loadout.IsAvailable(t.Id)).Select(t => t.Id));
 
-        int at = owned.IndexOf(_loadout.SelectedBoard);
-        _loadout.Select(owned[(at + 1) % owned.Count]);
-        BoardStyleButton.Text = BoardName(_loadout.SelectedBoard).ToUpperInvariant();
+        int at = owned.IndexOf(_loadout.BoardFollowsArea ? string.Empty : _loadout.SelectedBoard);
+        string next = owned[(at + 1) % owned.Count];
+        if (next.Length == 0) _loadout.FollowAreaBoard();
+        else _loadout.Select(next);
+        BoardStyleButton.Text = BoardLabel();
+    }
+
+    /// <summary>The song goes back to automatic (the music of the place) and the board to the area's themed one.</summary>
+    private async void OnResetAreaClicked(object? sender, EventArgs e)
+    {
+        _loadout.FollowAreaBoard();
+        _audio.SelectedTrack = 0;
+        BoardStyleButton.Text = BoardLabel();
+        _gameAudio.Ui(UiSound.SettingsChange);
+        await DisplayAlertAsync("Back to the area", "The board and the music now follow the area you are playing in.", "OK");
     }
 
     private void OnEffectsToggled(object? sender, ToggledEventArgs e)
