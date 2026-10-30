@@ -5,8 +5,8 @@
              NavigationPage.HasNavigationBar="False"
              Background="{StaticResource PageGradient}">
 
-    <Grid RowDefinitions="Auto,Auto,*" Padding="20,16,20,0" RowSpacing="12">
-        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="20,16,20,0">
             <Button Grid.Column="0" Text="←" Style="{StaticResource RoundButton}" FontSize="18" Clicked="OnBackClicked" />
             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="0">
                 <Label Text="Map" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
@@ -24,34 +24,14 @@
             </Border>
         </Grid>
 
-        <!-- The level you tapped: which level it is, which region it belongs to, which seed it was built from (for information
-             and bug reports), and PLAY. Every player gets their own levels, so the seed is how a level can be talked about. -->
-        <Border Grid.Row="1" Style="{StaticResource Glass}" Padding="16,10">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                <VerticalStackLayout VerticalOptions="Center" Spacing="2">
-                    <Label x:Name="DetailTitle" FontSize="17" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                    <Label x:Name="DetailRegion" Style="{StaticResource CaptionLabel}" />
-                    <Label x:Name="DetailSeed" Style="{StaticResource CaptionLabel}">
-                        <Label.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnSeedTapped" />
-                        </Label.GestureRecognizers>
-                    </Label>
-                    <Label x:Name="DetailHint" FontSize="11" TextColor="{StaticResource TextSecondary}" IsVisible="False" />
-                </VerticalStackLayout>
-                <Button x:Name="DetailPlay"
-                        Grid.Column="1"
-                        Text="PLAY"
-                        Style="{StaticResource PrimaryButton}"
-                        HeightRequest="44"
-                        MinimumWidthRequest="96"
-                        CornerRadius="22"
-                        FontSize="14"
-                        Clicked="OnDetailPlayClicked" />
-            </Grid>
-        </Border>
+        <!-- The journey: one pip per region, filled as the regions are restored. -->
+        <Grid x:Name="JourneyHost" Grid.Row="1" ColumnSpacing="6" Margin="20,0" />
 
         <ScrollView x:Name="Scroller" Grid.Row="2">
-            <VerticalStackLayout x:Name="RegionsHost" Spacing="14" Padding="0,0,0,28" />
+            <VerticalStackLayout x:Name="RegionsHost" Spacing="12" Padding="20,0,20,24" />
         </ScrollView>
+
+        <!-- The selected level and its PLAY button, pinned to the bottom. -->
+        <ContentView x:Name="BarHost" Grid.Row="3" />
     </Grid>
 </ContentPage>
