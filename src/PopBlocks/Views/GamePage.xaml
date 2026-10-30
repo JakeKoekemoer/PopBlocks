@@ -579,6 +579,54 @@
                                       Grid.Column="0"
                                       IsVisible="{Binding ScenePortraitLeft}"
                                       WidthRequest="72" HeightRequest="72" VerticalOptions="Center" />
+        <!-- Something new for the Story Book (a journal entry, a memory, a person, a Prism fragment): shown first, on its own,
+             with a way to open the Story Book at the right page. It comes before any story scene and before the result card. -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding UnlockPopupVisible}"
+              BackgroundColor="#CC070A16"
+              Margin="-6,-2,-6,-6">
+            <Border Style="{StaticResource Glass}"
+                    BackgroundColor="#F2141B38"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Center"
+                    WidthRequest="320"
+                    Padding="24,26">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="YOU FOUND SOMETHING"
+                           Style="{StaticResource CaptionLabel}"
+                           TextColor="{StaticResource Accent}"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockKind}"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           CharacterSpacing="2"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockTitle}"
+                           FontSize="24"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockText}"
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="15"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockProgress}"
+                           IsVisible="{Binding HasUnlockProgress}"
+                           Style="{StaticResource CaptionLabel}"
+                           HorizontalTextAlignment="Center" />
+                    <views:IconButton Text="{Binding UnlockViewText}"
+                                      Icon="Book"
+                                      Kind="Primary"
+                                      Margin="0,6,0,0"
+                                      Command="{Binding UnlockViewCommand}" />
+                    <Button Text="{Binding UnlockNextText}"
+                            Style="{StaticResource SecondaryButton}"
+                            Command="{Binding UnlockNextCommand}" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
                         <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
                             <Label Text="{Binding SceneTitle}"
                                    Style="{StaticResource CaptionLabel}"

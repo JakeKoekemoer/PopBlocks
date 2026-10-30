@@ -83,6 +83,7 @@ public partial class GamePage : ContentPage
         };
         _vm.ShopRequested += OnShopRequested;
         _vm.EaseRequested += OnEaseRequested;
+        _vm.StoryBookRequested += OnStoryBookRequested;
         _vm.ShareRequested += text => _ = Ui.ShareAsync(text);
 
         BoardView.StartInteraction += OnTouchStart;
@@ -552,6 +553,16 @@ public partial class GamePage : ContentPage
     private async void OnShopRequested()
     {
         var services = Handler?.MauiContext?.Services;
+    /// <summary>"View in Story Book" on the found-something card: opens the Story Book on the page that holds it. Back returns to the result.</summary>
+    private async void OnStoryBookRequested(int tab)
+    {
+        var services = Handler?.MauiContext?.Services;
+        if (services is null) return;
+        var archive = services.GetRequiredService<ArchivePage>();
+        archive.StartTab = tab;
+        await Navigation.PushAsync(archive);
+    }
+
         if (services is null) return;
         var nav = Navigation;
         var stack = nav.NavigationStack;

@@ -159,6 +159,8 @@ public sealed class GameViewModel : ObservableObject
         DismissLoadingCommand = new Command(DismissLoading);
         CopySeedCommand = new Command(CopySeed);
         EaseCommand = new Command(() => EaseRequested?.Invoke());
+        UnlockNextCommand = new Command(UnlockNext);
+        UnlockViewCommand = new Command(UnlockView);
         ShopCommand = new Command(() => ShopRequested?.Invoke());
         ShareCommand = new Command(() =>
         {
@@ -234,6 +236,8 @@ public sealed class GameViewModel : ObservableObject
     public ICommand InsightCommand { get; }
     public ICommand InsightAlwaysCommand { get; }
     public ICommand EaseCommand { get; }
+    public ICommand UnlockNextCommand { get; }
+    public ICommand UnlockViewCommand { get; }
 
     /// <summary>The player pressed EASE THIS LEVEL. The page asks them to confirm, then calls <see cref="ConfirmEase"/>.</summary>
     public event Action? EaseRequested;
@@ -418,7 +422,7 @@ public sealed class GameViewModel : ObservableObject
     public string RetryText => _isFailed ? "TRY AGAIN" : "PLAY AGAIN";
 
     public bool IsPlaying => _game.State is GameState.Playing or GameState.ResolvingBursts;
-    public bool IsOverlayVisible => !_endBeat && (_isPaused || _isFailed || _isComplete || _isClassicOver);
+    public bool IsOverlayVisible => !_endBeat && !UnlockPopupVisible && (_isPaused || _isFailed || _isComplete || _isClassicOver);
 
     public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : $"LEVEL {_setup.Level} COMPLETE")
         : _isFailed ? (_game.FailReason == FailReason.OutOfMoves
@@ -722,6 +726,7 @@ public sealed class GameViewModel : ObservableObject
             foreach (var found in _outcome.NewCosmetics.Where(c => c.Id != "garden" || _outcome.CosmeticUnlocked == null))
                 lines.Add($"New in the workshop: {found.Name}");
             foreach (var entry in _foundLore)
+        OnPropertyChanged(nameof(UnlockPopupVisible));
                 lines.Add(entry.Kind == LoreKind.Memory ? $"Memory found: {entry.Title}" : $"Journal entry: {entry.Title}");
             foreach (var a in _earned)
                 lines.Add($"Achievement: {a.Name} (+{a.Gold} gold)");
@@ -1630,6 +1635,9 @@ public sealed class GameViewModel : ObservableObject
         _setup = _setup with { Rules = _rules.EffectiveFor(_setup) };   // the player's own rules, where they apply
         _game.Start(_setup);
 
+        ResetClock();
+        _unlockOpen = false;
+        _unlockItems = new List<UnlockItem>();
         LoadLevelState();
         PrefetchNextLevel();
         GameStarted?.Invoke();
@@ -1893,7 +1901,7 @@ public sealed class GameViewModel : ObservableObject
         if (_outcome.Scenes.Count > 0)
         {
             foreach (var scene in _outcome.Scenes) _sceneQueue.Enqueue(scene);
-            ShowNextScene();
+            if (!_unlockOpen) ShowNextScene();
         }
 
         // A restored region plays its unlock chime (or, for the last one, the finale) once the scenes have been seen.
@@ -1903,9 +1911,6 @@ public sealed class GameViewModel : ObservableObject
             else _unlockPending = restoredRegion.Number + 1;
             FlushPendingAudio();
         }
-
-        // An optional objective met on this win uncovers its memory (on a replay too; no gold, no progress).
-        _foundLore = _campaign.OnBonusEarned(_game.Story, _run).ToList();
 
         MaybeOpenChoice();
         RaiseChoice();
@@ -1940,3 +1945,105 @@ public enum EndBeatKind
     /// <summary>Reduced motion: a short hold with no pulse.</summary>
     Still,
 }
+        // An optional objective met on this win uncovers its memory (on a replay too; no gold, no progress).
+        _foundLore = _campaign.OnBonusEarned(_game.Story, _run).ToList();
+
+        // Anything new for the Story Book is shown first, on its own, before the story scenes and the result card.
+        OpenUnlockPopup();
+
+    // ---------------------------------------------------------------- bindable state: "you found something" (before the result card)
+    // Journal entries, memories, new people and Prism fragments are shown one at a time, each with a way to open the Story Book at the
+    // right page. It appears after the end hold and before any story scene or the result card; nothing in it changes a reward.
+
+    private sealed record UnlockItem(string Kind, string Title, string Text, int BookTab);
+
+    private List<UnlockItem> _unlockItems = new();
+    private int _unlockIndex;
+    private bool _unlockOpen;
+
+    /// <summary>Raised with the Story Book tab to open (0 Story, 1 Memories, 2 People, 3 World).</summary>
+    public event Action<int>? StoryBookRequested;
+
+    public bool UnlockPopupVisible => _unlockOpen && !_endBeat;
+    private UnlockItem? CurrentUnlock => _unlockOpen && _unlockIndex < _unlockItems.Count ? _unlockItems[_unlockIndex] : null;
+    public string UnlockKind => CurrentUnlock?.Kind ?? string.Empty;
+    public string UnlockTitle => CurrentUnlock?.Title ?? string.Empty;
+    public string UnlockText => CurrentUnlock?.Text ?? string.Empty;
+    public string UnlockProgress => _unlockItems.Count > 1 ? $"{_unlockIndex + 1} / {_unlockItems.Count}" : string.Empty;
+    public bool HasUnlockProgress => _unlockItems.Count > 1;
+    public string UnlockNextText => _unlockIndex >= _unlockItems.Count - 1 ? "CONTINUE" : "NEXT";
+    public string UnlockViewText => "VIEW IN STORY BOOK";
+
+    private static string Brief(string text, int max = 230)
+    {
+        text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (text.Length <= max) return text;
+        int cut = text.LastIndexOf(' ', max);
+        return text[..(cut > max / 2 ? cut : max)].TrimEnd(' ', ',', ';', '.') + "…";
+    }
+
+    private static UnlockItem ItemFor(LoreEntry entry) => entry.Kind switch
+    {
+        LoreKind.Memory => new("MEMORY FOUND", entry.Title, Brief(entry.Text), 1),
+        LoreKind.Character => new("NEW IN PEOPLE", entry.Title, Brief(entry.Text), 2),
+        LoreKind.Journal => new("JOURNAL ENTRY", entry.Title, Brief(entry.Text), 0),
+        _ => new("NEW IN THE STORY BOOK", entry.Title, Brief(entry.Text), 0),
+    };
+
+    private void OpenUnlockPopup()
+    {
+        var items = new List<UnlockItem>();
+        if (_outcome.FragmentAwarded)
+        {
+            string place = _outcome.Region is { } r ? r.Title : "this place";
+            items.Add(new("PRISM FRAGMENT", $"A fragment from {place}", "A piece of the Prism has been recovered. It is kept on the World page of your Story Book.", 3));
+        }
+        foreach (var entry in _outcome.NewLore) items.Add(ItemFor(entry));
+        foreach (var entry in _foundLore) items.Add(ItemFor(entry));
+
+        _unlockItems = items;
+        _unlockIndex = 0;
+        _unlockOpen = items.Count > 0;
+        RaiseUnlock();
+    }
+
+    private void CloseUnlockPopup()
+    {
+        _unlockOpen = false;
+        RaiseUnlock();
+        UpdateOverlay();
+        ShowNextScene();   // the scenes that were waiting behind it
+    }
+
+    private void UnlockNext()
+    {
+        if (!_unlockOpen) return;
+        if (_unlockIndex < _unlockItems.Count - 1)
+        {
+            _unlockIndex++;
+            RaiseUnlock();
+            return;
+        }
+        CloseUnlockPopup();
+    }
+
+    private void UnlockView()
+    {
+        if (CurrentUnlock is not { } item) return;
+        CloseUnlockPopup();
+        StoryBookRequested?.Invoke(item.BookTab);
+    }
+
+    private void RaiseUnlock()
+    {
+        OnPropertyChanged(nameof(UnlockPopupVisible));
+        OnPropertyChanged(nameof(UnlockKind));
+        OnPropertyChanged(nameof(UnlockTitle));
+        OnPropertyChanged(nameof(UnlockText));
+        OnPropertyChanged(nameof(UnlockProgress));
+        OnPropertyChanged(nameof(HasUnlockProgress));
+        OnPropertyChanged(nameof(UnlockNextText));
+        OnPropertyChanged(nameof(UnlockViewText));
+        OnPropertyChanged(nameof(IsOverlayVisible));
+    }
+
