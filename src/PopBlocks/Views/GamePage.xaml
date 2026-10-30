@@ -15,55 +15,64 @@
           Padding="6,2,6,6"
           RowSpacing="4">
 
-        <!-- HUD: pause, level and score, moves left, upcoming pieces -->
-        <Border Grid.Row="0" Style="{StaticResource Glass}" Padding="10,6">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
-                <Button Grid.Column="0"
-                        Text="II"
-                        Style="{StaticResource RoundButton}"
-                        Command="{Binding PauseCommand}"
-                        VerticalOptions="Center" />
-
-                <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+        <!-- HUD: level and score | pause and play time | moves and gold. Thin lines keep the three groups apart. The upcoming
+             pieces and the ability keys live beside the board, so the top stays clean. -->
+        <Border Grid.Row="0" Style="{StaticResource Glass}" Padding="12,6">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,*" ColumnSpacing="10">
+                <VerticalStackLayout Grid.Column="0" Spacing="0" VerticalOptions="Center">
                     <Label Text="{Binding TitleText}" Style="{StaticResource CaptionLabel}" />
                     <Label Text="{Binding ScoreText}"
                            FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{StaticResource TextPrimary}" />
-                    <Label x:Name="GoldChipLabel"
-                           Text="{Binding SubText}"
-                           FontSize="12"
-                           FontAttributes="Bold"
-                           TextColor="{StaticResource GoldColor}" />
                     <Label Text="{Binding RulesChipText}"
                            IsVisible="{Binding HasRulesChip}"
-                           FontSize="11"
+                           FontSize="10"
                            FontAttributes="Bold"
                            TextColor="#FF9F6B"
                            SemanticProperties.Description="Your own rules are on" />
                 </VerticalStackLayout>
 
-                <VerticalStackLayout Grid.Column="2"
-                                     IsVisible="{Binding HasMoves}"
-                                     Spacing="0"
-                                     VerticalOptions="Center"
-                                     MinimumWidthRequest="58">
-                    <Label Text="MOVES" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
+                <BoxView Grid.Column="1" WidthRequest="1" HeightRequest="40" Color="{StaticResource GlassStroke}" VerticalOptions="Center" />
+
+                <VerticalStackLayout Grid.Column="2" Spacing="1" VerticalOptions="Center" HorizontalOptions="Center">
+                    <views:IconKey Icon="Pause"
+                                   Command="{Binding PauseCommand}"
+                                   WidthRequest="48"
+                                   HeightRequest="36"
+                                   HorizontalOptions="Center"
+                                   SemanticProperties.Description="Pause" />
+                    <Label Text="{Binding PlayTimeText}"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextSecondary}"
+                           HorizontalTextAlignment="Center"
+                           SemanticProperties.Description="Time played" />
+                </VerticalStackLayout>
+
+                <BoxView Grid.Column="3" WidthRequest="1" HeightRequest="40" Color="{StaticResource GlassStroke}" VerticalOptions="Center" />
+
+                <VerticalStackLayout Grid.Column="4" Spacing="0" VerticalOptions="Center" HorizontalOptions="End">
+                    <Label Text="MOVES"
+                           IsVisible="{Binding HasMoves}"
+                           Style="{StaticResource CaptionLabel}"
+                           HorizontalTextAlignment="End" />
                     <Label x:Name="MovesLabel"
                            Text="{Binding MovesText}"
+                           IsVisible="{Binding HasMoves}"
                            FontSize="24"
                            FontAttributes="Bold"
                            TextColor="{Binding MovesColour}"
-                           HorizontalTextAlignment="Center" />
-                </VerticalStackLayout>
-
-                <VerticalStackLayout Grid.Column="3" Spacing="0" VerticalOptions="Center">
-                    <Label Text="NEXT" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
-                    <GraphicsView x:Name="NextView" WidthRequest="64" HeightRequest="50" />
+                           HorizontalTextAlignment="End" />
+                    <Label x:Name="GoldChipLabel"
+                           Text="{Binding SubText}"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="End" />
                 </VerticalStackLayout>
             </Grid>
         </Border>
-
         <!-- Goals -->
         <Border Grid.Row="1" Style="{StaticResource Glass}" Padding="12,6" IsVisible="{Binding HasGoals}">
             <VerticalStackLayout Spacing="4">
@@ -112,8 +121,9 @@
             </VerticalStackLayout>
         </Border>
 
-        <!-- Board, with the tutorial card and little messages floating over it -->
-        <Grid Grid.Row="2">
+        <!-- Board, with the tutorial card and little messages floating over it. Beside it, on the right: the next pieces and the
+             ability keys (Second Chance, Prism Shift, Insight). Everything inside the first column floats over the board. -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="6">
             <GraphicsView x:Name="BoardView" />
 
             <Label Text="{Binding ChainText}"
@@ -197,47 +207,48 @@
                     </Grid>
                 </VerticalStackLayout>
             </Border>
+
+            <!-- The rail: next pieces, then the abilities. Nothing here is ever needed to finish a level. -->
+            <ScrollView Grid.Column="1" WidthRequest="58" VerticalScrollBarVisibility="Never" VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8" Padding="0,4,0,0">
+                    <Label Text="NEXT" Style="{StaticResource CaptionLabel}" HorizontalTextAlignment="Center" />
+                    <GraphicsView x:Name="NextView" WidthRequest="56" HeightRequest="150" HorizontalOptions="Center" />
+
+                    <BoxView HeightRequest="1" Color="{StaticResource GlassStroke}" IsVisible="{Binding HasAbilities}" />
+
+                    <views:IconKey Icon="Undo"
+                                   Badge="{Binding SecondChanceBadge}"
+                                   Command="{Binding SecondChanceCommand}"
+                                   IsVisible="{Binding ShowSecondChance}"
+                                   IsEnabled="{Binding CanSecondChance}"
+                                   WidthRequest="54" HeightRequest="54"
+                                   SemanticProperties.Description="{Binding SecondChanceDescription}" />
+                    <views:IconKey Icon="Shift"
+                                   Badge="{Binding PrismShiftBadge}"
+                                   Command="{Binding PrismShiftCommand}"
+                                   IsVisible="{Binding ShowPrismShift}"
+                                   IsEnabled="{Binding CanPrismShift}"
+                                   WidthRequest="54" HeightRequest="54"
+                                   SemanticProperties.Description="{Binding PrismShiftDescription}" />
+                    <views:IconKey Icon="Insight"
+                                   Badge="{Binding InsightBadge}"
+                                   Command="{Binding InsightCommand}"
+                                   IsVisible="{Binding ShowInsightButton}"
+                                   IsEnabled="{Binding CanInsight}"
+                                   WidthRequest="54" HeightRequest="54"
+                                   SemanticProperties.Description="Pip's Insight: ask where this piece would do the most good" />
+                    <views:IconKey Icon="Eye"
+                                   Accent="{Binding AlwaysOnIsOn}"
+                                   Command="{Binding InsightAlwaysCommand}"
+                                   IsVisible="{Binding ShowAlwaysOn}"
+                                   WidthRequest="54" HeightRequest="54"
+                                   SemanticProperties.Description="Show Pip's suggestion for every piece" />
+                </VerticalStackLayout>
+            </ScrollView>
         </Grid>
 
-        <!-- Controls: fold away with the handle; the gestures on the board always work -->
+        <!-- Controls: fold away with the handle; the gestures on the board always work. Tapping the board turns the piece. -->
         <VerticalStackLayout Grid.Row="3" Spacing="0">
-            <!-- Helpers: only when the level allows them and the player brought one in. Never needed to win. -->
-            <Grid IsVisible="{Binding HelpersVisible}" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,4">
-                <Button Grid.Column="0"
-                        Text="{Binding SecondChanceText}"
-                        Style="{StaticResource GhostButton}"
-                        Command="{Binding SecondChanceCommand}"
-                        IsVisible="{Binding ShowSecondChance}"
-                        IsEnabled="{Binding CanSecondChance}"
-                        HeightRequest="38"
-                        SemanticProperties.Description="{Binding SecondChanceDescription}" />
-                <Button Grid.Column="1"
-                        Text="{Binding PrismShiftText}"
-                        Style="{StaticResource GhostButton}"
-                        Command="{Binding PrismShiftCommand}"
-                        IsVisible="{Binding ShowPrismShift}"
-                        IsEnabled="{Binding CanPrismShift}"
-                        HeightRequest="38"
-                        SemanticProperties.Description="{Binding PrismShiftDescription}" />
-            </Grid>
-            <!-- Pip's Insight: shows where the piece in hand would do the most good. Never plays the move. -->
-            <Grid IsVisible="{Binding InsightRowVisible}" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,4">
-                <Button Grid.Column="0"
-                        Text="{Binding InsightText}"
-                        Style="{StaticResource GhostButton}"
-                        Command="{Binding InsightCommand}"
-                        IsVisible="{Binding ShowInsightButton}"
-                        IsEnabled="{Binding CanInsight}"
-                        HeightRequest="38"
-                        SemanticProperties.Description="Ask Pip where this piece would do the most good" />
-                <Button Grid.Column="1"
-                        Text="{Binding AlwaysOnText}"
-                        Style="{StaticResource GhostButton}"
-                        Command="{Binding InsightAlwaysCommand}"
-                        IsVisible="{Binding ShowAlwaysOn}"
-                        HeightRequest="38"
-                        SemanticProperties.Description="Show Pip's suggestion for every piece" />
-            </Grid>
             <Label Text="{Binding HelperHint}"
                    IsVisible="{Binding HasHelperHint}"
                    Style="{StaticResource CaptionLabel}"
@@ -251,12 +262,15 @@
                     HorizontalOptions="Center"
                     Clicked="OnToggleControls" />
 
-            <Grid x:Name="ControlsGrid" ColumnDefinitions="*,*,1.3*,*,*" ColumnSpacing="8">
-                <Button x:Name="LeftButton" Grid.Column="0" Text="LEFT" Style="{StaticResource ControlButton}" />
-                <Button x:Name="RightButton" Grid.Column="1" Text="RIGHT" Style="{StaticResource ControlButton}" />
-                <Button x:Name="RotateButton" Grid.Column="2" Text="ROTATE" Style="{StaticResource AccentControlButton}" />
-                <Button x:Name="DownButton" Grid.Column="3" Text="DOWN" Style="{StaticResource ControlButton}" />
-                <Button x:Name="DropButton" Grid.Column="4" Text="DROP" Style="{StaticResource ControlButton}" />
+            <!-- Far left, left, down, rotate, drop, right, far right. Icons only. Left, right and down repeat while held. -->
+            <Grid x:Name="ControlsGrid" ColumnDefinitions="*,*,*,1.2*,1.2*,*,*" ColumnSpacing="6">
+                <views:IconKey x:Name="FarLeftKey" Grid.Column="0" Icon="FarLeft" HeightRequest="52" SemanticProperties.Description="Move all the way left" />
+                <views:IconKey x:Name="LeftKey" Grid.Column="1" Icon="ArrowLeft" HeightRequest="52" SemanticProperties.Description="Move left" />
+                <views:IconKey x:Name="DownKey" Grid.Column="2" Icon="ArrowDown" HeightRequest="52" SemanticProperties.Description="Move down" />
+                <views:IconKey x:Name="RotateKey" Grid.Column="3" Icon="Rotate" HeightRequest="52" SemanticProperties.Description="Turn the piece" />
+                <views:IconKey x:Name="DropKey" Grid.Column="4" Icon="Drop" Accent="True" HeightRequest="52" SemanticProperties.Description="Drop the piece" />
+                <views:IconKey x:Name="RightKey" Grid.Column="5" Icon="ArrowRight" HeightRequest="52" SemanticProperties.Description="Move right" />
+                <views:IconKey x:Name="FarRightKey" Grid.Column="6" Icon="FarRight" HeightRequest="52" SemanticProperties.Description="Move all the way right" />
             </Grid>
         </VerticalStackLayout>
 
@@ -279,6 +293,16 @@
                            CharacterSpacing="1"
                            TextColor="{StaticResource TextPrimary}"
                            HorizontalTextAlignment="Center" />
+
+                    <!-- A lost level: why, on a line of its own under "LEVEL 48" -->
+                    <Label Text="{Binding OverlayReason}"
+                           IsVisible="{Binding HasOverlayReason}"
+                           FontSize="15"
+                           FontAttributes="Bold"
+                           CharacterSpacing="2"
+                           TextColor="{StaticResource Danger}"
+                           HorizontalTextAlignment="Center"
+                           Margin="0,-8,0,0" />
                     <Label Text="{Binding OverlayDetail}"
                            FontSize="17"
                            TextColor="{StaticResource TextSecondary}"
@@ -411,7 +435,7 @@
                                           WidthRequest="130"
                                           IsVisible="{Binding ShowShop}"
                                           Command="{Binding ShopCommand}"
-                                          SemanticProperties.Description="Open the workshop" />
+                                          SemanticProperties.Description="Open the shop" />
                     </Grid>
                     <Button Text="{Binding RetryText}"
                             Style="{StaticResource PrimaryButton}"
@@ -430,11 +454,10 @@
                     </VerticalStackLayout>
                     <views:IconButton Text="SHOP"
                                       Icon="Cart"
-                                      Kind="Ghost"
-                                      HorizontalOptions="Center"
+                                      Kind="Secondary"
                                       IsVisible="{Binding ShowShopOnFailed}"
                                       Command="{Binding ShopCommand}"
-                                      SemanticProperties.Description="Open the workshop" />
+                                      SemanticProperties.Description="Open the shop" />
                     <views:IconButton Text="SHARE"
                                       Icon="Share"
                                       Kind="Ghost"
@@ -553,6 +576,54 @@
                         <Button Grid.Column="3" Text="FILL 20" Style="{StaticResource GhostButton}" TextColor="{StaticResource Danger}"
                                 MinimumWidthRequest="0" Command="{Binding DevFillRowsCommand}" CommandParameter="20" />
                     </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Something new for the Story Book (a journal entry, a memory, a person, a Prism fragment): shown first, on its own,
+             with a way to open the Story Book at the right page. It comes before any story scene and before the result card. -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding UnlockPopupVisible}"
+              BackgroundColor="#CC070A16"
+              Margin="-6,-2,-6,-6">
+            <Border Style="{StaticResource Glass}"
+                    BackgroundColor="#F2141B38"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Center"
+                    WidthRequest="320"
+                    Padding="24,26">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="YOU FOUND SOMETHING"
+                           Style="{StaticResource CaptionLabel}"
+                           TextColor="{StaticResource Accent}"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockKind}"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           CharacterSpacing="2"
+                           TextColor="{StaticResource GoldColor}"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockTitle}"
+                           FontSize="24"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource TextPrimary}"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockText}"
+                           Style="{StaticResource BodyLabel}"
+                           FontSize="15"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding UnlockProgress}"
+                           IsVisible="{Binding HasUnlockProgress}"
+                           Style="{StaticResource CaptionLabel}"
+                           HorizontalTextAlignment="Center" />
+                    <views:IconButton Text="{Binding UnlockViewText}"
+                                      Icon="Book"
+                                      Kind="Primary"
+                                      Margin="0,6,0,0"
+                                      Command="{Binding UnlockViewCommand}" />
+                    <Button Text="{Binding UnlockNextText}"
+                            Style="{StaticResource SecondaryButton}"
+                            Command="{Binding UnlockNextCommand}" />
                 </VerticalStackLayout>
             </Border>
         </Grid>

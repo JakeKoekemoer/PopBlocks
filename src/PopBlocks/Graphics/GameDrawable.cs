@@ -356,7 +356,7 @@ public sealed class GameDrawable : IDrawable
                 if (colour is CellColour.Empty or CellColour.Orb) continue;   // an Orb is drawn as a whole, below
 
                 var links = LinksAt(board, x, y, colour);
-                float fall = Effects.FallOffsetCells(x, y, now);
+                float fall = Effects.FallOffsetCells(x, y, now) + OrbFx.PushOffsetCells(x, y, now);   // (an arriving Orb shoves the blocks above it up)
                 CellRenderer.DrawLayer(
                     canvas,
                     layer,

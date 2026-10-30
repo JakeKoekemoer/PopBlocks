@@ -152,7 +152,7 @@ public partial class DevMenuPage : ContentPage
         reset.TextColor = Ui.Res("Danger", Colors.Red);
         reset.Clicked += async (_, _) =>
         {
-            bool yes = await DisplayAlert("Reset everything?", "Level 1, no gold, no upgrades, no story. Settings are kept.", "RESET", "CANCEL");
+            bool yes = await DisplayAlertAsync("Reset everything?", "Level 1, no gold, no upgrades, no story. Settings are kept.", "RESET", "CANCEL");
             if (!yes) return;
             _dev.ResetEverything();
             Refresh();

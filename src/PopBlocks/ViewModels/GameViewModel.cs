@@ -159,6 +159,8 @@ public sealed class GameViewModel : ObservableObject
         DismissLoadingCommand = new Command(DismissLoading);
         CopySeedCommand = new Command(CopySeed);
         EaseCommand = new Command(() => EaseRequested?.Invoke());
+        UnlockNextCommand = new Command(UnlockNext);
+        UnlockViewCommand = new Command(UnlockView);
         ShopCommand = new Command(() => ShopRequested?.Invoke());
         ShareCommand = new Command(() =>
         {
@@ -234,6 +236,8 @@ public sealed class GameViewModel : ObservableObject
     public ICommand InsightCommand { get; }
     public ICommand InsightAlwaysCommand { get; }
     public ICommand EaseCommand { get; }
+    public ICommand UnlockNextCommand { get; }
+    public ICommand UnlockViewCommand { get; }
 
     /// <summary>The player pressed EASE THIS LEVEL. The page asks them to confirm, then calls <see cref="ConfirmEase"/>.</summary>
     public event Action? EaseRequested;
@@ -310,6 +314,9 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPrismShift));
         OnPropertyChanged(nameof(SecondChanceText));
         OnPropertyChanged(nameof(PrismShiftText));
+        OnPropertyChanged(nameof(SecondChanceBadge));
+        OnPropertyChanged(nameof(PrismShiftBadge));
+        OnPropertyChanged(nameof(HasAbilities));
         OnPropertyChanged(nameof(SecondChanceDescription));
         OnPropertyChanged(nameof(PrismShiftDescription));
         OnPropertyChanged(nameof(HelperHint));
@@ -345,7 +352,7 @@ public sealed class GameViewModel : ObservableObject
     public event Action<StoryScene>? Banner;
 
     /// <summary>Id of the board style to draw (cosmetic): "classic" or an unlocked style such as "garden".</summary>
-    public string BoardStyle => _loadout.SelectedBoard;
+    public string BoardStyle => _loadout.BoardFor(_setup.IsStory ? _setup.Level : 0);
 
     // ---------------------------------------------------------------- bindable state: header
 
@@ -354,10 +361,64 @@ public sealed class GameViewModel : ObservableObject
 
     public int BestScore { get => _bestScore; private set { if (SetProperty(ref _bestScore, value)) RaiseHeader(); } }
 
-    /// <summary>"LEVEL 12 · EASY" or "ENDLESS".</summary>
+    /// <summary>"L-48", "LESSON 2 OF 5" or "ENDLESS".</summary>
     public string TitleText => _setup.IsLesson ? $"LESSON {_setup.Level} OF {StoryConfig.LessonCount}"
-        : _setup.IsStory ? $"LEVEL {_setup.Level} · {StoryConfig.Name(StoryConfig.TierFor(_setup.Level)).ToUpperInvariant()}"
+        : _setup.IsStory ? $"L-{_setup.Level}"
         : "ENDLESS";
+
+    // ---- the play clock: how long this attempt has been played (paused, scenes, loading and the end hold do not count) ----
+
+    private IDispatcherTimer? _clockTimer;
+    private long _clockLastMs;
+    private long _playMs;
+    private int _shownSeconds = -1;
+
+    /// <summary>"3:07", or "1:02:09" past an hour.</summary>
+    public string PlayTimeText
+    {
+        get
+        {
+            var t = TimeSpan.FromMilliseconds(_playMs);
+            return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
+        }
+    }
+
+    private void StartClock(IDispatcher dispatcher)
+    {
+        if (_clockTimer is null)
+        {
+            _clockTimer = dispatcher.CreateTimer();
+            _clockTimer.Interval = TimeSpan.FromMilliseconds(500);
+            _clockTimer.IsRepeating = true;
+            _clockTimer.Tick += (_, _) => TickClock();
+        }
+        _clockLastMs = Environment.TickCount64;
+        if (!_clockTimer.IsRunning) _clockTimer.Start();
+    }
+
+    private void TickClock()
+    {
+        long now = Environment.TickCount64;
+        long delta = Math.Min(now - _clockLastMs, 1000);   // a long gap (the phone slept) is not play
+        _clockLastMs = now;
+        if (delta <= 0) return;
+        bool playing = _game.State is GameState.Playing or GameState.ResolvingBursts
+                       && !SceneVisible && !_promptOpen && !_isLoading && !_endBeat && _coach?.FreezesGame != true;
+        if (!playing) return;
+        _playMs += delta;
+        int seconds = (int)(_playMs / 1000);
+        if (seconds == _shownSeconds) return;
+        _shownSeconds = seconds;
+        OnPropertyChanged(nameof(PlayTimeText));
+    }
+
+    private void ResetClock()
+    {
+        _playMs = 0;
+        _shownSeconds = -1;
+        _clockLastMs = Environment.TickCount64;
+        OnPropertyChanged(nameof(PlayTimeText));
+    }
 
     /// <summary>Best score in Endless, gold in Story, "TUTORIAL" in a lesson.</summary>
     public string SubText => _setup.IsLesson ? "TUTORIAL" : _setup.IsStory ? $"{Math.Max(0, _progress.Gold - _chipHold):N0} gold" : $"BEST {_bestScore:N0}  ·  {RunGoldText}";
@@ -418,14 +479,20 @@ public sealed class GameViewModel : ObservableObject
     public string RetryText => _isFailed ? "TRY AGAIN" : "PLAY AGAIN";
 
     public bool IsPlaying => _game.State is GameState.Playing or GameState.ResolvingBursts;
-    public bool IsOverlayVisible => !_endBeat && (_isPaused || _isFailed || _isComplete || _isClassicOver);
+    public bool IsOverlayVisible => !_endBeat && !UnlockPopupVisible && (_isPaused || _isFailed || _isComplete || _isClassicOver);
 
     public string OverlayTitle => _isComplete ? (_setup.IsLesson ? "LESSON COMPLETE" : $"LEVEL {_setup.Level} COMPLETE")
-        : _isFailed ? (_game.FailReason == FailReason.OutOfMoves
-            ? (_setup.IsLesson ? "OUT OF MOVES" : $"LEVEL {_setup.Level} — OUT OF MOVES")
-            : (_setup.IsLesson ? "BOARD FULL" : $"LEVEL {_setup.Level} — STACK REACHED THE TOP"))
+        : _isFailed ? (_setup.IsLesson ? FailReasonText : $"LEVEL {_setup.Level}")
         : _isClassicOver ? "GAME OVER"
         : "PAUSED";
+
+    /// <summary>On a lost Story level: why, on a line of its own under "LEVEL 48". Empty everywhere else (a lesson puts the reason in its title).</summary>
+    public string OverlayReason => _isFailed && !_setup.IsLesson ? FailReasonText : string.Empty;
+    public bool HasOverlayReason => OverlayReason.Length > 0;
+
+    private string FailReasonText => _game.FailReason == FailReason.OutOfMoves
+        ? "OUT OF MOVES"
+        : _setup.IsLesson ? "BOARD FULL" : "STACK REACHED THE TOP";
 
     public string OverlayDetail
     {
@@ -530,6 +597,15 @@ public sealed class GameViewModel : ObservableObject
     public string InsightText => InsightUsesLeft == int.MaxValue ? "INSIGHT" : $"INSIGHT · {InsightUsesLeft} LEFT";
     public string AlwaysOnText => _shop.InsightAlwaysOn ? "ALWAYS ON: ON" : "ALWAYS ON: OFF";
 
+    // The ability keys at the side of the board show a count instead of words.
+    public string InsightBadge => InsightUsesLeft == int.MaxValue ? "∞" : InsightUsesLeft.ToString();
+    public string SecondChanceBadge => _game.SecondChancesLeft.ToString();
+    public string PrismShiftBadge => _game.PrismShiftsLeft.ToString();
+    public bool AlwaysOnIsOn => _shop.InsightAlwaysOn;
+
+    /// <summary>The rail beside the board has abilities to show (the NEXT pieces are always there).</summary>
+    public bool HasAbilities => ShowSecondChance || ShowPrismShift || InsightRowVisible;
+
     private void RaiseInsight()
     {
         OnPropertyChanged(nameof(InsightRowVisible));
@@ -540,6 +616,9 @@ public sealed class GameViewModel : ObservableObject
         OnPropertyChanged(nameof(CanInsight));
         OnPropertyChanged(nameof(InsightText));
         OnPropertyChanged(nameof(AlwaysOnText));
+        OnPropertyChanged(nameof(InsightBadge));
+        OnPropertyChanged(nameof(AlwaysOnIsOn));
+        OnPropertyChanged(nameof(HasAbilities));
     }
 
     /// <summary>Asks the advisor (off the UI thread) where the piece in hand should go. A suggestion already made for this piece is shown again for free.</summary>
@@ -644,7 +723,10 @@ public sealed class GameViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsOverlayVisible));
         OnPropertyChanged(nameof(OverlayTitle));
+        OnPropertyChanged(nameof(OverlayReason));
+        OnPropertyChanged(nameof(HasOverlayReason));
         OnPropertyChanged(nameof(OverlayDetail));
+        OnPropertyChanged(nameof(UnlockPopupVisible));
         OnPropertyChanged(nameof(NextText));
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(RetryText));
@@ -1430,6 +1512,7 @@ public sealed class GameViewModel : ObservableObject
     /// <summary>Creates the game timer. Call once the page has a dispatcher.</summary>
     public void Attach(IDispatcher dispatcher)
     {
+        StartClock(dispatcher);
         if (_timer is not null) return;
         _dispatcher = dispatcher;
         _timer = dispatcher.CreateTimer();
@@ -1508,6 +1591,7 @@ public sealed class GameViewModel : ObservableObject
     {
         if (_game.State is GameState.GameOver or GameState.LevelComplete) RecordPendingRun();   // a level just lost or won counts even if the page is left at once
         _beatTimer?.Stop();
+        _clockTimer?.Stop();
         _endBeat = false;
         _chipHold = 0;
         Pause();
@@ -1551,6 +1635,9 @@ public sealed class GameViewModel : ObservableObject
             _classicBanked = false;
         }
         _failureCounted = false;
+        ResetClock();
+        _unlockOpen = false;
+        _unlockItems = new List<UnlockItem>();
         RerollHintOpen = false;
         _insight = null;
         _insightIndex = -1;
@@ -1694,6 +1781,19 @@ public sealed class GameViewModel : ObservableObject
 
     public void MoveLeft() { if (!InputBlocked) _game.MoveLeft(); }
     public void MoveRight() { if (!InputBlocked) _game.MoveRight(); }
+
+    /// <summary>All the way to the left wall of the board (the page swaps these on an upside-down level).</summary>
+    public void MoveFarLeft()
+    {
+        if (InputBlocked) return;
+        for (int guard = 0; guard < GameConfig.Columns && _game.MoveLeft(); guard++) { }
+    }
+
+    public void MoveFarRight()
+    {
+        if (InputBlocked) return;
+        for (int guard = 0; guard < GameConfig.Columns && _game.MoveRight(); guard++) { }
+    }
     public void Rotate() { if (!InputBlocked) _game.Rotate(); }
     public void SoftDrop() { if (!InputBlocked) _game.SoftDrop(); }
     public void HardDrop() { if (!InputBlocked) _game.HardDrop(); }
@@ -1890,10 +1990,16 @@ public sealed class GameViewModel : ObservableObject
             _boardStyleApplied = true;
             OnPropertyChanged(nameof(BoardStyle));
         }
+        // An optional objective met on this win uncovers its memory (on a replay too; no gold, no progress).
+        _foundLore = _campaign.OnBonusEarned(_game.Story, _run).ToList();
+
+        // Anything new for the Story Book is shown first, on its own, before the story scenes and the result card.
+        OpenUnlockPopup();
+
         if (_outcome.Scenes.Count > 0)
         {
             foreach (var scene in _outcome.Scenes) _sceneQueue.Enqueue(scene);
-            ShowNextScene();
+            if (!_unlockOpen) ShowNextScene();
         }
 
         // A restored region plays its unlock chime (or, for the last one, the finale) once the scenes have been seen.
@@ -1904,13 +2010,106 @@ public sealed class GameViewModel : ObservableObject
             FlushPendingAudio();
         }
 
-        // An optional objective met on this win uncovers its memory (on a replay too; no gold, no progress).
-        _foundLore = _campaign.OnBonusEarned(_game.Story, _run).ToList();
-
         MaybeOpenChoice();
         RaiseChoice();
         RaiseHeader();
         UpdateOverlay();
+    }
+
+    // ---------------------------------------------------------------- bindable state: "you found something" (before the result card)
+    // Journal entries, memories, new people and Prism fragments are shown one at a time, each with a way to open the Story Book at the
+    // right page. It appears after the end hold and before any story scene or the result card; nothing in it changes a reward.
+
+    private sealed record UnlockItem(string Kind, string Title, string Text, int BookTab);
+
+    private List<UnlockItem> _unlockItems = new();
+    private int _unlockIndex;
+    private bool _unlockOpen;
+
+    /// <summary>Raised with the Story Book tab to open (0 Story, 1 Memories, 2 People, 3 World).</summary>
+    public event Action<int>? StoryBookRequested;
+
+    public bool UnlockPopupVisible => _unlockOpen && !_endBeat;
+    private UnlockItem? CurrentUnlock => _unlockOpen && _unlockIndex < _unlockItems.Count ? _unlockItems[_unlockIndex] : null;
+    public string UnlockKind => CurrentUnlock?.Kind ?? string.Empty;
+    public string UnlockTitle => CurrentUnlock?.Title ?? string.Empty;
+    public string UnlockText => CurrentUnlock?.Text ?? string.Empty;
+    public string UnlockProgress => _unlockItems.Count > 1 ? $"{_unlockIndex + 1} / {_unlockItems.Count}" : string.Empty;
+    public bool HasUnlockProgress => _unlockItems.Count > 1;
+    public string UnlockNextText => _unlockIndex >= _unlockItems.Count - 1 ? "CONTINUE" : "NEXT";
+    public string UnlockViewText => "VIEW IN STORY BOOK";
+
+    private static string Brief(string text, int max = 230)
+    {
+        text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (text.Length <= max) return text;
+        int cut = text.LastIndexOf(' ', max);
+        return text[..(cut > max / 2 ? cut : max)].TrimEnd(' ', ',', ';', '.') + "…";
+    }
+
+    private static UnlockItem ItemFor(LoreEntry entry) => entry.Kind switch
+    {
+        LoreKind.Memory => new("MEMORY FOUND", entry.Title, Brief(entry.Text), 1),
+        LoreKind.Character => new("NEW IN PEOPLE", entry.Title, Brief(entry.Text), 2),
+        LoreKind.Journal => new("JOURNAL ENTRY", entry.Title, Brief(entry.Text), 0),
+        _ => new("NEW IN THE STORY BOOK", entry.Title, Brief(entry.Text), 0),
+    };
+
+    private void OpenUnlockPopup()
+    {
+        var items = new List<UnlockItem>();
+        if (_outcome.FragmentAwarded)
+        {
+            string place = _outcome.Region is { } r ? r.Title : "this place";
+            items.Add(new("PRISM FRAGMENT", $"A fragment from {place}", "A piece of the Prism has been recovered. It is kept on the World page of your Story Book.", 3));
+        }
+        foreach (var entry in _outcome.NewLore) items.Add(ItemFor(entry));
+        foreach (var entry in _foundLore) items.Add(ItemFor(entry));
+
+        _unlockItems = items;
+        _unlockIndex = 0;
+        _unlockOpen = items.Count > 0;
+        RaiseUnlock();
+    }
+
+    private void CloseUnlockPopup()
+    {
+        _unlockOpen = false;
+        RaiseUnlock();
+        UpdateOverlay();
+        ShowNextScene();   // the scenes that were waiting behind it
+    }
+
+    private void UnlockNext()
+    {
+        if (!_unlockOpen) return;
+        if (_unlockIndex < _unlockItems.Count - 1)
+        {
+            _unlockIndex++;
+            RaiseUnlock();
+            return;
+        }
+        CloseUnlockPopup();
+    }
+
+    private void UnlockView()
+    {
+        if (CurrentUnlock is not { } item) return;
+        CloseUnlockPopup();
+        StoryBookRequested?.Invoke(item.BookTab);
+    }
+
+    private void RaiseUnlock()
+    {
+        OnPropertyChanged(nameof(UnlockPopupVisible));
+        OnPropertyChanged(nameof(UnlockKind));
+        OnPropertyChanged(nameof(UnlockTitle));
+        OnPropertyChanged(nameof(UnlockText));
+        OnPropertyChanged(nameof(UnlockProgress));
+        OnPropertyChanged(nameof(HasUnlockProgress));
+        OnPropertyChanged(nameof(UnlockNextText));
+        OnPropertyChanged(nameof(UnlockViewText));
+        OnPropertyChanged(nameof(IsOverlayVisible));
     }
 
     private void RearmTimer()

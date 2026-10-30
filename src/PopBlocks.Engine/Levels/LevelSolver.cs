@@ -517,8 +517,7 @@ public static class LevelSolver
     private static void MaybeSpawnOrb(State s, LevelDefinition level)
     {
         if (s.OrbBrokeThisResolution || s.OrbPos >= 0) return;
-        bool guarantee = !s.OrbEver && s.Placed >= OrbSystem.GuaranteeByPiece;
-        if (!guarantee && s.PiecesSinceOrb < OrbSystem.PiecesBetween) return;
+        if (s.PiecesSinceOrb < OrbSystem.PiecesBetween) return;
 
         int stackTop = 0;
         for (int i = 0; i < W * H; i++)
@@ -527,12 +526,9 @@ public static class LevelSolver
 
         // The engine asks "is there a window?" and only then rolls; both are answered from the arrays here, so no Board is built
         // unless an Orb is really going down (the search asks millions of times).
-        if (!guarantee)
-        {
-            if (!AnyOrbWindow(s, viewTop)) return;
-            double u = (SeedMix.Mix32(SeedMix.Mix32(level.PieceSeed, 0x0B0B), ++s.OrbRolls) & 0xFFFFFF) / 16777216.0;
-            if (!(u < OrbSystem.SpawnChance)) return;
-        }
+        if (!AnyOrbWindow(s, viewTop)) return;
+        double u = (SeedMix.Mix32(SeedMix.Mix32(level.PieceSeed, 0x0B0B), ++s.OrbRolls) & 0xFFFFFF) / 16777216.0;
+        if (!(u < OrbSystem.SpawnChance)) return;
 
         var board = ToBoard(s);
         var spots = OrbSystem.Spots(board, viewTop, GameConfig.ViewportRows, relaxed: false);
@@ -540,9 +536,6 @@ public static class LevelSolver
         bool placed = false;
         foreach (var (x, y) in spots)
             if (placed = OrbSystem.TryPlace(board, x, y)) break;
-        if (!placed && guarantee)
-            foreach (var (x, y) in OrbSystem.Spots(board, viewTop, GameConfig.ViewportRows, relaxed: true))
-                if (placed = OrbSystem.TryPlace(board, x, y)) break;
         if (!placed) return;
 
         GravityResolver.Apply(board);   // what was pushed up settles on the Orb

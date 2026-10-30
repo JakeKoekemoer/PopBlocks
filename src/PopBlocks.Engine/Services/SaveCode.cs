@@ -51,6 +51,7 @@ public static class SaveCode
             new(SaveKeys.BestScore, Kind.Int, 0, 1_000_000_000),
             new(SaveKeys.Unlocks, Kind.Unlocks),
             new(SaveKeys.CosmeticBoard, Kind.Text),
+            new(SaveKeys.CosmeticBoardPinned, Kind.Int, 0, 1),
             new(SaveKeys.CosmeticSkin, Kind.Text),
             new(SaveKeys.CosmeticBurst, Kind.Text),
             new(SaveKeys.CosmeticFrame, Kind.Text),

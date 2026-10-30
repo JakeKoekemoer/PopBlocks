@@ -293,7 +293,7 @@ public class CampaignServiceTests
         rig.Restart();
 
         Assert.True(rig.Campaign.HasFragment(RegionCatalog.Get(1)));
-        Assert.True(rig.Campaign.UnlockedLore().Any(l => l.Id == "r1_journal"));
+        Assert.Contains(rig.Campaign.UnlockedLore(), l => l.Id == "r1_journal");
         Assert.True(rig.Unlocks.Has(CampaignService.CosmeticGarden));
     }
 
@@ -349,7 +349,7 @@ public class CampaignServiceTests
 
         Assert.Equal(1, rig.Campaign.FragmentCount);
         Assert.True(rig.Unlocks.Has(CampaignService.CosmeticGarden));
-        Assert.True(rig.Campaign.UnlockedLore().Any(l => l.Id == "r1_journal"));
+        Assert.Contains(rig.Campaign.UnlockedLore(), l => l.Id == "r1_journal");
         Assert.False(rig.Campaign.HasSeen("r1_complete")); // the story is still theirs to read
         Assert.True(rig.Campaign.IsSceneAvailable(StoryContent.FindScene("r1_complete")!));
     }

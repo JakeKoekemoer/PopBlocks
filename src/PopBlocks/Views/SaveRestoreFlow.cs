@@ -46,7 +46,7 @@ internal static class SaveRestoreFlow
         if (!check.Ok) return new Result(false, check.Error);
 
         var s = check.Summary!;
-        bool go = await page.DisplayAlert("Restore this progress?",
+        bool go = await page.DisplayAlertAsync("Restore this progress?",
             $"This holds {s.HighestCleared} levels cleared and {s.Gold:N0} gold.\n\nThis replaces the progress on this phone.",
             "Restore", "Cancel");
         if (!go) return new Result(false, "");

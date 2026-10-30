@@ -20,6 +20,9 @@ public partial class ArchivePage : ContentPage
     private readonly ILocalSettings _local;
     private int _tab;
 
+    /// <summary>Open on this tab (0 Story, 1 Memories, 2 People, 3 World) the next time the page appears, e.g. from a "you found something" card.</summary>
+    public int? StartTab { get; set; }
+
     public ArchivePage(CampaignService campaign, EndingService ending, ILocalSettings local)
     {
         InitializeComponent();
@@ -33,6 +36,11 @@ public partial class ArchivePage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        if (StartTab is { } start)
+        {
+            _tab = Math.Clamp(start, 0, TabNames.Length - 1);
+            StartTab = null;
+        }
         Rebuild();
     }
 

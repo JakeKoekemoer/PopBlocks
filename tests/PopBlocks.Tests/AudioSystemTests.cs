@@ -374,7 +374,7 @@ public class AudioSystemTests
         var pcm = OfflineRenderer.Render(engine, 8);
         Assert.Equal(StateMask.Restored, d.State);
         Assert.True(engine.CurrentBar >= bar, "the music did not restart");
-        Assert.True(pcm.Any(f => MathF.Abs(f) > 0.01f));
+        Assert.Contains(pcm, f => MathF.Abs(f) > 0.01f);
     }
 
     [Fact]
@@ -539,6 +539,35 @@ public class AudioSystemTests
         broken.Audio.SfxMuted = true;
         broken.Sound.Rotated();
         Assert.Empty(broken.Spy.Played);
+    }
+
+    [Fact]
+    public void With_every_sound_off_the_phones_audio_is_left_alone_and_comes_back_when_a_sound_is_turned_on()
+    {
+        // Opening the output takes audio focus, which stops the player's own music or video: so a silent game must not hold it.
+        var (audio, _, _) = NewSettings();
+        audio.MasterMuted = true;
+        var output = new NullAudioOutput();
+        var now = 0.0;
+        var sound = new GameAudio(audio, output, null, useWorkerThread: false, clock: () => now);
+        sound.Start();
+        Assert.False(output.IsRunning);
+        Assert.False(sound.IsAvailable);
+
+        audio.MasterMuted = false;
+        sound.ApplySettings();
+        Assert.True(output.IsRunning);
+        Assert.True(sound.IsAvailable);
+
+        // ...and turning everything off again gives the device back.
+        audio.MasterMuted = true;
+        sound.ApplySettings();
+        now += 0.5; sound.Tick();
+        Assert.False(output.IsRunning);
+
+        audio.MasterMuted = false;
+        sound.ApplySettings();
+        Assert.True(output.IsRunning);
     }
 
     [Fact]

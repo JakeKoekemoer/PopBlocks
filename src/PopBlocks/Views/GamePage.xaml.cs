@@ -56,6 +56,7 @@ public partial class GamePage : ContentPage
 
         _board.Game = _vm.Game;
         _upcoming.Game = _vm.Game;
+        _upcoming.Vertical = true;   // the next pieces stand in a column beside the board
         BoardView.Drawable = _board;
         NextView.Drawable = _upcoming;
         CoinView.Drawable = new GoldCoinDrawable();
@@ -82,6 +83,7 @@ public partial class GamePage : ContentPage
             if (suggestion is not null) StartAnimation();
         };
         _vm.ShopRequested += OnShopRequested;
+        _vm.StoryBookRequested += OnStoryBookRequested;
         _vm.EaseRequested += OnEaseRequested;
         _vm.ShareRequested += text => _ = Ui.ShareAsync(text);
 
@@ -90,11 +92,14 @@ public partial class GamePage : ContentPage
         BoardView.EndInteraction += OnTouchEnd;
         BoardView.CancelInteraction += OnTouchCancel;
 
-        WireButton(LeftButton, MoveScreenLeft, repeat: true);
-        WireButton(RightButton, MoveScreenRight, repeat: true);
-        WireButton(DownButton, _vm.SoftDrop, repeat: true);
-        WireButton(RotateButton, _vm.Rotate, repeat: false);
-        WireButton(DropButton, _vm.HardDrop, repeat: false);
+        // Far left, left, down, rotate, drop, right, far right. (Tapping the board turns the piece too.)
+        WireButton(FarLeftKey.Pad, MoveScreenFarLeft, repeat: false);
+        WireButton(LeftKey.Pad, MoveScreenLeft, repeat: true);
+        WireButton(DownKey.Pad, _vm.SoftDrop, repeat: true);
+        WireButton(RotateKey.Pad, _vm.Rotate, repeat: false);
+        WireButton(DropKey.Pad, _vm.HardDrop, repeat: false);
+        WireButton(RightKey.Pad, MoveScreenRight, repeat: true);
+        WireButton(FarRightKey.Pad, MoveScreenFarRight, repeat: false);
     }
 
     /// <summary>Picks Classic, a Story level or a tutorial lesson. Call before the page is shown.</summary>
@@ -183,7 +188,7 @@ public partial class GamePage : ContentPage
     private async void OnTrackListTapped(object? sender, TappedEventArgs e)
     {
         var choices = _vm.TrackChoices();
-        string picked = await DisplayActionSheet("Soundtrack", "Close", null, choices.Select(c => c.Label).ToArray());
+        string picked = await DisplayActionSheetAsync("Soundtrack", "Close", null, choices.Select(c => c.Label).ToArray());
         foreach (var (number, label) in choices)
             if (label == picked) { _vm.ChooseTrack(number); return; }
     }
@@ -227,12 +232,13 @@ public partial class GamePage : ContentPage
         _board.ChainGlow = _shop.ChainSenseOwned;
         _board.Theme = BoardPalette.For(_vm.BoardStyle);
 
-        // The DOWN button points up the screen on an upside-down board.
-        DownButton.Text = _vm.IsFlipped ? "UP" : "DOWN";
+        // Down and drop point up the screen on an upside-down board.
+        DownKey.Icon = _vm.IsFlipped ? IconKind.ArrowUp : IconKind.ArrowDown;
+        DropKey.Icon = _vm.IsFlipped ? IconKind.DropUp : IconKind.Drop;
 
-        // Room for as many upcoming pieces as the shop has unlocked.
+        // Room for as many upcoming pieces as the shop has unlocked, stacked in the rail beside the board.
         int count = Math.Clamp(_shop.PreviewCount, 1, 5);
-        NextView.WidthRequest = count switch { 1 => 64, 2 => 100, _ => 132 };
+        NextView.HeightRequest = count * (count switch { 1 => 60, 2 => 54, 3 => 48, 4 => 44, _ => 40 });
 
         BoardView.Invalidate();
         NextView.Invalidate();
@@ -256,7 +262,11 @@ public partial class GamePage : ContentPage
     private void OnOrbHappened(GameEvent e, int x, int y)
     {
         long now = Environment.TickCount64;
-        if (e == GameEvent.OrbSpawned) _board.OrbFx.Appeared(x, y, now);
+        if (e == GameEvent.OrbSpawned)
+        {
+            var (left, right) = _vm.Game.OrbPushed;
+            _board.OrbFx.Appeared(x, y, now, left, right);
+        }
         else if (e == GameEvent.OrbBroken) _board.OrbFx.Broke(x, y, now);
         else _board.OrbFx.Corrupted(x, y, now);
         StartAnimation();
@@ -544,6 +554,16 @@ public partial class GamePage : ContentPage
         if (ease) _vm.ConfirmEase();
     }
 
+    /// <summary>"View in Story Book" on the found-something card: opens the Story Book on the page that holds it. Back returns to the result.</summary>
+    private async void OnStoryBookRequested(int tab)
+    {
+        var services = Handler?.MauiContext?.Services;
+        if (services is null) return;
+        var archive = services.GetRequiredService<ArchivePage>();
+        archive.StartTab = tab;
+        await Navigation.PushAsync(archive);
+    }
+
     /// <summary>SHOP on a result card: the workshop opens on Upgrades, and Back leads to the Map rather than into the finished level.</summary>
     private async void OnShopRequested()
     {
@@ -768,6 +788,16 @@ public partial class GamePage : ContentPage
     private void MoveScreenRight()
     {
         if (_vm.IsFlipped) _vm.MoveLeft(); else _vm.MoveRight();
+    }
+
+    private void MoveScreenFarLeft()
+    {
+        if (_vm.IsFlipped) _vm.MoveFarRight(); else _vm.MoveFarLeft();
+    }
+
+    private void MoveScreenFarRight()
+    {
+        if (_vm.IsFlipped) _vm.MoveFarLeft(); else _vm.MoveFarRight();
     }
 
     /// <summary>+1 when "down the board" is down the screen, -1 when the board is upside down.</summary>

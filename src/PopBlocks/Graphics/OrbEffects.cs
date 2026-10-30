@@ -12,7 +12,8 @@ namespace PopBlocks.Graphics;
 /// </summary>
 public sealed class OrbEffects
 {
-    public const int AppearMs = 450;
+    /// <summary>The same length as the hold the engine puts on the board while an Orb arrives (<c>GameEngine.OrbRevealMs</c>).</summary>
+    public const int AppearMs = PopBlocks.Engine.Logic.GameEngine.OrbRevealMs;
     public const int BreakMs = 700;
     public const int CorruptMs = 600;
     public const int ReducedMs = 220;
@@ -26,6 +27,7 @@ public sealed class OrbEffects
         public long StartMs;
         public int X, Y;   // board cell of the Orb's top-left
         public bool Reduced;
+        public int PushLeft, PushRight;   // rows the blocks in the Orb's two columns were shoved up (Appeared only)
     }
 
     private const int SlotCount = 3;
@@ -43,16 +45,19 @@ public sealed class OrbEffects
     public bool Enabled { get; set; } = true;
     public bool ReducedMotion { get; set; }
 
-    public void Appeared(int x, int y, long nowMs) => Start(Kind.Appeared, x, y, nowMs);
+    public void Appeared(int x, int y, long nowMs, int pushLeft = 0, int pushRight = 0) => Start(Kind.Appeared, x, y, nowMs, pushLeft, pushRight);
     public void Broke(int x, int y, long nowMs) => Start(Kind.Broke, x, y, nowMs);
     public void Corrupted(int x, int y, long nowMs) => Start(Kind.Corrupted, x, y, nowMs);
 
-    private void Start(Kind kind, int x, int y, long nowMs)
+    private void Start(Kind kind, int x, int y, long nowMs, int pushLeft = 0, int pushRight = 0)
     {
         if (!Enabled) return;
-        _slots[_next] = new Slot { Alive = true, Kind = kind, StartMs = nowMs, X = x, Y = y, Reduced = ReducedMotion };
+        _slots[_next] = new Slot { Alive = true, Kind = kind, StartMs = nowMs, X = x, Y = y, Reduced = ReducedMotion, PushLeft = pushLeft, PushRight = pushRight };
         _next = (_next + 1) % SlotCount;
     }
+
+    /// <summary>The share of the arrival spent swelling and shoving; the rest is the Orb settling and its ring of light.</summary>
+    private const float GrowShare = 0.72f;
 
     private static int LifeOf(in Slot s) =>
         s.Reduced ? ReducedMs : s.Kind switch { Kind.Appeared => AppearMs, Kind.Broke => BreakMs, _ => CorruptMs };
@@ -65,8 +70,9 @@ public sealed class OrbEffects
     }
 
     /// <summary>
-    /// How much of its full size the Orb on the board is drawn at: it grows from nothing with a small overshoot when it arrives,
-    /// and is whole at all other times (and always under Reduced motion).
+    /// How much of its full size the Orb on the board is drawn at: it starts as a single block (half the width of its 2x2 footprint),
+    /// swells to full size with a small overshoot while it shoves the blocks above it away, and is whole at all other times (and
+    /// always under Reduced motion).
     /// </summary>
     public float GrowFactor(long nowMs)
     {
@@ -75,13 +81,36 @@ public sealed class OrbEffects
             ref readonly var s = ref _slots[i];
             if (!s.Alive || s.Kind != Kind.Appeared || s.Reduced) continue;
             long age = nowMs - s.StartMs;
-            if (age < 0 || age >= AppearMs * 0.6f) continue;
-            float t = age / (AppearMs * 0.6f);
-            // ease-out with a small overshoot (back-out), settling on 1
+            if (age < 0 || age >= AppearMs * GrowShare) continue;
+            float t = age / (AppearMs * GrowShare);
+            // ease-out with a small overshoot (back-out), settling on 1; it begins at one block, not at nothing
             float k = t - 1f;
-            return 1f + 2.2f * k * k * k + 1.2f * k * k;
+            float back = 1f + 2.2f * k * k * k + 1.2f * k * k;
+            return 0.5f + 0.5f * back;
         }
         return 1f;
+    }
+
+    /// <summary>
+    /// How far below its place (in cells, board-down) a locked block is drawn while an Orb swells: the blocks in the Orb's two columns
+    /// above it start where they were before it arrived and slide up as it grows. Zero for every other cell and at all other times.
+    /// </summary>
+    public float PushOffsetCells(int x, int y, long nowMs)
+    {
+        for (int i = 0; i < SlotCount; i++)
+        {
+            ref readonly var s = ref _slots[i];
+            if (!s.Alive || s.Kind != Kind.Appeared || s.Reduced) continue;
+            if (y >= s.Y || (x != s.X && x != s.X + 1)) continue;
+            long age = nowMs - s.StartMs;
+            if (age < 0 || age >= AppearMs * GrowShare) continue;
+            int rows = x == s.X ? s.PushLeft : s.PushRight;
+            if (rows == 0) continue;
+            float t = age / (AppearMs * GrowShare);
+            float eased = 1f - (1f - t) * (1f - t);
+            return rows * (1f - eased);
+        }
+        return 0f;
     }
 
     public void Draw(ICanvas canvas, float originX, float originY, float cell, bool flip, long nowMs)
@@ -102,7 +131,7 @@ public sealed class OrbEffects
             float cx = x0 + cell, cy = y0 + cell;
 
             if (s.Reduced) DrawReduced(canvas, s.Kind, cx, cy, cell, t);
-            else if (s.Kind == Kind.Appeared) DrawAppeared(canvas, cx, cy, cell, t);
+            else if (s.Kind == Kind.Appeared) DrawAppeared(canvas, cx, cy, cell, MathF.Max(0f, (t - GrowShare * 0.6f) / (1f - GrowShare * 0.6f)));
             else if (s.Kind == Kind.Broke) DrawBroke(canvas, s, x0, y0, cx, cy, originX, originY, cell, t, i);
             else DrawCorrupted(canvas, s, x0, y0, cx, cy, originX, originY, cell, t, flip);
         }

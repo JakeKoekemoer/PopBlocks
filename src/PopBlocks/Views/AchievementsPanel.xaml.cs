@@ -58,7 +58,7 @@ public partial class AchievementsPanel : ContentView, IWorkshopPanel
         stack.Children.Add(Ui.Heading(a.Name, 18));
         stack.Children.Add(Ui.Body(a.Description, 13));
 
-        var card = Ui.Card(stack, new Thickness(18, 14));
+        var card = Ui.Card(ShopArt.Beside(stack, ShopArt.ForAchievement(a.Id), dimmed: !earned), new Thickness(18, 14));
         card.Opacity = earned ? 1.0 : 0.9;
         SemanticProperties.SetDescription(card, $"{a.Name}. {a.Description} {(earned ? "Earned." : "Not yet earned.")}");
         return card;

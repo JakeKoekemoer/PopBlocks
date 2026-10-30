@@ -68,6 +68,9 @@ public static class SaveKeys
     /// <summary>The equipped board accent (a cosmetic id, empty for none).</summary>
     public const string CosmeticBoard = "cos_board";
 
+    /// <summary>1 when the player has chosen a board by hand (the board then stays whatever the area is), 0 to follow the area. Absent: follows the area unless a board was saved before this key existed.</summary>
+    public const string CosmeticBoardPinned = "cos_board_pinned";
+
     /// <summary>The equipped block skin, burst style, piece frame and Pip accessory (cosmetic ids; empty for the default).</summary>
     public const string CosmeticSkin = "cos_skin";
     public const string CosmeticBurst = "cos_burst";
@@ -181,7 +184,7 @@ public static class SaveKeys
         SaveVersion, ProgressHighest, Gold, UpgradePreview, UpgradePopFlair, UpgradeExtraMoves, UpgradeColourLens, UpgradeChainSense, UpgradePrismReserve, UpgradeInsight, InsightAlwaysOn, ConsumableSecondChance, ConsumablePrismShift, BestScore,
         BlastEffects, ShowGhost, LandingGuideStyle, ReducedMotion, ControlsCollapsed, SoundEffects,
         AudioMaster, AudioMusic, AudioSfx, AudioAmbience, AudioMuteMaster, AudioMuteMusic, AudioMuteAmbience, AudioReduced, AudioTrack,
-        Unlocks, CosmeticBoard, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
+        Unlocks, CosmeticBoard, CosmeticBoardPinned, CosmeticSkin, CosmeticBurst, CosmeticFrame, CosmeticAccessory, EndingTheme,
         PlayerName, PlayerSalt, CurrentLevelFor, CurrentLevelSeed, CurrentLevelRerolls, CurrentLevelFailures, FirstClearSeeds, ClassicGoldCarry,
         LevelLosses, EasedLevels, ConsolationPaid,
         RuleFallSpeed, RuleColourCount, RuleColours, RuleShapes, RuleMinGroup, RuleSolidChance, RuleBoardRows, RuleFracture,

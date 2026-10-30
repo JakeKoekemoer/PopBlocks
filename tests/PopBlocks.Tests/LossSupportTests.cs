@@ -125,7 +125,7 @@ public class LossSupportTests
     }
 
     [Fact]
-    public void Easing_marks_the_level_resets_failures_and_asks_for_the_eased_roll()
+    public async Task Easing_marks_the_level_resets_failures_and_asks_for_the_eased_roll()
     {
         var rig = new Rig(39);
         rig.Lose(40, SeedingConfig.LossesForEase);
@@ -139,7 +139,7 @@ public class LossSupportTests
         Assert.False(rig.Levels.CanEase(40));   // already eased
         Assert.Null(rig.Levels.KnownSeed(40));  // an eased level has to be found first
 
-        var seed = rig.Levels.ResolveAsync(40).GetAwaiter().GetResult();
+        var seed = await rig.Levels.ResolveAsync(40);
         Assert.False(seed.IsLegacy);
         Assert.Contains(rig.Rolls, r => r.Level == 40 && r.Reroll >= LevelRoller.EasedRerollOffset);
     }
@@ -249,7 +249,7 @@ public class LossSupportTests
     }
 
     [Fact]
-    public void A_replay_of_an_eased_level_is_rolled_fresh_instead_of_replaying_the_eased_seed()
+    public async Task A_replay_of_an_eased_level_is_rolled_fresh_instead_of_replaying_the_eased_seed()
     {
         var rig = new Rig(39);
         var plain = LevelCatalog.Get(40, LevelSeed.Derive(1234, 40, 0, 0));
@@ -257,7 +257,7 @@ public class LossSupportTests
 
         Assert.Null(rig.Levels.KnownSeed(40));    // cleared + eased: needs a roll
         Assert.False(rig.Levels.IsEasedPlay(40)); // and it is a normal level, not the eased form
-        var seed = rig.Levels.ResolveAsync(40).GetAwaiter().GetResult();
+        var seed = await rig.Levels.ResolveAsync(40);
         Assert.False(seed.IsLegacy);
     }
 }

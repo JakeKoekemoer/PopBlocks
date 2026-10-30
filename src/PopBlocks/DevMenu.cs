@@ -7,8 +7,8 @@ namespace PopBlocks;
 public static class DevMenu
 {
 #if DEBUG || DEVMENU
-    public const bool Enabled = true;
+    public static bool Enabled { get; } = true;
 #else
-    public const bool Enabled = false;
+    public static bool Enabled { get; } = false;
 #endif
 }

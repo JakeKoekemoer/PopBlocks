@@ -7,6 +7,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>PopBlocks</RootNamespace>
     <UseMaui>true</UseMaui>
+    <SkipValidateMauiImplicitPackageReferences>true</SkipValidateMauiImplicitPackageReferences>
     <SingleProject>true</SingleProject>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -29,9 +30,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Launcher icon and splash are tiny SVGs. No gameplay graphics are image files. -->
+    <!-- Launcher icon and splash are tiny SVGs. The board and blocks are drawn in code, not image files. -->
     <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#0B1220" />
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#0B1220" BaseSize="128,128" />
+
+    <!-- Workshop artwork only (shop icons and tab banners). They are used as they are, not scaled up per screen density. -->
+    <MauiImage Include="Resources\Images\*.png" Resize="false" />
   </ItemGroup>
 
   <ItemGroup>

@@ -19,11 +19,12 @@ public sealed class TrophiesPanel : ContentView, IWorkshopPanel
 
         var grid = new Grid
         {
-            RowDefinitions = new RowDefinitionCollection(new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)),
+            RowDefinitions = new RowDefinitionCollection(new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)),
             RowSpacing = 10,
         };
-        grid.Add(_chips, 0, 0);
-        grid.Add(_body, 0, 1);
+        grid.Add(ShopArt.Banner("banner_trophies.png"), 0, 0);
+        grid.Add(_chips, 0, 1);
+        grid.Add(_body, 0, 2);
         Content = grid;
     }
 

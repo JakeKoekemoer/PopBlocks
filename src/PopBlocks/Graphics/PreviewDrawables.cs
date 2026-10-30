@@ -12,10 +12,24 @@ public sealed class UpcomingDrawable : IDrawable
 {
     public GameEngine? Game { get; set; }
 
+    /// <summary>Pieces are stacked top to bottom (the rail beside the board) instead of laid out left to right.</summary>
+    public bool Vertical { get; set; }
+
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
         var pieces = Game?.Upcoming;
         if (pieces is null || pieces.Count == 0) return;
+
+        if (Vertical)
+        {
+            float slotH = dirtyRect.Height / pieces.Count;
+            for (int p = 0; p < pieces.Count; p++)
+            {
+                var slot = new RectF(dirtyRect.X, dirtyRect.Y + p * slotH, dirtyRect.Width, slotH);
+                DrawPiece(canvas, pieces[p], slot, p == 0 ? 1f : 0.78f, p == 0 ? 1f : 0.75f);
+            }
+            return;
+        }
 
         float slotW = dirtyRect.Width / pieces.Count;
         for (int p = 0; p < pieces.Count; p++)

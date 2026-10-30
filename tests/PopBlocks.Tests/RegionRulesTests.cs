@@ -86,7 +86,7 @@ public class RegionRulesTests
     {
         for (int n = 151; n <= 174; n++)
             Assert.True(LevelCatalog.Get(n).Goals.Count >= 2, $"level {n}");
-        Assert.True(Enumerable.Range(161, 14).Any(n => LevelCatalog.Get(n).Goals.Count == 3));
+        Assert.Contains(Enumerable.Range(161, 14), n => LevelCatalog.Get(n).Goals.Count == 3);
         Assert.Equal(3, LevelCatalog.Get(RegionRules.TripleGoalIntro).Goals.Count);
         Assert.Equal(2, LevelCatalog.Get(RegionRules.DualGoalIntro).Goals.Count);
     }
@@ -125,8 +125,8 @@ public class RegionRulesTests
 
         // Later regions keep the pattern; the endless band does too.
         Assert.True(LevelCatalog.Get(151).FlipView);
-        Assert.True(Enumerable.Range(151, 60).Any(n => LevelCatalog.Get(n).NoPopPenalty > 0));
-        Assert.True(Enumerable.Range(151, 60).Any(n => !LevelCatalog.Get(n).FlipView));
+        Assert.Contains(Enumerable.Range(151, 60), n => LevelCatalog.Get(n).NoPopPenalty > 0);
+        Assert.Contains(Enumerable.Range(151, 60), n => !LevelCatalog.Get(n).FlipView);
     }
 
     // ---------------------------------------------------------------- finales

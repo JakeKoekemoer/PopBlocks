@@ -30,6 +30,8 @@ public partial class ShopPanel : ContentView, IWorkshopPanel
     {
         ItemsHost.Children.Clear();
 
+        ItemsHost.Children.Add(ShopArt.Banner(Category == ItemCategory.Consumable ? "banner_supplies.png" : "banner_upgrades.png"));
+
         if (Category == ItemCategory.Consumable)
         {
             ItemsHost.Children.Add(Ui.Body($"Used up when you use them. Hold up to {ConsumableCatalog.Cap} of each.", 13));
@@ -131,7 +133,7 @@ public partial class ShopPanel : ContentView, IWorkshopPanel
             stack.Children.Add(buy);
         }
 
-        return Ui.Card(stack, new Thickness(20, 18));
+        return Ui.Card(ShopArt.Beside(stack, ShopArt.ForSupply(info.Kind), entry.Locked), new Thickness(20, 18));
     }
 
     private View MakeCard(ShopEntry entry)
@@ -229,6 +231,9 @@ public partial class ShopPanel : ContentView, IWorkshopPanel
             stack.Children.Add(buy);
         }
 
-        return Ui.Card(stack, new Thickness(20, 18));
+        View body = ShopArt.HeroForUpgrade(item.Id) is { } hero
+            ? ShopArt.Above(stack, hero)
+            : ShopArt.Beside(stack, ShopArt.ForUpgrade(item.Id), entry.Locked);
+        return Ui.Card(body, new Thickness(20, 18));
     }
 }
