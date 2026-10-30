@@ -24,9 +24,7 @@ internal sealed class LevelTileGrid : Grid
         tile.VerticalOptions = LayoutOptions.Start;
         int row = _count / Columns;
         while (RowDefinitions.Count <= row) RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        SetRow(tile, row);
-        SetColumn(tile, _count % Columns);
-        Children.Add(tile);
+        this.Add(tile, _count % Columns, row);
         _count++;
     }
 }
