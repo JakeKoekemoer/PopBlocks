@@ -30,7 +30,6 @@ public partial class MainPage : ContentPage
         _identity = identity;
         _save = save;
 
-        LogoView.Drawable = new LogoDrawable();
         StartLogoView.Drawable = new LogoDrawable();
         CoinView.Drawable = new GoldCoinDrawable();
         StoryCardScene.Drawable = _storyScene;
