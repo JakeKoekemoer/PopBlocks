@@ -7,7 +7,7 @@ public enum IconKind
     None, Map, Cart, Book, Help, Share, Settings, Info, Infinity,
 
     // The game controls and abilities
-    ArrowLeft, ArrowRight, ArrowDown, ArrowUp, FarLeft, FarRight, Drop, DropUp, Pause, Undo, Shift, Insight, Eye,
+    ArrowLeft, ArrowRight, ArrowDown, ArrowUp, FarLeft, FarRight, Drop, DropUp, Pause, Undo, Shift, Insight, Eye, Rotate,
 }
 
 /// <summary>
@@ -60,9 +60,33 @@ public sealed class IconDrawable : IDrawable
             case IconKind.Shift: DrawShift(canvas); break;
             case IconKind.Insight: DrawBulb(canvas); break;
             case IconKind.Eye: DrawEye(canvas); break;
+            case IconKind.Rotate: DrawRotate(canvas); break;
         }
 
         canvas.RestoreState();
+    }
+
+    /// <summary>A circular arrow: most of a circle, clockwise, ending in an arrowhead.</summary>
+    private static void DrawRotate(ICanvas canvas)
+    {
+        const float cx = 12f, cy = 12f, r = 7.5f;
+        float start = 25f * MathF.PI / 180f, end = 305f * MathF.PI / 180f;
+        var p = new PathF();
+        const int steps = 24;
+        for (int i = 0; i <= steps; i++)
+        {
+            float a = start + (end - start) * i / steps;
+            float x = cx + r * MathF.Cos(a), y = cy + r * MathF.Sin(a);
+            if (i == 0) p.MoveTo(x, y); else p.LineTo(x, y);
+        }
+        canvas.DrawPath(p);
+
+        // Arrowhead at the end, pointing the way the arc is going (clockwise on screen).
+        float ex = cx + r * MathF.Cos(end), ey = cy + r * MathF.Sin(end);
+        float tx = -MathF.Sin(end), ty = MathF.Cos(end);     // direction of travel
+        float nx = MathF.Cos(end), ny = MathF.Sin(end);      // outward
+        canvas.DrawLine(ex, ey, ex - tx * 4.5f + nx * 3.5f, ey - ty * 4.5f + ny * 3.5f);
+        canvas.DrawLine(ex, ey, ex - tx * 4.5f - nx * 3.5f, ey - ty * 4.5f - ny * 3.5f);
     }
 
     private static void Dot(ICanvas canvas, float x, float y, float r) => canvas.FillEllipse(x - r, y - r, r * 2f, r * 2f);

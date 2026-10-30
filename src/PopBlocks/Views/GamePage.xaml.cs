@@ -92,10 +92,11 @@ public partial class GamePage : ContentPage
         BoardView.EndInteraction += OnTouchEnd;
         BoardView.CancelInteraction += OnTouchCancel;
 
-        // Far left, left, down, drop, right, far right. (Turning the piece is a tap on the board.)
+        // Far left, left, down, rotate, drop, right, far right. (Tapping the board turns the piece too.)
         WireButton(FarLeftKey.Pad, MoveScreenFarLeft, repeat: false);
         WireButton(LeftKey.Pad, MoveScreenLeft, repeat: true);
         WireButton(DownKey.Pad, _vm.SoftDrop, repeat: true);
+        WireButton(RotateKey.Pad, _vm.Rotate, repeat: false);
         WireButton(DropKey.Pad, _vm.HardDrop, repeat: false);
         WireButton(RightKey.Pad, MoveScreenRight, repeat: true);
         WireButton(FarRightKey.Pad, MoveScreenFarRight, repeat: false);

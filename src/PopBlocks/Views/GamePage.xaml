@@ -262,14 +262,15 @@
                     HorizontalOptions="Center"
                     Clicked="OnToggleControls" />
 
-            <!-- Far left, left, down, drop, right, far right. Icons only. Left, right and down repeat while held. -->
-            <Grid x:Name="ControlsGrid" ColumnDefinitions="*,*,*,1.4*,*,*" ColumnSpacing="6">
+            <!-- Far left, left, down, rotate, drop, right, far right. Icons only. Left, right and down repeat while held. -->
+            <Grid x:Name="ControlsGrid" ColumnDefinitions="*,*,*,1.2*,1.2*,*,*" ColumnSpacing="6">
                 <views:IconKey x:Name="FarLeftKey" Grid.Column="0" Icon="FarLeft" HeightRequest="52" SemanticProperties.Description="Move all the way left" />
                 <views:IconKey x:Name="LeftKey" Grid.Column="1" Icon="ArrowLeft" HeightRequest="52" SemanticProperties.Description="Move left" />
                 <views:IconKey x:Name="DownKey" Grid.Column="2" Icon="ArrowDown" HeightRequest="52" SemanticProperties.Description="Move down" />
-                <views:IconKey x:Name="DropKey" Grid.Column="3" Icon="Drop" Accent="True" HeightRequest="52" SemanticProperties.Description="Drop the piece" />
-                <views:IconKey x:Name="RightKey" Grid.Column="4" Icon="ArrowRight" HeightRequest="52" SemanticProperties.Description="Move right" />
-                <views:IconKey x:Name="FarRightKey" Grid.Column="5" Icon="FarRight" HeightRequest="52" SemanticProperties.Description="Move all the way right" />
+                <views:IconKey x:Name="RotateKey" Grid.Column="3" Icon="Rotate" HeightRequest="52" SemanticProperties.Description="Turn the piece" />
+                <views:IconKey x:Name="DropKey" Grid.Column="4" Icon="Drop" Accent="True" HeightRequest="52" SemanticProperties.Description="Drop the piece" />
+                <views:IconKey x:Name="RightKey" Grid.Column="5" Icon="ArrowRight" HeightRequest="52" SemanticProperties.Description="Move right" />
+                <views:IconKey x:Name="FarRightKey" Grid.Column="6" Icon="FarRight" HeightRequest="52" SemanticProperties.Description="Move all the way right" />
             </Grid>
         </VerticalStackLayout>
 
