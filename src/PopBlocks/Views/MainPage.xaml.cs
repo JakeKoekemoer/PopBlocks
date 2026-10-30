@@ -130,12 +130,6 @@ public partial class MainPage : ContentPage
         ShowMenu();
     }
 
-    private void OnBackToStartClicked(object? sender, EventArgs e)
-    {
-        _showingFullMenu = false;
-        ShowMenu();
-    }
-
     /// <summary>Repaints everything that changes as the player progresses.</summary>
     private void Refresh()
     {

@@ -44,7 +44,7 @@ public partial class WorldMapPage : ContentPage
 
     private readonly Dictionary<int, Section> _sections = new();
     private readonly Dictionary<int, Border> _tiles = new();
-    private FlexLayout? _beyondWrap;
+    private LevelTileGrid? _beyondWrap;
     private int _beyondLast;                // the last level of the endless band that has a tile
     private int _selected;                  // the level whose details are shown
     private int _open;                      // the section key that is open
@@ -303,7 +303,7 @@ public partial class WorldMapPage : ContentPage
 
         var wrap = NewWrap();
         for (int n = region.FirstLevel; n <= region.LastLevel; n++)
-            wrap.Children.Add(MakeTile(n, TierColour(StoryConfig.TierFor(n))));
+            wrap.AddTile(MakeTile(n, TierColour(StoryConfig.TierFor(n))));
         body.Children.Add(wrap);
         return body;
     }
@@ -317,7 +317,7 @@ public partial class WorldMapPage : ContentPage
         _beyondWrap = NewWrap();
         var colour = TierColour(Tier.Extreme);
         for (int n = RegionCatalog.LastCampaignLevel + 1; n <= _beyondLast; n++)
-            _beyondWrap.Children.Add(MakeTile(n, colour));
+            _beyondWrap.AddTile(MakeTile(n, colour));
         body.Children.Add(_beyondWrap);
 
         var more = new Button
@@ -333,19 +333,13 @@ public partial class WorldMapPage : ContentPage
             _beyondLast += MoreStep;
             var colour2 = TierColour(Tier.Extreme);
             for (int n = from; n <= _beyondLast; n++)
-                _beyondWrap.Children.Add(MakeTile(n, colour2));
+                _beyondWrap.AddTile(MakeTile(n, colour2));
         };
         body.Children.Add(more);
         return body;
     }
 
-    private static FlexLayout NewWrap() => new()
-    {
-        Wrap = FlexWrap.Wrap,
-        Direction = FlexDirection.Row,
-        JustifyContent = FlexJustify.Start,
-        AlignItems = FlexAlignItems.Start,
-    };
+    private static LevelTileGrid NewWrap() => new();
 
     private static Color TierColour(Tier tier) => tier switch
     {
@@ -401,9 +395,8 @@ public partial class WorldMapPage : ContentPage
 
         var tile = new Border
         {
-            WidthRequest = 54,
-            HeightRequest = 54,
-            Margin = new Thickness(0, 0, 8, 8),
+            WidthRequest = LevelTileGrid.TileSize,
+            HeightRequest = LevelTileGrid.TileSize,
             Padding = new Thickness(2),
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = new CornerRadius(16) },
             Content = content,

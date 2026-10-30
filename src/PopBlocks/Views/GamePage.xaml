@@ -434,7 +434,7 @@
                                           WidthRequest="130"
                                           IsVisible="{Binding ShowShop}"
                                           Command="{Binding ShopCommand}"
-                                          SemanticProperties.Description="Open the workshop" />
+                                          SemanticProperties.Description="Open the shop" />
                     </Grid>
                     <Button Text="{Binding RetryText}"
                             Style="{StaticResource PrimaryButton}"
@@ -456,7 +456,7 @@
                                       Kind="Secondary"
                                       IsVisible="{Binding ShowShopOnFailed}"
                                       Command="{Binding ShopCommand}"
-                                      SemanticProperties.Description="Open the workshop" />
+                                      SemanticProperties.Description="Open the shop" />
                     <views:IconButton Text="SHARE"
                                       Icon="Share"
                                       Kind="Ghost"

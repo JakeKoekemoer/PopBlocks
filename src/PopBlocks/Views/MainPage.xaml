@@ -52,13 +52,6 @@
     <ScrollView x:Name="FullMenu" IsVisible="False">
         <VerticalStackLayout Padding="24,20,24,28" Spacing="16">
 
-            <Button Text="BACK"
-                    Style="{StaticResource GhostButton}"
-                    HorizontalOptions="Start"
-                    Padding="0"
-                    Margin="0,0,0,-8"
-                    Clicked="OnBackToStartClicked" />
-
             <!-- Gold -->
             <Border Style="{StaticResource Glass}"
                     HorizontalOptions="End"
@@ -113,7 +106,7 @@
             <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="12">
                 <views:IconButton Grid.Row="0" Grid.Column="0" Icon="Map" Text="MAP" Clicked="OnMapClicked" />
                 <views:IconButton Grid.Row="0" Grid.Column="1" Icon="Infinity" Text="ENDLESS" Clicked="OnClassicClicked" />
-                <views:IconButton Grid.Row="1" Grid.Column="0" Icon="Cart" Text="WORKSHOP" Clicked="OnShopClicked" />
+                <views:IconButton Grid.Row="1" Grid.Column="0" Icon="Cart" Text="SHOP" Clicked="OnShopClicked" />
                 <views:IconButton Grid.Row="1" Grid.Column="1" Icon="Book" Text="STORY BOOK" Clicked="OnArchiveClicked" />
                 <views:IconButton Grid.Row="2" Grid.Column="0" Icon="Help" Text="TUTORIAL" Clicked="OnTutorialClicked" />
                 <views:IconButton Grid.Row="2" Grid.Column="1" Icon="Info" Text="ABOUT" Clicked="OnAboutClicked" />
