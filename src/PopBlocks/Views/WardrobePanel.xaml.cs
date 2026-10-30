@@ -59,6 +59,7 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
         }
 
         Host.Children.Clear();
+        Host.Children.Add(ShopArt.Banner(_slot == CosmeticSlot.Burst ? "banner_bursts.png" : "banner_looks.png"));
         Host.Children.Add(Ui.Body("Looks only. Nothing here changes how the game plays.", 13));
         foreach (var entry in _shop.Entries(_slot).OrderBy(e => e.State == CosmeticState.Locked))
         {
@@ -138,7 +139,8 @@ public partial class WardrobePanel : ContentView, IWorkshopPanel
                 break;
         }
 
-        var card = Ui.Card(stack, new Thickness(18, 16));
+        // A burst has its own picture beside the live preview; a locked one stays hidden so discovery is a surprise.
+        var card = Ui.Card(ShopArt.Beside(stack, locked ? null : ShopArt.ForBurst(item.Id)), new Thickness(18, 16));
         SemanticProperties.SetDescription(card, locked ? $"A look not found yet. {entry.Hint}" : $"{item.Name}. {item.Description}");
         return card;
     }
