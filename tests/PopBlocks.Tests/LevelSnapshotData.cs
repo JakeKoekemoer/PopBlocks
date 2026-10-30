@@ -44,15 +44,15 @@ public static class LevelSnapshotData
 38|Easy|BigGroup:5:0|m7|f811|c4|-|p0|8cc079d1
 39|Easy|Score:740:0|m10|f806|c4|-|p0|ac37fa01
 40|Easy|BigGroup:5:0|m7|f801|c4|-|p0|8099a3d9
-41|Easy|PopColour:11:2;Chain:3:0|m19|f796|c5|-|p0|8377cbb1
+41|Easy|PopColour:11:2;Chain:3:0|m20|f796|c5|-|p0|8377cbb1
 42|Easy|PopBlocks:47:0;BigGroup:5:0|m12|f791|c4|-|p0|6edc6eca
 43|Easy|Chain:3:0;PopBlocks:47:0|m11|f786|c4|-|p0|4dd10d3b|bonus BigGroup:7:0:mem_r2_2
 44|Easy|Score:800:0|m12|f781|c4|-|p0|bba69248
 45|Easy|BigGroup:5:0|m6|f776|c4|-|p0|c5f66c7a
-46|Easy|PopColour:15:2|m40|f770|c5|-|p0|241af389
+46|Easy|PopColour:15:2|m38|f770|c5|-|p0|241af389
 47|Easy|BigGroup:5:0|m6|f765|c4|-|p0|fe4da653
 48|Easy|ClearDown:17:0|m9|f760|c4|-|p0|2ebbb35e
-49|Easy|PopBlocks:69:0|m20|f755|c4|-|p0|3f8d7ab1
+49|Easy|PopBlocks:69:0|m21|f755|c4|-|p0|3f8d7ab1
 50|Easy|BigGroup:5:0;PopBlocks:58:0|m17|f750|c4|-|p0|d4bcbda4
 51|Medium|Score:800:0|m23|f800|c5|-|p0|41dcd970
 52|Medium|Chain:3:0|m7|f796|c5|-|p0|1dac8cb2
@@ -64,7 +64,7 @@ public static class LevelSnapshotData
 58|Medium|PopColour:16:4|m18|f774|c5|-|p0|a4723757
 59|Medium|BigGroup:6:0|m7|f771|c5|-|p0|00e253e0
 60|Medium|PopColour:16:1|m38|f767|c5|-|p0|a795b3b6
-61|Medium|PopBlocks:72:0|m20|f763|c5|-|p0|f568d912
+61|Medium|PopBlocks:72:0|m23|f763|c5|-|p0|f568d912
 62|Medium|PopColour:17:3|m29|f760|c5|-|p0|b41fb665|bonus Chain:3:0:mem_r3_1
 63|Medium|Score:920:0|m18|f756|c5|-|p0|09d57a9d
 64|Medium|Chain:3:0;PopBlocks:56:0|m16|f752|c5|-|p0|86351bfa
@@ -87,11 +87,11 @@ public static class LevelSnapshotData
 81|Medium|ClearDown:14:0;PopBlocks:66:0|m15|f690|c5|-|p0|886a2f4a
 82|Medium|Score:1100:0|m15|f686|c5|-|p0|a2068638
 83|Medium|BigGroup:6:0|m6|f682|c5|-|p0|321c07fe
-84|Medium|PopColour:21:4|m15|f679|c5|-|p0|21b75159
+84|Medium|PopColour:21:4|m20|f679|c5|-|p0|21b75159
 85|Medium|PopBlocks:91:0|m26|f675|c5|-|p0|c2015569
 86|Medium|ClearDown:16:0|m9|f671|c5|-|p0|36615dd1
-87|Medium|Score:860:0;ClearDown:14:0|m16|f668|c5|-|p0|3ca86aa3|bonus Chain:3:0:mem_r4_1
-88|Medium|Chain:3:0;PopBlocks:70:0|m20|f664|c5|-|p0|5ea9b43e
+87|Medium|Score:860:0;ClearDown:14:0|m27|f668|c5|-|p0|3ca86aa3|bonus Chain:3:0:mem_r4_1
+88|Medium|Chain:3:0;PopBlocks:70:0|m18|f664|c5|-|p0|5ea9b43e
 89|Medium|Score:880:0;PopBlocks:70:0|m15|f660|c5|-|p0|15cd3577
 90|Medium|PopBlocks:71:0;ClearDown:19:0|m14|f657|c5|-|p0|f834aa9f
 91|Medium|PopColour:16:1;Chain:3:0|m26|f653|c5|-|p0|5cd356c0
@@ -99,43 +99,43 @@ public static class LevelSnapshotData
 93|Medium|ClearDown:17:0|m10|f646|c5|-|p0|4250ff60|bonus Chain:3:0:mem_r4_2
 94|Medium|Score:1220:0|m21|f642|c5|-|p0|01924637
 95|Medium|BigGroup:6:0|m6|f638|c5|-|p0|e9c6231e
-96|Medium|PopColour:23:1|m27|f635|c5|-|p0|0365a690
+96|Medium|PopColour:23:1|m20|f635|c5|-|p0|0365a690
 97|Medium|PopBlocks:100:0|m25|f631|c5|-|p0|31a92426
-98|Medium|ClearDown:19:0|m15|f627|c5|-|p0|66dbc836
+98|Medium|ClearDown:19:0|m21|f627|c5|-|p0|66dbc836
 99|Medium|Score:950:0;PopBlocks:76:0|m14|f624|c5|-|p0|bc6f401b
 100|Medium|Chain:3:0;Score:1060:0|m20|f620|c5|-|p0|b834f2fc
 101|Hard|PopColour:15:1;Chain:3:0|m16|f650|c5|-|p0|75dd664c
 102|Hard|BigGroup:6:0;PopBlocks:68:0|m12|f647|c5|-|p0|f5662c74
-103|Hard|ClearDown:14:0;Score:850:0|m36|f643|c5|-|p0|de17e730
+103|Hard|ClearDown:14:0;Score:850:0|m19|f643|c5|-|p0|de17e730
 104|Hard|PopBlocks:69:0;Chain:3:0|m14|f640|c5|-|p0|2b72b178
-105|Hard|Chain:3:0;ClearDown:15:0|m37|f636|c5|-|p0|ddf34b30
+105|Hard|Chain:3:0;ClearDown:15:0|m33|f636|c5|-|p0|ddf34b30
 106|Hard|Score:880:0;PopBlocks:70:0|m18|f633|c5|-|p0|9fc4f5ef
 107|Hard|Chain:3:0;Score:880:0|m27|f629|c5|-|p0|b0bba55c
 108|Hard|ClearDown:15:0|m14|f626|c5|-|p0|0ab88b57
 109|Hard|PopBlocks:96:0|m19|f622|c5|-|p0|50f13103
 110|Hard|Chain:3:0|m9|f619|c5|-|p0|67c6f6be
-111|Hard|Score:910:0;Chain:3:0|m30|f615|c5|-|p0|65f925d3
+111|Hard|Score:910:0;Chain:3:0|m27|f615|c5|-|p0|65f925d3
 112|Hard|Chain:3:0;ClearDown:18:0|m16|f612|c5|-|p0|6819feae|bonus ClearColour:0:5:mem_r5_1
 113|Hard|PopColour:17:2;PopBlocks:74:0|m20|f608|c5|-|p0|bb64d086
 114|Hard|BigGroup:6:0;PopColour:17:3|m16|f605|c5|-|p0|f67bbe60
 115|Hard|ClearDown:15:0;Chain:3:0|m19|f601|c5|-|p0|08c61a9c
 116|Hard|PopBlocks:76:0;Score:950:0|m15|f598|c5|-|p0|f609b547
 117|Hard|Chain:3:0;Score:960:0|m15|f594|c5|-|p0|3b4ebf53
-118|Hard|Score:960:0;Chain:3:0|m27|f591|c5|-|p0|15b87e79|bonus BigGroup:9:0:mem_r5_2
+118|Hard|Score:960:0;Chain:3:0|m22|f591|c5|-|p0|15b87e79|bonus MovesLeft:3:0:mem_r5_2
 119|Hard|Chain:3:0|m11|f588|c5|-|p0|38a55682
 120|Hard|ClearDown:16:0|m20|f584|c5|-|p0|c42485a4
 121|Hard|PopBlocks:105:0|m21|f581|c5|-|p0|0c676df1
-122|Hard|ClearDown:20:0;Chain:3:0|m35|f577|c5|-|p0|cf3b8e00
+122|Hard|ClearDown:20:0;Chain:3:0|m32|f577|c5|-|p0|cf3b8e00
 123|Hard|Score:1000:0;PopBlocks:80:0|m16|f574|c5|-|p0|768b0549
 124|Hard|Chain:3:0;Score:1010:0|m16|f570|c5|-|p0|9b0ac59e
-125|Hard|PopColour:21:4;ClearDown:16:0|m71|f567|c5|-|p0|489b4173
+125|Hard|PopColour:21:4;ClearDown:16:0|m53|f567|c5|-|p0|489b4173
 126|Hard|BigGroup:7:0;ClearDown:19:0|m32|f563|c5|-|p0|6cf07137
 127|Hard|PopColour:19:1;PopBlocks:82:0|m21|f560|c5|-|p0|71ab0c02
-128|Hard|PopBlocks:83:0;PopColour:19:2|m21|f556|c5|flip|p0|70b9e7ac
-129|Hard|ClearDown:18:0;PopColour:19:3|m40|f553|c5|-|p0|0f321541
+128|Hard|PopBlocks:83:0;PopColour:19:2|m20|f556|c5|flip|p0|70b9e7ac
+129|Hard|ClearDown:18:0;PopColour:19:3|m62|f553|c5|-|p0|0f321541
 130|Hard|Score:1050:0;PopBlocks:84:0|m18|f549|c5|-|p0|02142838
 131|Hard|Chain:4:0|m9|f546|c5|-|p0|6a471278
-132|Hard|Score:1420:0|m29|f542|c5|-|p0|0c2433d3
+132|Hard|Score:1420:0|m28|f542|c5|-|p0|0c2433d3
 133|Hard|PopBlocks:115:0|m42|f539|c5|-|p0|aa3f359b
 134|Hard|Score:1080:0;ClearDown:19:0|m41|f536|c5|-|p10|18a2846d
 135|Hard|PopBlocks:87:0;PopColour:20:4|m26|f532|c5|-|p0|381b1ceb
@@ -146,21 +146,21 @@ public static class LevelSnapshotData
 140|Hard|PopBlocks:90:0;Chain:4:0|m26|f515|c5|-|p0|b62a7a46
 141|Hard|Score:1130:0;ClearDown:19:0|m25|f511|c5|-|p11|c6d378b7
 142|Hard|Score:1140:0;PopColour:21:1|m13|f508|c5|-|p0|3a5e3ebf
-143|Hard|Chain:4:0|m22|f504|c5|-|p0|55e9d31e|bonus BigGroup:9:0:mem_r6_2
-144|Hard|Score:1540:0|m27|f501|c5|-|p0|966da700
+143|Hard|Chain:4:0|m36|f504|c5|-|p0|55e9d31e|bonus MovesLeft:3:0:mem_r6_2
+144|Hard|Score:1540:0|m36|f501|c5|-|p0|966da700
 145|Hard|PopBlocks:124:0|m27|f497|c5|-|p0|efe77bf5
 146|Hard|PopColour:22:5;Score:1170:0|m27|f494|c5|flip|p0|cc18171e
 147|Hard|PopBlocks:94:0;Chain:4:0|m19|f490|c5|-|p0|37187fb4
-148|Hard|Score:1190:0;ClearDown:18:0|m24|f487|c5|-|p13|31193291
+148|Hard|Score:1190:0;ClearDown:18:0|m28|f487|c5|-|p13|31193291
 149|Hard|Score:1190:0;PopColour:22:3|m41|f483|c5|-|p0|34425b29
 150|Hard|BigGroup:7:0;ClearDown:20:0|m25|f480|c5|-|p0|e54b0af1
 151|Extreme|PopColour:20:5;PopBlocks:86:0|m19|f520|c5|flip|p0|8d3ea146
 152|Extreme|PopBlocks:87:0;Score:1080:0|m20|f518|c5|-|p0|ff59ea1a
-153|Extreme|ClearDown:12:0;Score:1090:0|m36|f516|c5|-|p0|0b1f67a5
+153|Extreme|ClearDown:12:0;Score:1090:0|m29|f516|c5|-|p0|0b1f67a5
 154|Extreme|Score:1090:0;Chain:4:0|m33|f515|c5|-|p0|3b858bd8
 155|Extreme|Chain:4:0;PopBlocks:88:0|m25|f513|c5|flip|p0|dff3a826
-156|Extreme|Score:1100:0;PopColour:20:4|m28|f511|c5|-|p15|bd4f4d1b
-157|Extreme|PopBlocks:88:0;ClearDown:12:0|m23|f509|c5|-|p0|52470da9
+156|Extreme|Score:1100:0;PopColour:20:4|m23|f511|c5|-|p15|bd4f4d1b
+157|Extreme|PopBlocks:88:0;ClearDown:12:0|m18|f509|c5|-|p0|52470da9
 158|Extreme|PopColour:20:1;PopBlocks:89:0|m28|f507|c5|-|p0|31a93e8c
 159|Extreme|Score:1110:0;PopBlocks:89:0|m23|f505|c5|flip|p15|96f31c8b
 160|Extreme|ClearDown:13:0;Score:1120:0|m35|f504|c5|-|p0|cdea9d8d
@@ -172,11 +172,11 @@ public static class LevelSnapshotData
 166|Extreme|Score:910:0;ClearDown:13:0;PopColour:17:4|m32|f493|c5|-|p0|c23d870e
 167|Extreme|PopColour:21:5;Chain:4:0|m26|f491|c5|flip|p0|d34006ae
 168|Extreme|Score:920:0;Chain:4:0;PopBlocks:74:0|m30|f489|c5|-|p17|83dc249c|bonus MovesLeft:3:0:mem_r7_2
-169|Extreme|PopBlocks:93:0;PopColour:21:2|m24|f487|c5|-|p0|bb51f0cc
+169|Extreme|PopBlocks:93:0;PopColour:21:2|m22|f487|c5|-|p0|bb51f0cc
 170|Extreme|Score:1160:0;ClearDown:13:0|m16|f485|c5|-|p0|a6860ffc
 171|Extreme|Score:930:0;ClearDown:12:0;BigGroup:7:0|m22|f484|c5|flip|p17|188ee4fe
 172|Extreme|PopBlocks:94:0;Score:1170:0|m25|f482|c5|-|p0|c41272c5
-173|Extreme|Score:940:0;PopColour:17:1;ClearDown:12:0|m44|f480|c5|-|p0|8110f468
+173|Extreme|Score:940:0;PopColour:17:1;ClearDown:12:0|m47|f480|c5|-|p0|8110f468
 174|Extreme|Score:1180:0;ClearDown:14:0|m21|f478|c5|-|p18|64dac665
 175|Extreme|Chain:4:0;ClearDown:11:0;PopBlocks:83:0|m27|f476|c5|-|p0|ba216765
 176|Extreme|Score:950:0;PopBlocks:76:0;Chain:4:0|m31|f475|c5|-|p0|51b25079
@@ -188,27 +188,27 @@ public static class LevelSnapshotData
 182|Extreme|BigGroup:7:0;ClearDown:14:0;PopColour:18:5|m21|f464|c5|-|p0|1c8becd6
 183|Extreme|Score:970:0;PopBlocks:78:0;BigGroup:7:0|m22|f462|c5|flip|p19|bd17d4cc
 184|Extreme|PopColour:22:2;PopBlocks:98:0|m22|f460|c5|-|p0|5b63545e
-185|Extreme|Chain:4:0;PopColour:18:3;Score:980:0|m29|f458|c5|-|p0|dcbcb353
+185|Extreme|Chain:4:0;PopColour:18:3;Score:980:0|m37|f458|c5|-|p0|dcbcb353
 186|Extreme|Score:1230:0;PopBlocks:98:0|m19|f456|c5|-|p20|5bef6c9c
 187|Extreme|Score:990:0;BigGroup:7:0;PopBlocks:79:0|m17|f455|c5|flip|p0|92cb1c2d|bonus MovesLeft:3:0:mem_r8_1
 188|Extreme|ClearDown:13:0;PopBlocks:79:0;PopColour:18:1|m18|f453|c5|-|p0|0e08486b
 189|Extreme|Score:1240:0;BigGroup:7:0|m28|f451|c5|-|p20|2af3a065
 190|Extreme|Score:1000:0;Chain:4:0;PopBlocks:80:0|m20|f449|c5|-|p0|276ffb2f
 191|Extreme|PopColour:23:4;BigGroup:7:0|m29|f447|c5|flip|p0|950bd0dc
-192|Extreme|Score:1000:0;Chain:4:0;PopBlocks:80:0|m24|f445|c5|-|p21|9a005dbf
-193|Extreme|PopBlocks:101:0;ClearDown:13:0|m46|f444|c5|-|p0|29298433|bonus ClearColour:0:2:mem_r8_2
+192|Extreme|Score:1000:0;Chain:4:0;PopBlocks:80:0|m38|f445|c5|-|p21|9a005dbf
+193|Extreme|PopBlocks:101:0;ClearDown:13:0|m57|f444|c5|-|p0|29298433|bonus Chain:4:0:mem_r8_2
 194|Extreme|Score:1010:0;Chain:4:0;PopColour:19:2|m32|f442|c5|-|p0|02d1a161
 195|Extreme|Score:1010:0;Chain:4:0;BigGroup:7:0|m22|f440|c5|flip|p21|e6aa0748
 196|Extreme|BigGroup:7:0;Score:1270:0|m21|f438|c5|-|p0|7260619f
 197|Extreme|Score:1020:0;ClearDown:13:0;PopBlocks:82:0|m27|f436|c5|-|p0|c1f74c3d
-198|Extreme|Score:1280:0;ClearDown:14:0|m29|f435|c5|-|p22|8b5dcb5f
+198|Extreme|Score:1280:0;ClearDown:14:0|m23|f435|c5|-|p22|8b5dcb5f
 199|Extreme|Chain:3:0;BigGroup:6:0;ClearDown:19:0|m26|f433|c5|flip|p0|377c9b3b
 200|Extreme|ChainSet:3:0:w3|m18|f431|c5|-|p0|9371513b
 201|Extreme|Score:1290:0;PopColour:24:3|m22|f429|c5|-|p22|1f353a5d
-202|Extreme|ClearDown:19:0;Chain:4:0;BigGroup:7:0|m39|f427|c5|-|p0|af46e9c4
+202|Extreme|ClearDown:19:0;Chain:4:0;BigGroup:7:0|m59|f427|c5|-|p0|af46e9c4
 203|Extreme|BigGroup:8:0;PopBlocks:104:0|m35|f425|c5|flip|p0|9d86439c
-204|Extreme|Score:1040:0;PopBlocks:84:0;ClearDown:13:0|m35|f424|c5|-|p23|b0b8e60a
-205|Extreme|PopColour:24:2;ClearDown:14:0|m36|f422|c5|-|p0|cc207793
+204|Extreme|Score:1040:0;PopBlocks:84:0;ClearDown:13:0|m37|f424|c5|-|p23|b0b8e60a
+205|Extreme|PopColour:24:2;ClearDown:14:0|m45|f422|c5|-|p0|cc207793
 206|Extreme|Chain:4:0;ClearDown:19:0;PopBlocks:76:0|m22|f420|c5|-|p0|e686f69b
 207|Extreme|Score:1050:0;PopBlocks:84:0;PopColour:19:4|m21|f418|c5|flip|p23|dbca25c7
 208|Extreme|Score:1320:0;PopColour:24:5|m21|f416|c5|-|p0|95ee1068
@@ -216,7 +216,7 @@ public static class LevelSnapshotData
 210|Extreme|Score:1330:0;BigGroup:8:0|m22|f413|c5|-|p24|0f1c95d6
 211|Extreme|Score:1070:0;PopBlocks:85:0;Chain:5:0|m41|f411|c5|flip|p0|73059c2f
 212|Extreme|PopColour:20:4;Score:1070:0;BigGroup:8:0|m22|f409|c5|-|p0|8af8dddd
-213|Extreme|Score:1340:0;Chain:5:0|m44|f407|c5|-|p24|2fb2ae12
+213|Extreme|Score:1340:0;Chain:5:0|m60|f407|c5|-|p24|2fb2ae12
 214|Extreme|PopBlocks:86:0;BigGroup:8:0;ClearDown:14:0|m23|f405|c5|-|p0|95b33c01
 215|Extreme|Score:1350:0;PopBlocks:108:0|m25|f404|c5|flip|p0|4cfc145d
 216|Extreme|Score:1080:0;Chain:5:0;PopColour:20:3|m47|f402|c5|-|p25|42a01d3c

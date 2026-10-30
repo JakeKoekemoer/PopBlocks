@@ -77,3 +77,4 @@ $RECYCLE.BIN/
 _to_delete/
 ## Local scratch space.
 scratch/
+scripts/Build-Aab.ps1
