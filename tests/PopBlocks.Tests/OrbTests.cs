@@ -39,7 +39,7 @@ public class OrbTests
     }
 
     [Fact]
-    public void A_sparse_or_one_colour_board_has_no_spot_but_the_guarantee_still_finds_one()
+    public void A_sparse_or_one_colour_board_has_no_spot_but_the_relaxed_search_still_finds_one()
     {
         var sparse = Board.FromRows(new[] { "C.......", "C......." });
         Assert.Empty(OrbSystem.Spots(sparse, GameConfig.HiddenRows, GameConfig.ViewportRows, relaxed: false));
@@ -188,8 +188,9 @@ public class OrbTests
     }
 
     [Fact]
-    public void An_orb_appears_by_the_eighth_piece_at_the_latest_and_never_two_at_once()
+    public void An_orb_is_not_guaranteed_and_never_two_are_on_the_board()
     {
+        Assert.Equal(0.40, OrbSystem.SpawnChance);
         for (int seed = 1; seed <= 8; seed++)
         {
             var e = new GameEngine(new PieceGenerator(new Random(seed)));
@@ -212,10 +213,42 @@ public class OrbTests
                 Story.Settle(e);
                 Assert.True(OrbCells(e.Board) is 0 or 4, "never more than one orb");
             }
-
-            if (e.PiecesPlaced >= 10) Assert.InRange(firstSpawnAt, 1, 9);
             Assert.True(spawns >= 0);
         }
+    }
+
+    [Fact]
+    public void An_orb_holds_the_board_still_before_the_next_piece_drops()
+    {
+        bool seenHold = false;
+        for (int seed = 1; seed <= 12 && !seenHold; seed++)
+        {
+            var e = new GameEngine(new PieceGenerator(new Random(seed)));
+            e.Start(GameSetup.ClassicRun(seed * 31, chosen: false) with { Rules = GameRules.Default with { Orbs = OrbMode.Always } });
+            e.Timing = new PopTiming(40, 40);
+            var random = new Random(seed + 7);
+            for (int step = 0; step < 60 && e.State is GameState.Playing or GameState.ResolvingBursts; step++)
+            {
+                if (e.State == GameState.ResolvingBursts)
+                {
+                    if (e.IsRevealingOrb)
+                    {
+                        seenHold = true;
+                        Assert.Null(e.CurrentPiece);
+                        Assert.Equal(GameEngine.OrbRevealMs, e.TimerIntervalMs);
+                        Assert.NotNull(e.OrbAt);
+                        e.Tick();
+                        Assert.Equal(GameState.Playing, e.State);
+                        Assert.NotNull(e.CurrentPiece);   // and now the next piece drops
+                    }
+                    else e.Tick();
+                    continue;
+                }
+                for (int s = random.Next(0, 5); s > 0; s--) e.MoveRight();
+                e.HardDrop();
+            }
+        }
+        Assert.True(seenHold, "no Orb arrived in twelve games on Always");
     }
 
     [Fact]

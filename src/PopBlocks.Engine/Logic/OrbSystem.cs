@@ -18,11 +18,11 @@ public static class OrbSystem
     /// <summary>Pieces that must be locked after an Orb leaves (or a level starts) before another can appear.</summary>
     public const int PiecesBetween = 4;
 
-    /// <summary>Chance of an Orb appearing at a settle that meets the conditions (1.0 when the rules say Always).</summary>
-    public const double SpawnChance = 0.35;
-
-    /// <summary>If no Orb has appeared by this many pieces, the next settle spawns one anyway.</summary>
-    public const int GuaranteeByPiece = 8;
+    /// <summary>
+    /// Chance of an Orb appearing at a settle that meets the conditions (1.0 when the rules say Always). There is no guarantee
+    /// on top of this: a level can go by without one.
+    /// </summary>
+    public const double SpawnChance = 0.40;
 
     /// <summary>Gold (not tenths) for breaking an Orb.</summary>
     public const int BreakBonusGold = 25;
@@ -135,6 +135,17 @@ public static class OrbSystem
                 work[cx, cy] = CellColour.Orb;
         board.CopyFrom(work);
         return true;
+    }
+
+    /// <summary>
+    /// How many rows the blocks in each of the Orb's two columns are pushed up when it is placed with its top-left cell at (x, y):
+    /// 0 for a free column, 1 when the block is only in the upper row, 2 when it is in the lower row. The drawing uses this to slide
+    /// those blocks away as the Orb swells; it does not change the board.
+    /// </summary>
+    public static (int Left, int Right) PushShifts(Board board, int x, int y)
+    {
+        int Shift(int cx) => board[cx, y + 1] != CellColour.Empty ? 2 : board[cx, y] != CellColour.Empty ? 1 : 0;
+        return (Shift(x), Shift(x + 1));
     }
 
     private static void Move(Board board, int x, int from, int to)

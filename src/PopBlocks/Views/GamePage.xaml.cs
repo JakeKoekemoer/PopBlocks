@@ -256,7 +256,11 @@ public partial class GamePage : ContentPage
     private void OnOrbHappened(GameEvent e, int x, int y)
     {
         long now = Environment.TickCount64;
-        if (e == GameEvent.OrbSpawned) _board.OrbFx.Appeared(x, y, now);
+        if (e == GameEvent.OrbSpawned)
+        {
+            var (left, right) = _vm.Game.OrbPushed;
+            _board.OrbFx.Appeared(x, y, now, left, right);
+        }
         else if (e == GameEvent.OrbBroken) _board.OrbFx.Broke(x, y, now);
         else _board.OrbFx.Corrupted(x, y, now);
         StartAnimation();

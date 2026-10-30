@@ -19,7 +19,10 @@ public readonly record struct PopTiming(int HighlightMs, int SettleMs)
 /// </summary>
 public sealed class GameEngine
 {
-    private enum Phase { None, Instant, Highlight, Settle }
+    private enum Phase { None, Instant, Highlight, Settle, OrbReveal }
+
+    /// <summary>How long the board is held still while an Orb swells and shoves the blocks aside, before the next piece drops.</summary>
+    public const int OrbRevealMs = 950;
 
     private static readonly IReadOnlyList<ColourGroup> NoGroups = Array.Empty<ColourGroup>();
 
@@ -268,8 +271,18 @@ public sealed class GameEngine
         {
             Phase.Highlight => Timing.HighlightMs,
             Phase.Settle => Timing.SettleMs,
+            Phase.OrbReveal => OrbRevealMs,
             _ => GameConfig.ResolveStepMs,
         };
+
+    /// <summary>An Orb has just appeared and the board is being held so the player can watch it arrive. No piece is falling.</summary>
+    public bool IsRevealingOrb => State is GameState.ResolvingBursts or GameState.Paused && _phase == Phase.OrbReveal;
+
+    /// <summary>
+    /// For the arrival of an Orb: how many rows the blocks in its left and right columns were pushed up (see
+    /// <see cref="OrbSystem.PushShifts"/>). Valid from <see cref="GameEvent.OrbSpawned"/> until the next one.
+    /// </summary>
+    public (int Left, int Right) OrbPushed { get; private set; }
 
     /// <summary>Raised after any change a view might need to redraw.</summary>
     public event Action? Changed;
@@ -593,34 +606,33 @@ public sealed class GameEngine
     /// 35% (always, when the rules say so). If none has appeared by the eighth piece, the next settle puts one at the best
     /// spot there is, thresholds or not. The roll comes from the engine's own seeded stream, never from the piece stream.
     /// </summary>
-    private void MaybeSpawnOrb()
+    private bool MaybeSpawnOrb()
     {
-        if (!OrbsActive || _orbBrokeThisResolution || OrbSystem.Find(Board) is not null) return;
-        bool guarantee = !_orbEver && PiecesPlaced >= OrbSystem.GuaranteeByPiece;
-        if (!guarantee && _piecesSinceOrb < OrbSystem.PiecesBetween) return;
+        if (!OrbsActive || _orbBrokeThisResolution || OrbSystem.Find(Board) is not null) return false;
+        if (_piecesSinceOrb < OrbSystem.PiecesBetween) return false;
 
         UpdateCamera();
         var spots = OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: false);
-        if (!guarantee)
-        {
-            if (spots.Count == 0) return;
-            if (Rules.Orbs != OrbMode.Always && !NextOrbRoll()) return;
-        }
+        if (spots.Count == 0) return false;
+        if (Rules.Orbs != OrbMode.Always && !NextOrbRoll()) return false;
 
         bool placed = false;
+        (int Left, int Right) pushed = default;
         foreach (var (x, y) in spots)
-            if (placed = OrbSystem.TryPlace(Board, x, y)) break;
-        if (!placed && guarantee)
-            foreach (var (x, y) in OrbSystem.Spots(Board, ViewTopRow, GameConfig.ViewportRows, relaxed: true))
-                if (placed = OrbSystem.TryPlace(Board, x, y)) break;
-        if (!placed) return;
+        {
+            var shifts = OrbSystem.PushShifts(Board, x, y);
+            if (placed = OrbSystem.TryPlace(Board, x, y)) { pushed = shifts; break; }
+        }
+        if (!placed) return false;
 
         GravityResolver.Apply(Board);   // what was pushed up settles on the Orb
         _orbTimer = Rules.OrbTimer;
         _orbEver = true;
         _piecesSinceOrb = 0;
+        OrbPushed = pushed;
         OrbEventAt = OrbSystem.Find(Board);
         Raise(GameEvent.OrbSpawned);
+        return true;
     }
 
     /// <summary>
@@ -629,7 +641,10 @@ public sealed class GameEngine
     /// </summary>
     public bool PlaceOrb(int x, int y, int? timer = null)
     {
-        if (OrbSystem.Find(Board) is not null || !OrbSystem.TryPlace(Board, x, y)) return false;
+        if (OrbSystem.Find(Board) is not null) return false;
+        var shifts = OrbSystem.PushShifts(Board, x, y);
+        if (!OrbSystem.TryPlace(Board, x, y)) return false;
+        OrbPushed = shifts;
         GravityResolver.Apply(Board);
         _orbTimer = timer ?? Rules.OrbTimer;
         _orbEver = true;
@@ -712,6 +727,13 @@ public sealed class GameEngine
                 ApplyWave(PendingGroups);
                 PendingGroups = NoGroups;
                 _phase = Phase.Settle;
+                break;
+
+            case Phase.OrbReveal:
+                // The Orb has finished arriving: now the next piece can drop.
+                _phase = Phase.None;
+                State = GameState.Playing;
+                SpawnNext();
                 break;
 
             case Phase.Settle:
@@ -911,7 +933,15 @@ public sealed class GameEngine
             return;
         }
 
-        MaybeSpawnOrb();
+        if (MaybeSpawnOrb() && !Timing.IsInstant)
+        {
+            // Hold the board still while the Orb swells and shoves the blocks aside; the next piece drops when it is done.
+            CurrentPiece = null;
+            NextPiece = _queue.Count > 0 ? _queue[0] : NextPiece;
+            _phase = Phase.OrbReveal;
+            State = GameState.ResolvingBursts;
+            return;
+        }
         SpawnNext();
     }
 
