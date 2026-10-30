@@ -187,7 +187,7 @@ public partial class GamePage : ContentPage
     private async void OnTrackListTapped(object? sender, TappedEventArgs e)
     {
         var choices = _vm.TrackChoices();
-        string picked = await DisplayActionSheet("Soundtrack", "Close", null, choices.Select(c => c.Label).ToArray());
+        string picked = await DisplayActionSheetAsync("Soundtrack", "Close", null, choices.Select(c => c.Label).ToArray());
         foreach (var (number, label) in choices)
             if (label == picked) { _vm.ChooseTrack(number); return; }
     }

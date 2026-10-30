@@ -376,13 +376,13 @@ public partial class SettingsPage : ContentPage
         string choice = everything;
         if (_save.IsAvailable)
         {
-            choice = await DisplayActionSheet("Delete save data", "Cancel", everything, fileOnly);
+            choice = await DisplayActionSheetAsync("Delete save data", "Cancel", everything, fileOnly);
             if (choice is null or "Cancel") return;
         }
 
         if (choice == fileOnly)
         {
-            bool go = await DisplayAlert("Delete the save file?",
+            bool go = await DisplayAlertAsync("Delete the save file?",
                 "Your progress stays in the game, but without the file it is lost if you uninstall PopBlocks. You can turn the file back on at any time with BACK UP NOW.",
                 "Delete", "Cancel");
             if (!go) return;
@@ -395,7 +395,7 @@ public partial class SettingsPage : ContentPage
             return;
         }
 
-        bool erase = await DisplayAlert("Erase all progress?",
+        bool erase = await DisplayAlertAsync("Erase all progress?",
             "This deletes the save file and wipes your levels, gold, shop, looks and name from this phone, as if PopBlocks were new. It can't be undone.\n\nA save code you copied earlier will still restore it.",
             "Erase everything", "Cancel");
         if (!erase) return;

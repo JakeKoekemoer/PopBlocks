@@ -65,13 +65,13 @@ public partial class MainPage : ContentPage
             if (notice.Kind == RestoreKind.Restored)
             {
                 var s = notice.Summary!;
-                await DisplayAlert($"Welcome back, {_identity.Name}",
+                await DisplayAlertAsync($"Welcome back, {_identity.Name}",
                     $"Your progress was restored from your save file: {s.HighestCleared} levels cleared and {s.Gold:N0} gold.",
                     "OK");
             }
             else if (notice.Kind == RestoreKind.Unreadable)
             {
-                await DisplayAlert("Save file found",
+                await DisplayAlertAsync("Save file found",
                     $"PopBlocks found a save file in {_save.Location} but couldn't use it ({notice.Error}). It hasn't been changed, and nothing will be saved over it until you choose BACK UP NOW in Settings. You can also choose a file by hand there.",
                     "OK");
             }
@@ -94,7 +94,7 @@ public partial class MainPage : ContentPage
         }
         else if (result.Message.Length > 0)
         {
-            await DisplayAlert("Save file", result.Message, "OK");
+            await DisplayAlertAsync("Save file", result.Message, "OK");
         }
     }
 

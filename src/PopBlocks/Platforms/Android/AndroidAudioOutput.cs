@@ -233,7 +233,7 @@ public sealed class AndroidAudioOutput : IAudioOutput
             .SetBufferSizeInBytes(bytes)!
             .SetTransferMode(AudioTrackMode.Stream)!;
 
-        if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+        if (OperatingSystem.IsAndroidVersionAtLeast(26))
             builder.SetPerformanceMode(AudioTrackPerformanceMode.LowLatency);
 
         var track = builder.Build();
@@ -256,7 +256,7 @@ public sealed class AndroidAudioOutput : IAudioOutput
             _focus ??= new FocusListener(this);
 
             AudioFocusRequest result;
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+            if (OperatingSystem.IsAndroidVersionAtLeast(26))
             {
                 _focusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)!
                     .SetAudioAttributes(BuildAttributes())!
@@ -285,7 +285,7 @@ public sealed class AndroidAudioOutput : IAudioOutput
         try
         {
             if (_manager is null) return;
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+            if (OperatingSystem.IsAndroidVersionAtLeast(26))
             {
                 if (_focusRequest is not null) _manager.AbandonAudioFocusRequest(_focusRequest);
             }
@@ -336,7 +336,7 @@ public sealed class AndroidAudioOutput : IAudioOutput
             _noisy = new NoisyReceiver(this);
             var filter = new IntentFilter(AudioManager.ActionAudioBecomingNoisy);
             var context = Android.App.Application.Context;
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu)
+            if (OperatingSystem.IsAndroidVersionAtLeast(33))
                 context.RegisterReceiver(_noisy, filter, ReceiverFlags.NotExported);
             else
                 context.RegisterReceiver(_noisy, filter);

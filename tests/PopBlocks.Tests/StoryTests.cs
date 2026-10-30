@@ -481,7 +481,7 @@ public class TutorialLevelTests
         var level = LevelCatalog.Get(11);
         Assert.True(level.ExoticShare > 0);
         Assert.Contains("Plus", level.Script[0]);
-        Assert.Equal(StoryConfig.TierFor(11), Tier.Easy);
+        Assert.Equal(Tier.Easy, StoryConfig.TierFor(11));
     }
 }
 
@@ -898,7 +898,7 @@ public class ShapeTests
     public void The_script_plays_first_then_random_pieces_follow()
     {
         var generator = new ScriptedPieceGenerator(new[] { "Dot:C", "Pair:RR" }, new PieceGenerator(new Random(3)));
-        Assert.Equal(1, generator.Next(4).Cells.Count);
+        Assert.Single(generator.Next(4).Cells);
         Assert.Equal(2, generator.Next(4).Cells.Count);
         Assert.NotNull(generator.Next(4));
     }
@@ -1005,8 +1005,8 @@ public class LevelCatalogueTests
     public void Multiple_goals_arrive_later_in_the_story()
     {
         Assert.True(Enumerable.Range(12, 19).All(n => LevelCatalog.Get(n).Goals.Count == 1));
-        Assert.True(Enumerable.Range(32, 40).Any(n => LevelCatalog.Get(n).Goals.Count >= 2));
-        Assert.True(Enumerable.Range(161, 40).Any(n => LevelCatalog.Get(n).Goals.Count >= 3));
+        Assert.Contains(Enumerable.Range(32, 40), n => LevelCatalog.Get(n).Goals.Count >= 2);
+        Assert.Contains(Enumerable.Range(161, 40), n => LevelCatalog.Get(n).Goals.Count >= 3);
     }
 
     [Fact]

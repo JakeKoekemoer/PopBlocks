@@ -374,7 +374,7 @@ public class AudioSystemTests
         var pcm = OfflineRenderer.Render(engine, 8);
         Assert.Equal(StateMask.Restored, d.State);
         Assert.True(engine.CurrentBar >= bar, "the music did not restart");
-        Assert.True(pcm.Any(f => MathF.Abs(f) > 0.01f));
+        Assert.Contains(pcm, f => MathF.Abs(f) > 0.01f);
     }
 
     [Fact]

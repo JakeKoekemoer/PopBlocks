@@ -59,7 +59,7 @@ public class PrismShiftTests
         Story.MoveTo(e, 7);
         e.HardDrop();
         Story.Settle(e);
-        Assert.Equal(shifted.Cells.Select(c => c.Colour), e.CurrentPiece!.Cells.Select(c => c.Colour));   // played as shifted (on a tall board the piece is lifted to the top of the screen, so it is a moved copy)
+        Assert.Equal(shifted!.Cells.Select(c => c.Colour), e.CurrentPiece!.Cells.Select(c => c.Colour));   // played as shifted (on a tall board the piece is lifted to the top of the screen, so it is a moved copy)
         Assert.Equal("P", Board.ToChar(e.NextPiece!.Cells[0].Colour).ToString());   // the next one is the scripted Dot:P, untouched
     }
 
@@ -416,7 +416,7 @@ public class NoHelpersObjectiveTests
         var level = Story.Level(new[] { "RRR.CCC." }, new[] { "Dot:R", "Pair:RC", "Dot:Y" },
             new[] { new Goal(GoalKind.PopBlocks, 4) }, moves: 5);
         var bonus = new BonusObjective(BonusKind.BigGroup, 4, CellColour.Empty, "mem_x", WithoutHelpers: true);
-        Assert.True(bonus.Describe().EndsWith("without helpers"));
+        Assert.EndsWith("without helpers", bonus.Describe());
 
         foreach (bool useHelper in new[] { false, true })
         {

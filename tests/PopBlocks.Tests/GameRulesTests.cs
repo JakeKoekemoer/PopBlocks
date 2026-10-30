@@ -101,7 +101,7 @@ public class GameRulesTests
     public void The_shapes_always_include_one_with_four_or_more_cells()
     {
         var small = (GameRules.Default with { EnabledShapes = new[] { "Pair", "Bar", "Elbow" } }).Normalized();
-        Assert.True(small.EnabledShapes.Any(n => ShapeCatalog.Find(n).CellCount >= 4));
+        Assert.Contains(small.EnabledShapes, n => ShapeCatalog.Find(n).CellCount >= 4);
         var ok = (GameRules.Default with { EnabledShapes = new[] { "Pair", "Bar", "Block" } }).Normalized();
         Assert.Equal(3, ok.EnabledShapes.Count);
     }
