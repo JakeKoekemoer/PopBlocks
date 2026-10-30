@@ -43,6 +43,7 @@ public sealed class GameAudio : IDisposable
     private bool _interrupted;           // another app has the audio
     private bool _routePaused;           // headphones came out: wait for the player to do something
     private bool _outputPaused;
+    private bool _startPending;          // the device output has not been opened yet because nothing could be heard when the game began
     private float _focusGain = 1f;
     private double _lastPop = -99, _lastRotate = -99, _lastPlace = -99, _lastCombo = -99, _lastTick, _lastOrb = -99;
     private bool _disposed;
@@ -137,6 +138,9 @@ public sealed class GameAudio : IDisposable
     public void Start() => Post(() =>
     {
         if (_available) return;
+        // With every sound switched off there is nothing to play, so the phone's audio is left alone (opening the output would take
+        // audio focus and stop the player's own music or video). It opens when something becomes audible.
+        if (!_settings.AnythingAudible) { _startPending = true; return; }
         _available = SafeStart();
         ApplyGains(immediate: true);
     });
@@ -182,6 +186,13 @@ public sealed class GameAudio : IDisposable
     {
         if (_background || _interrupted) return;
         _routePaused = false;
+        if (!_settings.AnythingAudible) return;   // nothing to hear: stay off the speaker so other apps keep audio focus
+        if (_startPending)
+        {
+            _startPending = false;
+            _available = SafeStart();
+            ApplyGains(immediate: true);
+        }
         if (_outputPaused)
         {
             try { _output.Resume(); } catch (Exception ex) { Failed?.Invoke("audio resume", ex); }
@@ -218,10 +229,28 @@ public sealed class GameAudio : IDisposable
 
     private void OnSettingsChanged() => Post(() =>
     {
+        SyncOutputToSettings();
         ApplyGains(immediate: false);
         Director.SettingsChanged();
         if (_scene is Scene.Classic or Scene.Region && _settings.SelectedTrack != _appliedTrack) ApplyScene();   // a new song was picked
     });
+
+    /// <summary>
+    /// When every sound is switched off (or turned down to nothing) the output is closed so the phone's audio goes back to whatever
+    /// else is playing: music, a video, a podcast. When something becomes audible again it is opened (or resumed).
+    /// </summary>
+    private void SyncOutputToSettings()
+    {
+        if (_settings.AnythingAudible) { Wake(); return; }
+        if (!_available || _outputPaused) return;
+        Engine.SetMasterFade(0f, 0.05f);
+        Later(0.1, () =>
+        {
+            if (_settings.AnythingAudible || !_available || _outputPaused) return;
+            try { _output.Pause(); } catch (Exception ex) { Failed?.Invoke("audio pause", ex); }
+            _outputPaused = true;
+        });
+    }
 
     /// <summary>Pushes the volumes and mutes to the engine. A mute is a very short ramp (immediate to the ear, no click).</summary>
     private void ApplyGains(bool immediate)
