@@ -36,6 +36,9 @@
 
     <!-- Workshop artwork only (shop icons and tab banners). They are used as they are, not scaled up per screen density. -->
     <MauiImage Include="Resources\Images\*.png" Resize="false" />
+
+    <!-- Character portraits (Mara, Bram): the same PNGs the website shows, read from the app package and drawn by PortraitDrawable. -->
+    <MauiAsset Include="Resources\Raw\*.png" LogicalName="%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

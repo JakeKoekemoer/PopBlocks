@@ -62,6 +62,11 @@ public partial class GamePage : ContentPage
         CoinView.Drawable = new GoldCoinDrawable();
         ScenePipView.Drawable = _portrait;
         ScenePipRightView.Drawable = _portrait;   // the same portrait, shown on whichever side the speaker stands
+        _ = PortraitImages.LoadAsync(() => MainThread.BeginInvokeOnMainThread(() =>
+        {
+            ScenePipView.Invalidate();
+            ScenePipRightView.Invalidate();
+        }));   // Mara and Bram show their art once it has loaded; until then, the stand-in
         StageView.Drawable = _stage;
         BannerPipView.Drawable = _bannerPip;
         CoinFlyView.Drawable = _coinFly;

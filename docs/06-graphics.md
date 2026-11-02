@@ -162,7 +162,7 @@ A dialogue panel has a **stage strip** above the text and a small **portrait** b
 
 **One-shot animations** (the sweep, the mark drawing on, a shard rising, Pip coming out) play from the line where the cue begins and are finished on any later line, so moving to the next line never replays them. **Loops** (ambience, flow, crystal pulse, Pip's bob and blink) run on a clock.
 
-**Portraits follow the brief:** Pip is Pip; the Warden is the Warden's silhouette (never a recoloured Pip); a recorded voice is a memory crystal and the Warden's message is the mark (a recording is never a character). Mara and Bram are still a tinted stand-in until they are designed.
+**Portraits follow the brief:** Pip is Pip; the Warden is the Warden's silhouette (never a recoloured Pip); a recorded voice is a memory crystal and the Warden's message is the mark (a recording is never a character). Mara and Bram are the painted portraits the website shows (`Resources/Raw/portrait_mara.png` and `portrait_bram.png`, packaged as app assets and loaded by `PortraitImages`); the tinted stand-in is only the fallback while they load or if they cannot be read. The Pip on the stage strip wears the equipped look, like the portrait and banner Pip.
 
 **Reduced motion** shows every picture as its final still frame: no ambience, no loops, no timer. The stage timer (~30 fps) runs only while a panel is open and not reduced. Skipping a scene closes the panel as before; nothing a cue draws is needed to understand the story, because the text carries it.
 

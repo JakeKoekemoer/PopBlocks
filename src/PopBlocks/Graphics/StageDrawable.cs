@@ -355,10 +355,25 @@ public sealed class PortraitDrawable : IDrawable
                 _mark.Draw(canvas, r);
                 break;
 
+            case Cast.Mara when PortraitImages.Mara is { } mara:
+                DrawPortrait(canvas, mara, r);
+                break;
+
+            case Cast.Bram when PortraitImages.Bram is { } bram:
+                DrawPortrait(canvas, bram, r);
+                break;
+
             default:
                 Pip.Time = t;
                 Pip.Draw(canvas, r);
                 break;
         }
+    }
+
+    /// <summary>Draws a square portrait, as large as fits, centred in the area (the art is never stretched).</summary>
+    private static void DrawPortrait(ICanvas canvas, Microsoft.Maui.Graphics.IImage image, RectF r)
+    {
+        float side = MathF.Min(r.Width, r.Height);
+        canvas.DrawImage(image, r.X + (r.Width - side) / 2f, r.Y + (r.Height - side) / 2f, side, side);
     }
 }
