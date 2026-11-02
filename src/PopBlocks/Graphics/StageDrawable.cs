@@ -1,4 +1,5 @@
 using Microsoft.Maui.Graphics;
+using PopBlocks.Engine.Services;
 using PopBlocks.Engine.Story;
 
 namespace PopBlocks.Graphics;
@@ -28,6 +29,12 @@ public sealed class StageDrawable : IDrawable
     public Func<long> Clock { get; set; } = () => Environment.TickCount64;
 
     public bool ReducedMotion { get; set; }
+
+    /// <summary>What the player has equipped on Pip, so the Pip on the stage wears it too (same as the portrait and the banner).</summary>
+    public AccessoryStyle PipAccessory { get; set; } = AccessoryStyle.None;
+
+    /// <summary>Regions restored: the small lights circling Pip.</summary>
+    public int PipDetail { get; set; }
 
     /// <summary>How bright Pip is drawn (the world's restoration), for the scene where Pip comes out from behind the stone.</summary>
     public float PipBrightness { get; set; } = 0.35f;
@@ -243,6 +250,8 @@ public sealed class StageDrawable : IDrawable
         float py = ground - h * 0.22f - p * h * 0.16f;
 
         _pip.Brightness = PipBrightness;
+        _pip.Accessory = PipAccessory;
+        _pip.Detail = PipDetail;
         _pip.Time = t;
         _pip.Mood = p > 0.75f ? PipMood.Happy : PipMood.Curious;
         _pip.Look = p < 0.75f ? 0.6f : 0f;

@@ -647,6 +647,8 @@ public partial class GamePage : ContentPage
 
         _stage.ReducedMotion = reduced;
         _stage.PipBrightness = _vm.PipBrightness;
+        _stage.PipAccessory = _vm.PipAccessory;   // the equipped look shows on the stage Pip too, not only in the portrait
+        _stage.PipDetail = _vm.PipDetail;
         _stage.SpeakerId = _vm.SceneSpeakerId;
         _stage.Info = info;
         _portrait.Animated = info is not null && !reduced;
